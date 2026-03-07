@@ -1,0 +1,50 @@
+aporto-new-api  | [0m[33m[326.400ms] [34;1m[rows:0][0m SELECT * FROM "tasks" WHERE progress != '100%' AND status NOT IN ('FAILURE','SUCCESS') AND submit_time < 1772776462 ORDER BY submit_time LIMIT 100
+aporto-new-api  | 
+aporto-new-api  | 2026/03/07 08:54:23 [31;1m/build/model/task.go:310 [35;1mFATAL: prepared statement name is already in use (SQLSTATE 08P01)
+aporto-new-api  | [0m[33m[143.425ms] [34;1m[rows:0][0m SELECT * FROM "tasks" WHERE progress != '100%' AND status != 'FAILURE' AND status != 'SUCCESS' ORDER BY id LIMIT 1000
+aporto-new-api  | [SYS] 2026/03/07 - 08:54:23 | 任务进度轮询完成 
+aporto-new-api  | 
+aporto-new-api  | 2026/03/07 08:54:24 [32m/build/model/db_time.go:12 [33mSLOW SQL >= 200ms
+aporto-new-api  | [0m[31;1m[1399.066ms] [33m[rows:1][35m SELECT EXTRACT(EPOCH FROM NOW())::bigint[0m
+aporto-new-api  | 
+aporto-new-api  | 2026/03/07 08:54:25 [31;1m/build/model/subscription.go:818 [35;1mERROR: relation "user_subscriptions" does not exist (SQLSTATE 42P01)
+aporto-new-api  | [0m[33m[404.180ms] [34;1m[rows:0][0m SELECT * FROM "user_subscriptions" WHERE status = 'active' AND end_time > 0 AND end_time <= 1772862865 ORDER BY end_time asc, id asc LIMIT 300
+aporto-new-api  | [WARN] 2026/03/07 - 08:54:25 | SYSTEM | subscription expire task failed: ERROR: relation "user_subscriptions" does not exist (SQLSTATE 42P01) 
+aporto-new-api  | 
+aporto-new-api  | 2026/03/07 08:54:27 [31;1m/build/model/midjourney.go:97 [35;1mERROR: relation "midjourneys" does not exist (SQLSTATE 42P01)
+aporto-new-api  | [0m[33m[449.819ms] [34;1m[rows:0][0m SELECT * FROM "midjourneys" WHERE progress != '100%'
+aporto-new-api  | [GIN] 2026/03/07 - 08:54:33 | api | 20260307055433905533336cUOqEYRV | 200 |   11.769125ms |             ::1 |     GET /api/status
+aporto-new-api  | [SYS] 2026/03/07 - 08:54:38 | 任务进度轮询开始 
+aporto-new-api  | 
+aporto-new-api  | 2026/03/07 08:54:38 [31;1m/build/model/task.go:299 [35;1mERROR: relation "tasks" does not exist (SQLSTATE 42P01)
+aporto-new-api  | [0m[33m[399.150ms] [34;1m[rows:0][0m SELECT * FROM "tasks" WHERE progress != '100%' AND status NOT IN ('FAILURE','SUCCESS') AND submit_time < 1772776478 ORDER BY submit_time LIMIT 100
+aporto-new-api  | 
+aporto-new-api  | 2026/03/07 08:54:38 [31;1m/build/model/task.go:310 [35;1mERROR: relation "tasks" does not exist (SQLSTATE 42P01)
+aporto-new-api  | [0m[33m[154.038ms] [34;1m[rows:0][0m SELECT * FROM "tasks" WHERE progress != '100%' AND status != 'FAILURE' AND status != 'SUCCESS' ORDER BY id LIMIT 1000
+aporto-new-api  | [SYS] 2026/03/07 - 08:54:38 | 任务进度轮询完成 
+aporto-new-api  | 
+aporto-new-api  | 2026/03/07 08:54:42 [31;1m/build/model/midjourney.go:97 [35;1mFATAL: prepared statement name is already in use (SQLSTATE 08P01)
+aporto-new-api  | [0m[33m[402.617ms] [34;1m[rows:0][0m SELECT * FROM "midjourneys" WHERE progress != '100%'
+aporto-new-api  | [SYS] 2026/03/07 - 08:54:50 | syncing options from database 
+aporto-new-api  | [SYS] 2026/03/07 - 08:54:50 | syncing channels from database 
+aporto-new-api  | 
+aporto-new-api  | 2026/03/07 08:54:51 [31;1m/build/model/option.go:25 [35;1mERROR: relation "options" does not exist (SQLSTATE 42P01)
+aporto-new-api  | [0m[33m[1116.646ms] [34;1m[rows:0][0m SELECT * FROM "options"
+aporto-new-api  | 
+aporto-new-api  | 2026/03/07 08:54:51 [31;1m/build/model/channel_cache.go:27 [35;1mERROR: relation "channels" does not exist (SQLSTATE 42P01)
+aporto-new-api  | [0m[33m[1116.091ms] [34;1m[rows:0][0m SELECT * FROM "channels"
+aporto-new-api  | 
+aporto-new-api  | 2026/03/07 08:54:51 [31;1m/build/model/channel_cache.go:32 [35;1mERROR: relation "abilities" does not exist (SQLSTATE 42P01)
+aporto-new-api  | [0m[33m[324.603ms] [34;1m[rows:0][0m SELECT * FROM "abilities"
+aporto-new-api  | [SYS] 2026/03/07 - 08:54:51 | channels synced from database 
+aporto-new-api  | [SYS] 2026/03/07 - 08:54:53 | 任务进度轮询开始 
+aporto-new-api  | 
+aporto-new-api  | 2026/03/07 08:54:53 [31;1m/build/model/task.go:299 [35;1mERROR: relation "tasks" does not exist (SQLSTATE 42P01)
+aporto-new-api  | [0m[33m[369.617ms] [34;1m[rows:0][0m SELECT * FROM "tasks" WHERE progress != '100%' AND status NOT IN ('FAILURE','SUCCESS') AND submit_time < 1772776493 ORDER BY submit_time LIMIT 100
+aporto-new-api  | 
+aporto-new-api  | 2026/03/07 08:54:54 [31;1m/build/model/task.go:310 [35;1mERROR: relation "tasks" does not exist (SQLSTATE 42P01)
+aporto-new-api  | [0m[33m[162.142ms] [34;1m[rows:0][0m SELECT * FROM "tasks" WHERE progress != '100%' AND status != 'FAILURE' AND status != 'SUCCESS' ORDER BY id LIMIT 1000
+aporto-new-api  | [SYS] 2026/03/07 - 08:54:54 | 任务进度轮询完成 
+aporto-new-api  | 
+aporto-new-api  | 2026/03/07 08:54:57 [31;1m/build/model/midjourney.go:97 [35;1mERROR: relation "midjourneys" does not exist (SQLSTATE 42P01)
+aporto-new-api  | [0m[33m[313.145ms] [34;1m[rows:0][0m SELECT * FROM "midjourneys" WHERE progress != '100%'

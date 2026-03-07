@@ -1,0 +1,22 @@
+# Version control
+.git
+.gitignore
+
+# Dev artifacts
+.next
+node_modules
+npm-debug.log*
+
+# Environment (sensitive)
+.env.local
+
+# Prisma dev DB (container uses its own volume)
+prisma/dev.db
+prisma/dev.db-journal
+
+# macOS
+.DS_Store
+
+# Editor
+.vscode
+.idea

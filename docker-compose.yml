@@ -1,0 +1,99 @@
+version: '3.8'
+
+# ============================================================
+# aporto.tech — Local Development Stack
+# ============================================================
+# Services:
+#   app      → app.aporto Next.js   http://localhost:3001
+#   new-api  → New-API middleware   http://localhost:3002
+#   postgres → New-API database     (internal)
+#   redis    → New-API cache        (internal)
+# ============================================================
+#
+# First-time setup:
+#   1. docker compose up -d
+#   2. Open http://localhost:3002 → login with root / 123456
+#   3. Change password → Settings → copy admin API token
+#   4. Paste token into .env.local as NEWAPI_ADMIN_TOKEN
+#   5. docker compose restart app
+# ============================================================
+
+networks:
+  aporto-net:
+    driver: bridge
+
+volumes:
+  newapi_data:
+  newapi_logs:
+  app_db:    # SQLite DB for NextAuth
+
+services:
+
+  # ── New-API (OpenAI-compatible middleware) ─────────────────
+  new-api:
+    image: calciumion/new-api:latest
+    container_name: aporto-new-api
+    restart: unless-stopped
+    command: --log-dir /app/logs
+    ports:
+      - "3002:3000"
+    volumes:
+      - newapi_data:/data
+      - newapi_logs:/app/logs
+    environment:
+      - SQL_DSN=${DATABASE_URL}
+      - REDIS_CONN_STRING=redis://redis
+      - TZ=Europe/Moscow
+      - ERROR_LOG_ENABLED=true
+      - BATCH_UPDATE_ENABLED=true
+      - SESSION_SECRET=aporto_local_secret_change_in_prod
+    depends_on:
+      redis:
+        condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://localhost:3000/api/status | grep -o '\"success\":true' || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    networks:
+      - aporto-net
+
+  # ── Redis (for New-API cache) ──────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: aporto-redis
+    restart: unless-stopped
+    networks:
+      - aporto-net
+
+  # ── app.aporto (Next.js) ───────────────────────────────────
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: aporto-app
+    restart: unless-stopped
+    ports:
+      - "3001:3001"
+    environment:
+      # App
+      - NODE_ENV=production
+      - PORT=3001
+      # NextAuth
+      - NEXTAUTH_URL=http://localhost:3001
+      - NEXTAUTH_SECRET=aporto_nextauth_secret_change_in_prod
+      # Database (PostgreSQL via Prisma)
+      - DATABASE_URL=${DATABASE_URL}
+      # New-API integration
+      - NEWAPI_URL=http://new-api:3000
+      - NEWAPI_ADMIN_TOKEN=${NEWAPI_ADMIN_TOKEN:-changeme_after_first_boot}
+      # Optional: Email (Resend)
+      - RESEND_API_KEY=${RESEND_API_KEY:-}
+      # Optional: Google OAuth
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET:-}
+    depends_on:
+      new-api:
+        condition: service_healthy
+    networks:
+      - aporto-net
