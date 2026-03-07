@@ -1,11 +1,11 @@
-import NextAuth from "next-auth";
+import NextAuth, { NextAuthOptions } from "next-auth";
 import GoogleProvider from "next-auth/providers/google";
 import CredentialsProvider from "next-auth/providers/credentials";
 import { PrismaAdapter } from "@next-auth/prisma-adapter";
 import { prisma } from "@/lib/prisma";
 import bcrypt from "bcrypt";
 
-const handler = NextAuth({
+export const authOptions: NextAuthOptions = {
     adapter: PrismaAdapter(prisma),
     providers: [
         GoogleProvider({
@@ -41,6 +41,7 @@ const handler = NextAuth({
                     id: user.id,
                     email: user.email,
                     name: user.name,
+                    newApiUserId: user.newApiUserId,
                 };
             }
         })
@@ -67,6 +68,8 @@ const handler = NextAuth({
     pages: {
         signIn: "/login",
     },
-});
+};
+
+const handler = NextAuth(authOptions);
 
 export { handler as GET, handler as POST };

@@ -67,6 +67,26 @@ export async function newApiCreateUser(opts: {
             return null;
         }
 
+        // New-API's register endpoint doesn't return the created user object in `data`.
+        // We must fetch the user list filtering by username to get the assigned ID.
+        const listRes = await fetch(`${cfg.url}/api/user/?keyword=${opts.username}`, {
+            method: "GET",
+            headers: {
+                Authorization: `Bearer ${cfg.token}`,
+                "New-Api-User": "1",
+            },
+        });
+
+        const listData = await listRes.json() as { success: boolean; data?: { items: NewApiUser[] } };
+
+        if (listData.success && listData.data?.items) {
+            const createdUser = listData.data.items.find(u => u.username === opts.username);
+            if (createdUser) {
+                return createdUser;
+            }
+        }
+
+        console.warn("[newapi] User created but could not retrieve their generated ID.");
         return data.data ?? null;
     } catch (err) {
         console.error("[newapi] Error creating user:", err);

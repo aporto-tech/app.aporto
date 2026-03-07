@@ -41,7 +41,7 @@ services:
       - newapi_data:/data
       - newapi_logs:/app/logs
     environment:
-      - SQL_DSN=${DATABASE_URL}
+      - SQL_DSN=${NEWAPI_DATABASE_URL:-$DATABASE_URL}
       - REDIS_CONN_STRING=redis://redis
       - TZ=Europe/Moscow
       - ERROR_LOG_ENABLED=true

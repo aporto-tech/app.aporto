@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
+import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 
 export const dynamic = "force-dynamic"; // Do not statically cache this route
 
@@ -24,17 +25,18 @@ export async function GET(req: NextRequest) {
             );
         }
 
-        const session = await getServerSession();
+        const session = await getServerSession(authOptions);
         // Fallback to "1" (admin) only if no user is logged in, though typically this route is protected
         const newApiUserId = (session?.user as any)?.newApiUserId || "1";
 
-        // Fetch current user info to get quota
-        // Note: If using a web session token (no sk- prefix), New-Api-User header is required
-        const res = await fetch(`${newApiUrl}/api/user/self`, {
+        // Fetch specific user info to get quota
+        // We MUST pass "New-Api-User: 1" because the admin token belongs to user 1.
+        // We cannot pass New-Api-User: 2 with user 1's token.
+        const res = await fetch(`${newApiUrl}/api/user/${newApiUserId}`, {
             method: "GET",
             headers: {
                 Authorization: `Bearer ${adminToken}`,
-                "New-Api-User": String(newApiUserId),
+                "New-Api-User": "1",
             },
             cache: "no-store", // Do not cache the fetch result
         });
