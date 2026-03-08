@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { newApiCreateToken } from "@/lib/newapi";
 
 import { getServerSession } from "next-auth";
+import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 
 /**
  * POST /api/newapi/create-key
@@ -12,9 +13,13 @@ import { getServerSession } from "next-auth";
  */
 export async function POST(req: NextRequest) {
     try {
-        const session = await getServerSession();
-        // Fallback to "1" (admin) only if no user is logged in, though typically this route is protected
-        const newApiUserId = (session?.user as any)?.newApiUserId || 1;
+        const session = await getServerSession(authOptions);
+
+        if (!session?.user || !(session.user as any).newApiUserId) {
+            return NextResponse.json({ success: false, message: "Unauthorized" }, { status: 401 });
+        }
+
+        const newApiUserId = (session.user as any).newApiUserId;
 
         const body = await req.json();
         const { name } = body as { name: string };

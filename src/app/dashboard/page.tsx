@@ -25,6 +25,7 @@ export default function DashboardPage() {
 
     // UI state
     const [activeTab, setActiveTab] = useState<"gettingStarted" | "analytics">("gettingStarted");
+    const [activeRulesCount, setActiveRulesCount] = useState(0);
 
     // Modal state
     const [showCreateModal, setShowCreateModal] = useState(false);
@@ -40,6 +41,18 @@ export default function DashboardPage() {
     const [copySuccess, setCopySuccess] = useState(false);
     const [isCreatingKey, setIsCreatingKey] = useState(false);
     const [createKeyError, setCreateKeyError] = useState("");
+
+    // Rule Modal state
+    const [userKeys, setUserKeys] = useState<any[]>([]);
+    const [showRuleModal, setShowRuleModal] = useState(false);
+    const [ruleLimitType, setRuleLimitType] = useState<"spending" | "usage">("spending");
+    const [ruleSelectedKeyId, setRuleSelectedKeyId] = useState<string>("");
+    const [ruleLimitAmount, setRuleLimitAmount] = useState("");
+    const [ruleTimePeriod, setRuleTimePeriod] = useState("Per Run");
+    const [ruleName, setRuleName] = useState("Global Spending Limit");
+    const [isCreatingRule, setIsCreatingRule] = useState(false);
+    const [createRuleError, setCreateRuleError] = useState("");
+    const [isRuleCreated, setIsRuleCreated] = useState(false);
 
     // Balance state (from New-API)
     const [balance, setBalance] = useState<{ remainingUSD: number; usedUSD: number } | null>(null);
@@ -74,12 +87,38 @@ export default function DashboardPage() {
         return () => clearInterval(interval);
     }, [status]);
 
+    // ─── Fetch keys to persist "Getting Started" checklist ───────────────────
+    useEffect(() => {
+        if (status !== "authenticated") return;
+        const fetchKeys = async () => {
+            try {
+                const res = await fetch("/api/newapi/keys", { cache: "no-store" });
+                const data = await res.json() as { success: boolean; tokens?: any[] };
+                if (data.success && data.tokens) {
+                    setUserKeys(data.tokens);
+                    if (data.tokens.length > 0) {
+                        setIsApiKeyCreated(true);
+                    }
+                    const activeRules = data.tokens.filter((t: any) => t.remain_quota > 0 || !t.unlimited_quota);
+                    setActiveRulesCount(activeRules.length);
+                    if (activeRules.length > 0) {
+                        setIsRuleCreated(true);
+                    }
+                }
+            } catch {
+                // silently fail
+            }
+        };
+        fetchKeys();
+    }, [status]);
+
     // ─── Close modal on Escape ───────────────────────────────────────────────
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
             if (e.key === "Escape") {
                 setShowCreateModal(false);
                 setShowKeyCreatedModal(false);
+                setShowRuleModal(false);
             }
         };
         window.addEventListener("keydown", handleKeyDown);
@@ -120,6 +159,76 @@ export default function DashboardPage() {
         }
     }, [newKeyName, newKeyDescription]);
 
+    const openRuleModal = useCallback(() => {
+        setRuleLimitType("spending");
+        if (userKeys.length > 0) {
+            setRuleSelectedKeyId(String(userKeys[0].id));
+        } else {
+            setRuleSelectedKeyId("");
+        }
+        setRuleLimitAmount("");
+        setRuleTimePeriod("Per Run");
+        setRuleName("Global Spending Limit");
+        setCreateRuleError("");
+        setShowRuleModal(true);
+    }, [userKeys]);
+
+    const handleCreateRule = useCallback(async () => {
+        if (!ruleSelectedKeyId) {
+            setCreateRuleError("Please select an API key.");
+            return;
+        }
+        if (!ruleLimitAmount || isNaN(Number(ruleLimitAmount)) || Number(ruleLimitAmount) <= 0) {
+            setCreateRuleError("Please enter a valid positive amount.");
+            return;
+        }
+
+        setIsCreatingRule(true);
+        setCreateRuleError("");
+        try {
+            const selectedKey = userKeys.find(k => String(k.id) === ruleSelectedKeyId);
+            if (!selectedKey) throw new Error("Key not found");
+
+            // remain_quota calculation: $1 = 500,000 quota in New-API
+            let quotaToSets = 0;
+            if (ruleLimitType === "spending") {
+                quotaToSets = Math.floor(Number(ruleLimitAmount) * 500000);
+            } else {
+                quotaToSets = Number(ruleLimitAmount);
+            }
+
+            const res = await fetch("/api/newapi/keys", {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    tokenId: Number(ruleSelectedKeyId),
+                    name: selectedKey.name,
+                    remain_quota: quotaToSets,
+                    unlimited_quota: false
+                }),
+            });
+            const data = await res.json();
+            if (!data.success) {
+                setCreateRuleError(data.message ?? "Failed to save rule settings.");
+                return;
+            }
+
+            setIsRuleCreated(true);
+            setShowRuleModal(false);
+
+            // refresh keys
+            const keysRes = await fetch("/api/newapi/keys", { cache: "no-store" });
+            const keysData = await keysRes.json();
+            if (keysData.success && keysData.tokens) {
+                setUserKeys(keysData.tokens);
+            }
+        } catch (err) {
+            setCreateRuleError(`Error: ${String(err)}`);
+        } finally {
+            setIsCreatingRule(false);
+        }
+    }, [ruleSelectedKeyId, ruleLimitAmount, ruleLimitType, userKeys]);
+
     const handleCopyKey = useCallback(async () => {
         try {
             await navigator.clipboard.writeText(generatedKey);
@@ -142,6 +251,7 @@ export default function DashboardPage() {
         if (e.target === e.currentTarget) {
             setShowCreateModal(false);
             setShowKeyCreatedModal(false);
+            setShowRuleModal(false);
         }
     }, []);
 
@@ -160,12 +270,12 @@ export default function DashboardPage() {
             title: "Create a Spending Rule",
             desc: "Protect your spend with automated limits",
             action: "Create",
-            completed: false,
+            completed: isRuleCreated,
         },
         {
             num: 3,
             title: "First Transaction",
-            desc: "Make your first API call through Sapiom",
+            desc: "Make your first API call through Aporto",
             action: null,
             completed: false,
         },
@@ -232,7 +342,7 @@ export default function DashboardPage() {
                                     flexShrink: 0,
                                 }} />
                                 <div className={styles.welcomeText}>
-                                    <h1 style={{ margin: 0, fontSize: 22, fontWeight: 700 }}>Welcome to Sapiom!</h1>
+                                    <h1 style={{ margin: 0, fontSize: 22, fontWeight: 700 }}>Welcome to Aporto!</h1>
                                     <p style={{ margin: "8px 0 0", color: "#888", fontSize: 13, lineHeight: 1.5 }}>
                                         Complete the checklist below to get started. Switch to Analytics for your dashboard.
                                     </p>
@@ -254,7 +364,7 @@ export default function DashboardPage() {
                                     <div className={styles.actionIcon} style={{ color: "#00dc82", background: "rgba(0,220,130,0.1)" }}>▷</div>
                                     <div className={styles.actionInfo}>
                                         <h3>Interactive Guide</h3>
-                                        <p>Try Sapiom in action</p>
+                                        <p>Try Aporto in action</p>
                                     </div>
                                 </div>
                                 <div className={styles.actionCard} role="button" tabIndex={0} onClick={() => alert("Documentation coming soon!")}>
@@ -296,6 +406,7 @@ export default function DashboardPage() {
                                             className={styles.itemButton}
                                             onClick={() => {
                                                 if (item.num === 1) openCreateModal();
+                                                else if (item.num === 2) openRuleModal();
                                                 else alert(`${item.title} – coming soon!`);
                                             }}
                                         >
@@ -372,16 +483,25 @@ export default function DashboardPage() {
                                 </span>
                                 <button
                                     style={{ background: "none", border: "none", color: "#00dc82", cursor: "pointer", fontSize: 13 }}
-                                    onClick={() => alert("Governance rules – coming soon!")}
+                                    onClick={openRuleModal}
                                 >
                                     + Add
                                 </button>
                             </div>
-                            <div className={styles.governanceText}>0 Rules Active</div>
-                            <div className={styles.statusIndicator}>
-                                <span style={{ color: "#ef4444" }}>✕</span>
-                                <span style={{ color: "#ef4444" }}>Unprotected</span>
+                            <div className={styles.governanceText}>
+                                {activeRulesCount} Rule{activeRulesCount !== 1 ? "s" : ""} Active
                             </div>
+                            {activeRulesCount > 0 ? (
+                                <div className={styles.statusIndicator} style={{ color: "#00dc82" }}>
+                                    <span style={{ background: "rgba(0,220,130,0.1)", borderRadius: "50%", width: 16, height: 16, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10 }}>✓</span>
+                                    <span>Protected</span>
+                                </div>
+                            ) : (
+                                <div className={styles.statusIndicator}>
+                                    <span style={{ color: "#ef4444" }}>✕</span>
+                                    <span style={{ color: "#ef4444" }}>Unprotected</span>
+                                </div>
+                            )}
                         </div>
 
                         {/* Recent Activity */}
@@ -477,6 +597,156 @@ export default function DashboardPage() {
                                 }}
                             >
                                 {isCreatingKey ? "Creating..." : "Create API Key"}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Add New Rule Modal */}
+            {showRuleModal && (
+                <div className={styles.modalOverlay} onClick={handleOverlayClick}>
+                    <div className={styles.modalContentLarge} role="dialog" aria-modal="true" aria-labelledby="rule-modal-title">
+                        <div className={styles.modalHeader} style={{ marginBottom: 0 }}>
+                            <div>
+                                <h2 id="rule-modal-title" style={{ fontSize: 20, margin: 0 }}>Add New Rule</h2>
+                                <p className={styles.modalSubtitle} style={{ marginTop: 4 }}>
+                                    Create a usage or spending limit. Automatically protect your balance.
+                                </p>
+                            </div>
+                            <button className={styles.closeButton} onClick={() => setShowRuleModal(false)}>✕</button>
+                        </div>
+
+                        <div className={styles.ruleModalGrid}>
+                            {/* Left Column: Form Settings */}
+                            <div>
+                                <div className={styles.ruleSectionTitle}>What do you want to limit?</div>
+
+                                <div
+                                    className={`${styles.ruleOptionCard} ${ruleLimitType === "spending" ? styles.selected : ""}`}
+                                    onClick={() => setRuleLimitType("spending")}
+                                >
+                                    <div className={styles.ruleOptionIcon}></div>
+                                    <div className={styles.ruleOptionText}>
+                                        <h4><span style={{ color: "#00dc82" }}>$</span> Spending</h4>
+                                        <p>Control how much money is spent<br />e.g. Max $500 per month</p>
+                                    </div>
+                                </div>
+
+                                <div
+                                    className={`${styles.ruleOptionCard} ${ruleLimitType === "usage" ? styles.selected : ""}`}
+                                    onClick={() => setRuleLimitType("usage")}
+                                >
+                                    <div className={styles.ruleOptionIcon}></div>
+                                    <div className={styles.ruleOptionText}>
+                                        <h4><span style={{ color: "#00dc82" }}>📊</span> Usage</h4>
+                                        <p>Control how many times it&apos;s used<br />e.g. Max 10,000 calls per day</p>
+                                    </div>
+                                </div>
+
+                                <div className={styles.formGroup} style={{ marginTop: 24 }}>
+                                    <label>TARGET API KEY*</label>
+                                    <select
+                                        className={styles.formSelect}
+                                        value={ruleSelectedKeyId}
+                                        onChange={(e) => setRuleSelectedKeyId(e.target.value)}
+                                    >
+                                        <option value="" disabled>Select an API Key...</option>
+                                        {userKeys.map((k) => (
+                                            <option key={k.id} value={k.id}>{k.name}</option>
+                                        ))}
+                                    </select>
+                                    {userKeys.length === 0 && (
+                                        <span className={styles.formHelpText} style={{ color: "#ef4444" }}>You must create an API key first!</span>
+                                    )}
+                                </div>
+
+                                <div className={styles.formGroup}>
+                                    <label>MAXIMUM AMOUNT*</label>
+                                    <div className={styles.limitInputWrapper}>
+                                        {ruleLimitType === "spending" && <span className={styles.limitCurrency}>$</span>}
+                                        <input
+                                            type="number"
+                                            className={`${styles.formInput} ${ruleLimitType === "spending" ? styles.limitInput : ""}`}
+                                            placeholder="0.00"
+                                            value={ruleLimitAmount}
+                                            onChange={(e) => setRuleLimitAmount(e.target.value)}
+                                            step={ruleLimitType === "spending" ? "0.01" : "1"}
+                                        />
+                                    </div>
+                                </div>
+
+                                <div className={styles.formGroup}>
+                                    <label>TIME PERIOD*</label>
+                                    <select
+                                        className={styles.formSelect}
+                                        value={ruleTimePeriod}
+                                        onChange={(e) => setRuleTimePeriod(e.target.value)}
+                                    >
+                                        <option value="Per Run">Per Run (Total Quota)</option>
+                                    </select>
+                                    <span className={styles.formHelpText}>Aporto limits apply as total quota restrictions directly to the key.</span>
+                                </div>
+
+                                {createRuleError && (
+                                    <div style={{ color: "#ef4444", fontSize: 13, marginTop: 8 }}>
+                                        ⚠️ {createRuleError}
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Right Column: Summary */}
+                            <div>
+                                <div className={styles.ruleSummaryBox}>
+                                    <h3>Rule Summary</h3>
+
+                                    <div className={styles.formGroup}>
+                                        <label style={{ fontSize: 11, color: "#666", textTransform: "uppercase" }}>Name of Rule*</label>
+                                        <input
+                                            className={styles.formInput}
+                                            value={ruleName}
+                                            onChange={(e) => setRuleName(e.target.value)}
+                                            placeholder="Global Spending Limit"
+                                        />
+                                    </div>
+
+                                    <div className={styles.summaryItem}>
+                                        <div className={styles.summaryLabel}>Limit Type</div>
+                                        <div className={styles.summaryValue}>
+                                            {ruleLimitType === "spending" ? "Spending" : "Usage"}<br />
+                                            <span style={{ fontSize: 13, color: "#888" }}>
+                                                {ruleLimitType === "spending" ? "Control how much money is spent" : "Control how many times it's used"}
+                                            </span>
+                                        </div>
+                                    </div>
+
+                                    <div className={styles.summaryItem}>
+                                        <div className={styles.summaryLabel}>Time Period</div>
+                                        <div className={styles.summaryValue}>{ruleTimePeriod}</div>
+                                    </div>
+
+                                    <div className={styles.summaryItem}>
+                                        <div className={styles.summaryLabel}>Services</div>
+                                        <div className={styles.summaryValue}>All services</div>
+                                    </div>
+
+                                    <div className={styles.summaryItem}>
+                                        <div className={styles.summaryLabel}>Agents</div>
+                                        <div className={styles.summaryValue}>All agents</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className={styles.modalFooter}>
+                            <button className={styles.cancelButton} onClick={() => setShowRuleModal(false)} disabled={isCreatingRule}>Cancel</button>
+                            <button
+                                className={styles.createButton}
+                                style={{ background: "#00dc82", color: "#000" }}
+                                onClick={handleCreateRule}
+                                disabled={isCreatingRule}
+                            >
+                                {isCreatingRule ? "Saving..." : "Create Rule"}
                             </button>
                         </div>
                     </div>

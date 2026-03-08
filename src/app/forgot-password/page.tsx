@@ -42,8 +42,8 @@ export default function ForgotPasswordPage() {
             <div className={styles.leftSection}>
                 <div className={styles.branding}>
                     <div className={styles.logoContainer}>
-                        <div className={styles.logoIcon}>S</div>
-                        <div className={styles.logoText}>sapiom</div>
+                        <div className={styles.logoIcon}>A</div>
+                        <div className={styles.logoText}>aporto</div>
                     </div>
                     <div className={styles.tagline}>
                         <span>Reset Password.</span>

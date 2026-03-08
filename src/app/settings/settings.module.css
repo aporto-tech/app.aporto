@@ -1,0 +1,285 @@
+.container {
+    padding: 24px;
+    color: #fff;
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+.header {
+    margin-bottom: 24px;
+}
+
+.header h1 {
+    font-size: 28px;
+    font-weight: 700;
+    margin: 0 0 8px;
+    color: #f8fafc;
+}
+
+.header p {
+    color: #94a3b8;
+    margin: 0;
+    font-size: 15px;
+}
+
+/* Tabs */
+.tabs {
+    display: flex;
+    gap: 0;
+    margin-bottom: 24px;
+    background: #111;
+    border: 1px solid #222;
+    border-radius: 8px;
+    width: fit-content;
+    overflow: hidden;
+}
+
+.tab {
+    background: transparent;
+    border: none;
+    color: #888;
+    padding: 10px 20px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.tab:hover {
+    color: #bbb;
+}
+
+.tab.active {
+    background: #222;
+    color: #fff;
+}
+
+/* Card layout */
+.keysCard,
+.billingCard {
+    background: #11151c;
+    border: 1px solid #222c3b;
+    border-radius: 12px;
+    padding: 24px;
+}
+
+.cardHeader {
+    margin-bottom: 24px;
+}
+
+.cardHeader h2 {
+    font-size: 16px;
+    font-weight: 600;
+    margin: 0 0 4px;
+    color: #f8fafc;
+}
+
+.cardHeader p {
+    font-size: 13px;
+    color: #94a3b8;
+    margin: 0;
+}
+
+/* Toolbar */
+.toolbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+}
+
+.searchBox {
+    background: #0d1219;
+    border: 1px solid #1e293b;
+    color: #fff;
+    padding: 8px 16px;
+    border-radius: 6px;
+    font-size: 14px;
+    width: 300px;
+}
+
+.searchBox:focus {
+    outline: none;
+    border-color: #334155;
+}
+
+.toolbarRight {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+.keyCount {
+    color: #94a3b8;
+    font-size: 13px;
+}
+
+.createBtn {
+    background: #00dc82;
+    color: #000;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 6px;
+    font-weight: 600;
+    font-size: 14px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.createBtn:hover {
+    background: #00c675;
+}
+
+/* Table */
+.table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.table th {
+    text-align: left;
+    padding: 12px 0;
+    color: #888;
+    font-weight: 500;
+    font-size: 13px;
+    border-bottom: 1px solid #222c3b;
+}
+
+.table td {
+    padding: 16px 0;
+    border-bottom: 1px solid #1a2332;
+    font-size: 14px;
+    color: #e2e8f0;
+}
+
+.keyName {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 500;
+}
+
+.keyString {
+    background: #1e293b;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-family: monospace;
+    font-size: 12px;
+    color: #94a3b8;
+}
+
+.status {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    color: #64748b;
+}
+
+.statusActive {
+    color: #00dc82;
+}
+
+.actions {
+    display: flex;
+    gap: 12px;
+}
+
+.actionBtn {
+    background: transparent;
+    border: none;
+    color: #94a3b8;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    transition: color 0.2s;
+}
+
+.actionBtn:hover {
+    color: #f8fafc;
+}
+
+.revokeBtn {
+    color: #ef4444;
+}
+
+.revokeBtn:hover {
+    color: #f87171;
+}
+
+.empty {
+    text-align: center;
+    padding: 48px 0;
+    color: #888;
+}
+
+.emptyIcon {
+    font-size: 32px;
+    margin-bottom: 16px;
+}
+
+/* Billing specific */
+.billingEmpty {
+    border: 1px dashed #1e293b;
+    border-radius: 8px;
+    padding: 64px 20px;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    margin-top: 16px;
+}
+
+.cardIcon {
+    width: 48px;
+    height: 48px;
+    background: #1e293b;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+    color: #94a3b8;
+    margin-bottom: 16px;
+}
+
+.billingTitle {
+    font-size: 16px;
+    font-weight: 600;
+    color: #f8fafc;
+    margin: 0 0 8px;
+}
+
+.billingDesc {
+    font-size: 14px;
+    color: #94a3b8;
+    margin: 0 0 24px;
+}
+
+/* Modals */
+.modalPortal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.6);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    backdrop-filter: blur(4px);
+}
+
+.modal {
+    background: #0f1011;
+    border: 1px solid #1f2022;
+    border-radius: 12px;
+    width: 400px;
+    padding: 24px;
+}

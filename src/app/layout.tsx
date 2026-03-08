@@ -14,8 +14,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Sapiom - Login",
-  description: "Login to Sapiom to start tracking.",
+  title: "Aporto - Login",
+  description: "Login to Aporto to start tracking.",
 };
 
 export default function RootLayout({

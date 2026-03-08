@@ -46,7 +46,7 @@ export default function Home() {
             <div className={styles.welcomeText}>
               <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "16px" }}>
                 <div style={{ width: "32px", height: "32px", backgroundColor: "#00dc82", clipPath: "polygon(25% 0%, 100% 0%, 75% 100%, 0% 100%)" }}></div>
-                <h1 style={{ margin: 0 }}>Welcome to Sapiom!</h1>
+                <h1 style={{ margin: 0 }}>Welcome to Aporto!</h1>
               </div>
               <p>Complete the checklist below to get started. Switch to Analytics for your dashboard.</p>
             </div>
@@ -64,7 +64,7 @@ export default function Home() {
                 <div className={styles.actionIcon}>▶️</div>
                 <div className={styles.actionInfo}>
                   <h3>Interactive Guide</h3>
-                  <p>Try Sapiom in action</p>
+                  <p>Try Aporto in action</p>
                 </div>
               </div>
               <div className={styles.actionCard}>
@@ -111,7 +111,7 @@ export default function Home() {
                 <div className={styles.itemNumber}>3</div>
                 <div className={styles.itemText}>
                   <h4>First Transaction</h4>
-                  <p>Make your first API call through Sapiom</p>
+                  <p>Make your first API call through Aporto</p>
                 </div>
               </div>
               <span style={{ opacity: 0.5 }}>-</span>

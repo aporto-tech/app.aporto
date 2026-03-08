@@ -9,7 +9,6 @@ const Sidebar = () => {
     const pathname = usePathname();
 
     const navItems = [
-        { name: "Assistant", icon: "✨", path: "/assistant" },
         { name: "Dashboard", icon: "📊", path: "/dashboard" },
         { name: "Service Hub", icon: "⚡", path: "/services" },
         { name: "Guide", icon: "📖", path: "/guide" },
@@ -25,8 +24,8 @@ const Sidebar = () => {
     return (
         <aside className={styles.sidebar}>
             <div className={styles.sidebarLogo}>
-                <div className={styles.logoIcon}>S</div>
-                <span className={styles.logoText}>sapiom</span>
+                <div className={styles.logoIcon}>A</div>
+                <span className={styles.logoText}>aporto</span>
             </div>
 
             <nav className={styles.sidebarNav}>

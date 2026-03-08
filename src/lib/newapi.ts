@@ -8,6 +8,8 @@
  * It manages users, API tokens (keys), and LLM channel routing.
  */
 
+import { prisma } from "@/lib/prisma";
+
 interface NewApiUser {
     id: number;
     username: string;
@@ -18,6 +20,12 @@ interface NewApiToken {
     id: number;
     key: string;
     name: string;
+    status: number;
+    created_time: number;
+    accessed_time: number;
+    expired_time: number;
+    remain_quota: number;
+    unlimited_quota: boolean;
 }
 
 function getConfig() {
@@ -114,7 +122,9 @@ export async function newApiCreateToken(opts: {
             headers: {
                 "Content-Type": "application/json",
                 Authorization: `Bearer ${cfg.token}`,
-                "New-Api-User": opts.userId ? String(opts.userId) : "1",
+                // We MUST create this as the Admin user (1) initially, because New-API 
+                // rejects the request if New-Api-User does not match the token's owner ID.
+                "New-Api-User": "1",
             },
             body: JSON.stringify({
                 name: opts.name,
@@ -133,11 +143,12 @@ export async function newApiCreateToken(opts: {
 
         // New-API does NOT return the key string in the POST response.
         // We must fetch the tokens list and find the one we just created.
-        const listRes = await fetch(`${cfg.url}/api/token/?p=0&size=10`, {
+        // Because of the New-API delegation bug, the token is temporarily owned by Admin (1).
+        const listRes = await fetch(`${cfg.url}/api/token/?p=0&size=100`, {
             method: "GET",
             headers: {
                 Authorization: `Bearer ${cfg.token}`,
-                "New-Api-User": opts.userId ? String(opts.userId) : "1",
+                "New-Api-User": "1", // Always fetch from admin's list where it was mistakenly created
             },
         });
 
@@ -147,6 +158,13 @@ export async function newApiCreateToken(opts: {
             // Find the most recently created token that matches the name
             const createdToken = listData.data.items.find((t) => t.name === opts.name);
             if (createdToken) {
+                if (opts.userId) {
+                    try {
+                        await prisma.$executeRawUnsafe('UPDATE "tokens" SET "user_id" = $1 WHERE "id" = $2', opts.userId, createdToken.id);
+                    } catch (e) {
+                        console.error("[newapi] Failed to update token ownership via Prisma:", e);
+                    }
+                }
                 return createdToken;
             }
         }
@@ -188,6 +206,84 @@ export async function newApiUpdatePassword(opts: {
         return data.success ?? false;
     } catch (err) {
         console.error("[newapi] Error updating password:", err);
+        return false;
+    }
+}
+
+/**
+ * List all tokens for a specific user.
+ * We query Prisma directly because New-API strictly prevents Admins from fetching other users' tokens via API.
+ */
+export async function newApiListTokens(userId: number): Promise<NewApiToken[]> {
+    try {
+        const tokens = await prisma.$queryRawUnsafe<any[]>(
+            `SELECT id, key, name, status, created_time, accessed_time, expired_time, remain_quota, unlimited_quota 
+             FROM tokens 
+             WHERE user_id = $1 AND deleted_at IS NULL 
+             ORDER BY created_time DESC`,
+            userId
+        );
+
+        // Prisma returns BigInt for Postgres bigints, convert them to standard numbers to match Next.js serialization
+        return tokens.map(t => ({
+            id: Number(t.id),
+            key: t.key?.trim() || "",
+            name: t.name,
+            status: Number(t.status),
+            created_time: Number(t.created_time),
+            accessed_time: Number(t.accessed_time),
+            expired_time: Number(t.expired_time),
+            remain_quota: Number(t.remain_quota),
+            unlimited_quota: Boolean(t.unlimited_quota)
+        }));
+    } catch (err) {
+        console.error("[newapi] Error listing tokens via Prisma:", err);
+        return [];
+    }
+}
+
+/**
+ * Delete a specific token.
+ */
+export async function newApiDeleteToken(tokenId: number, userId: number): Promise<boolean> {
+    try {
+        // New-API uses soft deletes
+        const count = await prisma.$executeRawUnsafe(
+            `UPDATE tokens SET deleted_at = CURRENT_TIMESTAMP WHERE id = $1 AND user_id = $2`,
+            tokenId,
+            userId
+        );
+        return count > 0;
+    } catch (err) {
+        console.error("[newapi] Error deleting token via Prisma:", err);
+        return false;
+    }
+}
+
+/**
+ * Update a token's quota.
+ */
+export async function newApiUpdateTokenQuota(opts: {
+    tokenId: number;
+    userId: number;
+    name: string;
+    remain_quota: number;
+    unlimited_quota: boolean;
+}): Promise<boolean> {
+    try {
+        const count = await prisma.$executeRawUnsafe(
+            `UPDATE tokens 
+             SET name = $1, remain_quota = $2, unlimited_quota = $3 
+             WHERE id = $4 AND user_id = $5`,
+            opts.name,
+            opts.remain_quota,
+            opts.unlimited_quota,
+            opts.tokenId,
+            opts.userId
+        );
+        return count > 0;
+    } catch (err) {
+        console.error("[newapi] Error updating token quota via Prisma:", err);
         return false;
     }
 }

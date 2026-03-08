@@ -45,8 +45,8 @@ function LoginForm() {
       <div className={styles.leftSection}>
         <div className={styles.branding}>
           <div className={styles.logoContainer}>
-            <div className={styles.logoIcon}>S</div>
-            <div className={styles.logoText}>sapiom</div>
+            <div className={styles.logoIcon}>A</div>
+            <div className={styles.logoText}>aporto</div>
           </div>
           <div className={styles.tagline}>
             <span>Instant Tracking.</span>
@@ -58,7 +58,7 @@ function LoginForm() {
       <div className={styles.rightSection}>
         <div className={styles.loginCard}>
           <h1 className={styles.title}>Welcome!</h1>
-          <p className={styles.subtitle}>Login to Sapiom</p>
+          <p className={styles.subtitle}>Login to Aporto</p>
 
           <form onSubmit={handleSubmit}>
             {registered && <div style={{ color: "var(--accent-color)", marginBottom: "16px", textAlign: "center", fontSize: "14px" }}>Registration successful! Please login.</div>}

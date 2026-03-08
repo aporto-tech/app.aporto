@@ -1,0 +1,549 @@
+.container {
+    padding: 24px;
+    color: #fff;
+}
+
+.headerCard {
+    background: linear-gradient(135deg, #111a24 0%, #0d1219 100%);
+    border: 1px solid #1e293b;
+    border-radius: 16px;
+    padding: 32px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 32px;
+    position: relative;
+    overflow: hidden;
+}
+
+/* Background pattern */
+.headerCard::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-image: radial-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+    background-size: 20px 20px;
+    z-index: 0;
+    pointer-events: none;
+}
+
+.headerContent {
+    position: relative;
+    z-index: 1;
+    max-width: 60%;
+}
+
+.headerBadge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(0, 220, 130, 0.1);
+    color: #00dc82;
+    padding: 4px 12px;
+    border-radius: 9999px;
+    font-size: 13px;
+    font-weight: 500;
+    margin-bottom: 16px;
+    border: 1px solid rgba(0, 220, 130, 0.2);
+}
+
+.headerTitle {
+    font-size: 28px;
+    font-weight: 700;
+    margin: 0 0 12px;
+    color: #fff;
+}
+
+.headerDesc {
+    font-size: 15px;
+    color: #94a3b8;
+    line-height: 1.5;
+    margin: 0;
+}
+
+.headerWidgets {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    gap: 16px;
+}
+
+.widgetBox {
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 12px;
+    padding: 16px 20px;
+    min-width: 140px;
+}
+
+.widgetLabel {
+    font-size: 13px;
+    color: #94a3b8;
+    margin-bottom: 4px;
+}
+
+.widgetValue {
+    font-size: 20px;
+    font-weight: 700;
+    color: #f8fafc;
+}
+
+.widgetSub {
+    font-size: 12px;
+    color: #64748b;
+    margin-top: 2px;
+}
+
+.serviceList {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.serviceCard {
+    background: #0d1219;
+    border: 1px solid #1e293b;
+    border-radius: 12px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    transition: all 0.2s;
+}
+
+.serviceCard:hover {
+    border-color: #334155;
+}
+
+.serviceCardHeader {
+    padding: 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: pointer;
+    background: #0d1219;
+    transition: background 0.2s;
+}
+
+.serviceCardHeader:hover {
+    background: #111a24;
+}
+
+.serviceInfo {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+.serviceIcon {
+    width: 40px;
+    height: 40px;
+    border-radius: 8px;
+    background: rgba(0, 220, 130, 0.1);
+    color: #00dc82;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+    flex-shrink: 0;
+}
+
+.serviceText h3 {
+    margin: 0 0 4px;
+    font-size: 16px;
+    font-weight: 600;
+    color: #f8fafc;
+}
+
+.serviceText p {
+    margin: 0;
+    font-size: 14px;
+    color: #94a3b8;
+}
+
+.serviceActions {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+.connectBtn {
+    background: transparent;
+    border: 1px solid #334155;
+    color: #e2e8f0;
+    padding: 6px 16px;
+    border-radius: 6px;
+    font-weight: 500;
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.2s;
+    pointer-events: none;
+    /* Prevent click since the whole header is clickable */
+}
+
+.providerCount {
+    color: #94a3b8;
+    font-size: 13px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+/* Accordion Styles */
+.providersContainer {
+    display: grid;
+    grid-template-rows: 0fr;
+    transition: grid-template-rows 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.providersContainer.expanded {
+    grid-template-rows: 1fr;
+    border-top: 1px solid #1e293b;
+    background: #0b0f14;
+}
+
+.providersInner {
+    overflow: hidden;
+    padding: 0 20px;
+}
+
+.providersList {
+    padding: 20px 0;
+    display: flex;
+    gap: 16px;
+}
+
+.providerCard {
+    background: #11151c;
+    border: 1px solid #222c3b;
+    border-radius: 12px;
+    padding: 16px;
+    width: 280px;
+    flex-shrink: 0;
+}
+
+.providerHeader {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.providerName {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 15px;
+    font-weight: 600;
+    color: #e2e8f0;
+}
+
+.providerName svg {
+    width: 16px;
+    height: 16px;
+    color: #94a3b8;
+}
+
+.providerConnectBtn {
+    background: #1e293b;
+    border: 1px solid #334155;
+    color: #f8fafc;
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-weight: 500;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.providerConnectBtn:hover {
+    background: #334155;
+}
+
+.providerDesc {
+    font-size: 13px;
+    color: #94a3b8;
+    margin-bottom: 16px;
+}
+
+.providerPricingDivider {
+    height: 1px;
+    background: #1e293b;
+    margin: 16px 0 12px;
+}
+
+.pricingTitle {
+    font-size: 12px;
+    color: #64748b;
+    margin-bottom: 8px;
+}
+
+.pricingRow {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 13px;
+    margin-bottom: 6px;
+}
+
+.pricingLabel {
+    color: #94a3b8;
+}
+
+.pricingValue {
+    color: #f8fafc;
+    font-family: monospace;
+}
+
+/* Modal Custom Styles */
+.modalOverlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.8);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 2000;
+    backdrop-filter: blur(4px);
+}
+
+.modalContent {
+    background: #111111;
+    border: 1px solid #222222;
+    border-radius: 12px;
+    width: 100%;
+    max-width: 640px;
+    display: flex;
+    flex-direction: column;
+    max-height: 90vh;
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
+}
+
+.modalHeader {
+    padding: 20px 24px;
+    border-bottom: 1px solid #222;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.modalHeaderLeft {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.stepBadge {
+    background: rgba(0, 220, 130, 0.1);
+    color: #00dc82;
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+}
+
+.headerTitle {
+    font-size: 16px;
+    font-weight: 600;
+    color: #fff;
+    margin: 0;
+}
+
+.stepIndicator {
+    font-size: 13px;
+    color: #888;
+}
+
+.closeButton {
+    background: none;
+    border: none;
+    color: #888;
+    font-size: 18px;
+    cursor: pointer;
+}
+
+.modalBody {
+    padding: 32px 24px;
+    overflow-y: auto;
+}
+
+.modalTitle {
+    text-align: center;
+    font-size: 24px;
+    font-weight: 700;
+    margin: 0 0 8px;
+}
+
+.modalSubtitle {
+    text-align: center;
+    color: #888;
+    font-size: 14px;
+    margin: 0 0 32px;
+}
+
+.apiKeyBox {
+    background: rgba(0, 220, 130, 0.05);
+    border: 1px solid rgba(0, 220, 130, 0.2);
+    border-radius: 8px;
+    padding: 16px;
+    margin-bottom: 24px;
+}
+
+.apiKeyHeader {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 12px;
+    font-size: 13px;
+    color: #888;
+}
+
+.apiKeyText {
+    font-family: monospace;
+    color: #eee;
+    word-break: break-all;
+    font-size: 14px;
+}
+
+.copyBtn {
+    background: none;
+    border: none;
+    color: #fff;
+    cursor: pointer;
+    font-size: 13px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.codeBox {
+    background: #000;
+    border: 1px solid #333;
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.codeHeader {
+    background: #111;
+    padding: 12px 16px;
+    border-bottom: 1px solid #333;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.windowControls {
+    display: flex;
+    gap: 6px;
+}
+
+.controlDot {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+}
+
+.dotRed {
+    background: #ff5f56;
+}
+
+.dotYellow {
+    background: #ffbd2e;
+}
+
+.dotGreen {
+    background: #27c93f;
+}
+
+.fileName {
+    color: #888;
+    font-size: 13px;
+    font-family: monospace;
+}
+
+.codeTabs {
+    display: flex;
+    gap: 8px;
+}
+
+.codeTab {
+    background: none;
+    border: none;
+    color: #888;
+    font-size: 12px;
+    padding: 4px 8px;
+    cursor: pointer;
+    border-radius: 4px;
+}
+
+.codeTab.active {
+    background: #333;
+    color: #fff;
+}
+
+.codeContent {
+    padding: 16px;
+    margin: 0;
+    font-family: monospace;
+    font-size: 13px;
+    color: #e2e8f0;
+    overflow-x: auto;
+    line-height: 1.5;
+}
+
+.keyword {
+    color: #ff7b72;
+}
+
+.string {
+    color: #a5d6ff;
+}
+
+.comment {
+    color: #8b949e;
+}
+
+.function {
+    color: #d2a8ff;
+}
+
+.modalFooter {
+    padding: 16px 24px;
+    border-top: 1px solid #222;
+    display: flex;
+    justify-content: space-between;
+    background: #111;
+    border-bottom-left-radius: 12px;
+    border-bottom-right-radius: 12px;
+}
+
+.backBtn {
+    background: transparent;
+    border: none;
+    color: #fff;
+    cursor: pointer;
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.doneBtn {
+    background: #00dc82;
+    color: #000;
+    border: none;
+    padding: 10px 24px;
+    border-radius: 6px;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}

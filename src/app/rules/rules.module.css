@@ -1,0 +1,117 @@
+.container {
+    padding: 24px;
+}
+
+.header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 32px;
+}
+
+.header h1 {
+    font-size: 24px;
+    font-weight: 700;
+    margin: 0;
+}
+
+.rulesCard {
+    background-color: #111111;
+    border: 1px solid #222222;
+    border-radius: 12px;
+    overflow: hidden;
+}
+
+.table {
+    width: 100%;
+    border-collapse: collapse;
+    text-align: left;
+}
+
+.table th {
+    padding: 16px 24px;
+    border-bottom: 1px solid #222222;
+    font-size: 13px;
+    font-weight: 600;
+    color: #888888;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.table td {
+    padding: 16px 24px;
+    border-bottom: 1px solid #222222;
+    font-size: 14px;
+    color: #eeeeee;
+}
+
+.table tr:last-child td {
+    border-bottom: none;
+}
+
+.ruleName {
+    font-weight: 600;
+}
+
+.targetKey {
+    font-family: monospace;
+    color: #666;
+    background: #1a1a1a;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 13px;
+}
+
+.status {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+}
+
+.statusActive {
+    color: #00dc82;
+}
+
+.actions {
+    display: flex;
+    gap: 12px;
+}
+
+.actionBtn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: #666;
+    font-size: 18px;
+    padding: 4px;
+    transition: color 0.2s;
+}
+
+.actionBtn:hover {
+    color: #ffffff;
+}
+
+.revokeBtn:hover {
+    color: #ef4444;
+}
+
+.loading {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 100px 0;
+    color: #888;
+}
+
+.empty {
+    padding: 60px 0;
+    text-align: center;
+    color: #666;
+}
+
+.emptyIcon {
+    font-size: 48px;
+    margin-bottom: 16px;
+    opacity: 0.2;
+}
