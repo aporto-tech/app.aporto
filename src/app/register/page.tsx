@@ -57,7 +57,7 @@ export default function RegisterPage() {
             <div className={styles.leftSection}>
                 <div className={styles.branding}>
                     <div className={styles.logoContainer}>
-                        <div className={styles.logoIcon}>A</div>
+                        <img src="/logo.svg" alt="Aporto Logo" width={32} height={32} />
                         <div className={styles.logoText}>aporto</div>
                     </div>
                     <div className={styles.tagline}>
