@@ -67,31 +67,31 @@ export default function GuidePage() {
     const renderCodeBlock = () => {
         let codeContent = "";
         if (codeFormat === "Axios") {
-            codeContent = `// npm install @sapiom/axios axios
+            codeContent = `// npm install @aporto/axios axios
 
-import { withSapiom } from '@sapiom/axios';
+import { withAporto } from '@aporto/axios';
 import axios from 'axios';
 
 // IMPORTANT: Store API keys securely as environment variables
-// e.g., process.env.SAPIOM_API_KEY, process.env.OPENAI_API_KEY
+// e.g., process.env.APORTO_API_KEY, process.env.OPENAI_API_KEY
 
-const sapiomClient = withSapiom(axios, {
-  apiKey: process.env.SAPIOM_API_KEY,  // Your Sapiom API Key
+const aportoClient = withAporto(axios, {
+  apiKey: process.env.APORTO_API_KEY,  // Your Aporto API Key
   agentName: '${agentName}'  // Your agent name
 });
 
 // Use like regular axios - requests are tracked automatically
-const response = await sapiomClient.post('/v1/chat/completions', {
+const response = await aportoClient.post('/v1/chat/completions', {
   model: 'gpt-4',
   messages: [{ role: 'user', content: 'Hello' }]
 });`;
         } else {
-            codeContent = `// Using standard fetch with Sapiom routing
+            codeContent = `// Using standard fetch with Aporto routing
 
 const response = await fetch('https://api.aporto.tech/v1/chat/completions', {
     method: 'POST',
     headers: {
-        'Authorization': \`Bearer \${process.env.SAPIOM_API_KEY}\`,
+        'Authorization': \`Bearer \${process.env.APORTO_API_KEY}\`,
         'Content-Type': 'application/json',
         'X-Agent-Name': '${agentName}'
     },
@@ -150,7 +150,7 @@ const data = await response.json();`;
                         <div className={styles.mainIcon}>▶</div>
                         <div className={styles.headerText}>
                             <h1>Interactive Guide</h1>
-                            <p>Experience Sapiom in action</p>
+                            <p>Experience Aporto in action</p>
                         </div>
                     </div>
                     <button className={styles.docsBtn}>
@@ -169,7 +169,7 @@ const data = await response.json();`;
                             <div className={styles.sectionLabel}>
                                 <div className={styles.sectionIcon}>⚡</div>
                                 <div>
-                                    <p>Sapiom Services</p>
+                                    <p>Aporto Services</p>
                                     <span>Execute live demos with real API calls</span>
                                 </div>
                             </div>
@@ -211,7 +211,7 @@ const data = await response.json();`;
                             >
                                 <div className={`${styles.serviceCardIcon} ${styles.cyan}`}>🔗</div>
                                 <div className={styles.serviceCardInfo}>
-                                    <h3>Add Sapiom to Your Code</h3>
+                                    <h3>Add Aporto to Your Code</h3>
                                     <p>Wrap your existing API calls with tracking</p>
                                 </div>
                                 {selectedService === "take_control" && (
@@ -232,7 +232,7 @@ const data = await response.json();`;
                     {currentStep === 2 && (
                         <div className={styles.stepHeaderLeft}>
                             <h2 className={styles.stepTitle}>Add Your Code</h2>
-                            <p className={styles.stepSubtitle}>Add the Sapiom SDK to your existing code</p>
+                            <p className={styles.stepSubtitle}>Add the Aporto SDK to your existing code</p>
 
                             <div className={styles.inputGroup}>
                                 <label>Agent Name</label>
@@ -295,7 +295,7 @@ const data = await response.json();`;
                                 <div className={styles.ruleHeader}>
                                     <div className={styles.ruleIcon}>🛡️</div>
                                     <div>
-                                        <h3 className={styles.ruleTitle}>Add Sapiom to Your Code Spend Limit</h3>
+                                        <h3 className={styles.ruleTitle}>Add Aporto to Your Code Spend Limit</h3>
                                         <p className={styles.ruleDesc}>Block transactions when spend exceeds limit</p>
                                     </div>
                                 </div>
@@ -338,7 +338,7 @@ const data = await response.json();`;
                             <div style={{ textAlign: 'center', marginTop: '64px' }}>
                                 <div style={{ fontSize: 64, marginBottom: 24 }}>🎉</div>
                                 <h2 className={styles.stepTitle}>Setup Complete!</h2>
-                                <p className={styles.stepSubtitle}>You have successfully configured and tested your Sapiom integration.</p>
+                                <p className={styles.stepSubtitle}>You have successfully configured and tested your Aporto integration.</p>
 
                                 <button className={styles.continueBtn} style={{ margin: '0 auto' }} onClick={() => window.location.href = '/dashboard'}>Go to Dashboard</button>
                             </div>

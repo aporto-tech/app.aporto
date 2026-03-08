@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, useCallback } from "react";
 import { useSession } from "next-auth/react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import DashboardLayout from "../components/DashboardLayout";
 import styles from "./settings.module.css";
 import dashboardStyles from "../dashboard.module.css";
@@ -20,7 +20,17 @@ interface ApiToken {
 export default function SettingsPage() {
     const { data: session, status } = useSession();
     const router = useRouter();
+    const searchParams = useSearchParams();
     const [activeTab, setActiveTab] = useState<"api-keys" | "billing">("api-keys");
+
+    useEffect(() => {
+        const tab = searchParams.get("tab");
+        if (tab === "billing") {
+            setActiveTab("billing");
+        } else if (tab === "api-keys") {
+            setActiveTab("api-keys");
+        }
+    }, [searchParams]);
 
     const [tokens, setTokens] = useState<ApiToken[]>([]);
     const [loading, setLoading] = useState(true);
@@ -35,6 +45,9 @@ export default function SettingsPage() {
     const [isCreatingKey, setIsCreatingKey] = useState(false);
     const [generatedKey, setGeneratedKey] = useState("");
     const [showKeyCreatedModal, setShowKeyCreatedModal] = useState(false);
+
+    // Payment Modal state
+    const [showPaymentModal, setShowPaymentModal] = useState(false);
 
     const fetchTokens = useCallback(async () => {
         setLoading(true);
@@ -197,7 +210,7 @@ export default function SettingsPage() {
                             <div className={styles.cardIcon}>💳</div>
                             <h3 className={styles.billingTitle}>No payment method</h3>
                             <p className={styles.billingDesc}>Add a payment method to enable automatic billing</p>
-                            <button className={styles.createBtn}>+ Add Payment Method</button>
+                            <button className={styles.createBtn} onClick={() => setShowPaymentModal(true)}>+ Add Payment Method</button>
                         </div>
                     </div>
                 )}
@@ -253,6 +266,71 @@ export default function SettingsPage() {
                         </div>
                         <div className={dashboardStyles.modalFooter}>
                             <button className={dashboardStyles.createButton} onClick={() => setShowKeyCreatedModal(false)}>Done</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Payment Method Modal */}
+            {showPaymentModal && (
+                <div className={dashboardStyles.modalOverlay} onClick={(e) => e.target === e.currentTarget && setShowPaymentModal(false)}>
+                    <div className={styles.paymentModal}>
+                        <div className={styles.paymentModalHeader}>
+                            <div>
+                                <h2>Add Payment Method</h2>
+                                <p>Enter your card details to add a new payment method.</p>
+                            </div>
+                            <button className={styles.paymentCloseBtn} onClick={() => setShowPaymentModal(false)}>✕</button>
+                        </div>
+
+                        <div className={styles.paymentDivider}></div>
+
+                        <div className={styles.paymentFormGroup}>
+                            <label className={styles.paymentLabel}>Card number</label>
+                            <div className={styles.paymentInputWrapper}>
+                                <input type="text" className={styles.paymentInput} placeholder="1234 1234 1234 1234" />
+                                <div className={styles.cardIcons}>
+                                    <img src="https://upload.wikimedia.org/wikipedia/commons/2/2a/Mastercard-logo.svg" className={styles.cardIconImg} alt="Mastercard" />
+                                    <img src="https://upload.wikimedia.org/wikipedia/commons/5/5e/Visa_Inc._logo.svg" className={styles.cardIconImg} alt="Visa" />
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className={styles.paymentRow}>
+                            <div className={styles.paymentCol}>
+                                <label className={styles.paymentLabel}>Expiry date</label>
+                                <input type="text" className={styles.paymentInput} placeholder="MM / YY" />
+                            </div>
+                            <div className={styles.paymentCol}>
+                                <label className={styles.paymentLabel}>Security code</label>
+                                <div className={styles.paymentInputWrapper}>
+                                    <input type="text" className={styles.paymentInput} placeholder="CVC" />
+                                    <span style={{ position: 'absolute', right: 16, color: '#94a3b8' }}>💳</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className={styles.paymentFormGroup}>
+                            <label className={styles.paymentLabel}>Country</label>
+                            <select className={styles.paymentSelect} defaultValue="Netherlands">
+                                <option value="Netherlands">Netherlands</option>
+                                <option value="United States">United States</option>
+                                <option value="United Kingdom">United Kingdom</option>
+                                <option value="Germany">Germany</option>
+                                <option value="France">France</option>
+                            </select>
+                        </div>
+
+                        <div className={styles.paymentDisclaimer}>
+                            By providing your card information, you allow Aporto to charge your card for future payments in accordance with their terms.
+                        </div>
+
+                        <div className={styles.paymentFooter}>
+                            <button className={styles.paymentCancelBtn} onClick={() => setShowPaymentModal(false)}>Cancel</button>
+                            <button className={styles.paymentAddBtn} onClick={() => {
+                                alert("Card added successfully!");
+                                setShowPaymentModal(false);
+                            }}>Add Card</button>
                         </div>
                     </div>
                 </div>

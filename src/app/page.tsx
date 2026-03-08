@@ -125,7 +125,12 @@ export default function Home() {
                   <p>Continue after your $5 free credits</p>
                 </div>
               </div>
-              <button className={styles.itemButton}>Add</button>
+              <button
+                className={styles.itemButton}
+                onClick={() => router.push("/settings?tab=billing")}
+              >
+                Add
+              </button>
             </div>
           </div>
         </div>
@@ -137,7 +142,12 @@ export default function Home() {
               <span>$ Available Balance</span>
             </div>
             <div className={styles.balanceAmount}>$5.00</div>
-            <button className={styles.addFundsBtn}>+ Add Funds</button>
+            <button
+              className={styles.addFundsBtn}
+              onClick={() => router.push("/settings?tab=billing")}
+            >
+              + Add Funds
+            </button>
           </div>
 
           {/* Governance Widget */}
