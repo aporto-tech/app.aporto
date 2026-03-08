@@ -24,7 +24,7 @@ const Sidebar = () => {
     return (
         <aside className={styles.sidebar}>
             <div className={styles.sidebarLogo}>
-                <div className={styles.logoIcon}>A</div>
+                <img src="/logo.svg" alt="Aporto Logo" width={32} height={32} />
                 <span className={styles.logoText}>aporto</span>
             </div>
 

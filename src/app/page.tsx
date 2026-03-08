@@ -45,7 +45,7 @@ export default function Home() {
           <div className={styles.welcomeCard}>
             <div className={styles.welcomeText}>
               <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "16px" }}>
-                <div style={{ width: "32px", height: "32px", backgroundColor: "#00dc82", clipPath: "polygon(25% 0%, 100% 0%, 75% 100%, 0% 100%)" }}></div>
+                <img src="/logo.svg" alt="Aporto Logo" width={32} height={32} />
                 <h1 style={{ margin: 0 }}>Welcome to Aporto!</h1>
               </div>
               <p>Complete the checklist below to get started. Switch to Analytics for your dashboard.</p>
