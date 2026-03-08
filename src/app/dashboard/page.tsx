@@ -470,7 +470,7 @@ export default function DashboardPage() {
                                     ${balance?.remainingUSD.toFixed(4) ?? "0.0000"}
                                 </div>
                             )}
-                            <button className={styles.addFundsBtn} onClick={() => alert("Add Funds – coming soon!")}>
+                            <button className={styles.addFundsBtn} onClick={() => router.push("/settings?tab=billing")}>
                                 + Add Funds
                             </button>
                         </div>
