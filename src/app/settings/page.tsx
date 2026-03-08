@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import DashboardLayout from "../components/DashboardLayout";
 import styles from "./settings.module.css";
 import dashboardStyles from "../dashboard.module.css";
+import { Suspense } from "react";
 
 interface ApiToken {
     id: number;
@@ -17,7 +18,7 @@ interface ApiToken {
     unlimited_quota: boolean;
 }
 
-export default function SettingsPage() {
+function SettingsContent() {
     const { data: session, status } = useSession();
     const router = useRouter();
     const searchParams = useSearchParams();
@@ -336,5 +337,13 @@ export default function SettingsPage() {
                 </div>
             )}
         </DashboardLayout>
+    );
+}
+
+export default function SettingsPage() {
+    return (
+        <Suspense fallback={<div style={{ padding: "24px", color: "#888" }}>Loading settings...</div>}>
+            <SettingsContent />
+        </Suspense>
     );
 }
