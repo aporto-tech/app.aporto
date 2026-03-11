@@ -1,12 +1,17 @@
 "use client";
 
-import React from "react";
+import React, { useEffect, useState } from "react";
 import styles from "./layout.module.css";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useSession } from "next-auth/react";
 
 const Sidebar = () => {
     const pathname = usePathname();
+    const { status } = useSession();
+
+    const [balance, setBalance] = useState<{ remainingUSD: number; usedUSD: number } | null>(null);
+    const [balanceLoading, setBalanceLoading] = useState(true);
 
     const navItems = [
         { name: "Dashboard", icon: "📊", path: "/dashboard" },
@@ -20,6 +25,29 @@ const Sidebar = () => {
         { name: "Rules", icon: "🛡️", path: "/rules", hasAdd: true },
         { name: "Activity", icon: "📈", path: "/activity" },
     ];
+
+    useEffect(() => {
+        if (status !== "authenticated") {
+            setBalanceLoading(false);
+            return;
+        }
+        const fetchBalance = async () => {
+            try {
+                const res = await fetch("/api/newapi/balance");
+                const data = await res.json() as { success: boolean; remainingUSD?: number; usedUSD?: number };
+                if (data.success) {
+                    setBalance({ remainingUSD: data.remainingUSD ?? 0, usedUSD: data.usedUSD ?? 0 });
+                }
+            } catch {
+                // silently fail
+            } finally {
+                setBalanceLoading(false);
+            }
+        };
+        fetchBalance();
+        const interval = setInterval(fetchBalance, 60_000); // refresh every minute
+        return () => clearInterval(interval);
+    }, [status]);
 
     return (
         <aside className={styles.sidebar}>
@@ -65,7 +93,11 @@ const Sidebar = () => {
                     <span>Settings</span>
                 </Link>
                 <div className={styles.balance}>
-                    Balance: <strong>$5.00</strong>
+                    {balanceLoading ? (
+                        <span>Balance: <strong>...</strong></span>
+                    ) : (
+                        <span>Balance: <strong>${balance?.remainingUSD.toFixed(4) ?? "0.0000"}</strong></span>
+                    )}
                 </div>
             </div>
         </aside>
