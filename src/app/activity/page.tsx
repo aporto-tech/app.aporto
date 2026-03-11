@@ -1,23 +1,28 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import DashboardLayout from "../components/DashboardLayout";
 import styles from "./activity.module.css";
 
 interface LogEntry {
     id: number;
+    user_id: number;
     created_at: number;
     type: number;
     content: string;
+    username: string;
     token_name: string;
     model_name: string;
     quota: number;
     prompt_tokens: number;
     completion_tokens: number;
+    channel_id: number;
     use_time: number;
+    is_stream: boolean;
 }
 
-const LOG_TYPE_LABEL: Record<number, { label: string; color: string }> = {
+const LOG_TYPES: Record<number, { label: string; color: string }> = {
+    0: { label: "All", color: "#64748b" },
     1: { label: "Recharge", color: "#3b82f6" },
     2: { label: "Consumption", color: "#f59e0b" },
     3: { label: "Management", color: "#8b5cf6" },
@@ -37,8 +42,6 @@ function formatDate(ts: number): string {
     });
 }
 
-const PAGE_SIZE = 20;
-
 export default function ActivityPage() {
     const [logs, setLogs] = useState<LogEntry[]>([]);
     const [total, setTotal] = useState(0);
@@ -49,51 +52,44 @@ export default function ActivityPage() {
     const [tokenFilter, setTokenFilter] = useState("");
     const [startDate, setStartDate] = useState("");
     const [endDate, setEndDate] = useState("");
-    const [trigger, setTrigger] = useState(0); // increment to re-fetch
 
-    useEffect(() => {
-        let cancelled = false;
+    const PAGE_SIZE = 20;
+
+    const fetchLogs = useCallback(async (p: number) => {
         setLoading(true);
         setError(null);
-
-        const params = new URLSearchParams({
-            p: String(page),
-            size: String(PAGE_SIZE),
-            type: "0",
-        });
-        if (modelFilter) params.set("model_name", modelFilter);
-        if (tokenFilter) params.set("token_name", tokenFilter);
-        if (startDate) params.set("start_timestamp", String(Math.floor(new Date(startDate).getTime() / 1000)));
-        if (endDate) params.set("end_timestamp", String(Math.floor(new Date(endDate).getTime() / 1000)));
-
-        fetch(`/api/newapi/logs?${params.toString()}`)
-            .then(r => r.json())
-            .then(data => {
-                if (cancelled) return;
-                if (data.success) {
-                    setLogs(data.data?.items ?? []);
-                    setTotal(data.data?.total ?? 0);
-                } else {
-                    setError(data.message ?? "Failed to fetch logs");
-                }
-            })
-            .catch(e => {
-                if (!cancelled) setError(String(e));
-            })
-            .finally(() => {
-                if (!cancelled) setLoading(false);
+        try {
+            const params = new URLSearchParams({
+                p: String(p),
+                size: String(PAGE_SIZE),
+                type: "0",
             });
+            if (modelFilter) params.set("model_name", modelFilter);
+            if (tokenFilter) params.set("token_name", tokenFilter);
+            if (startDate) params.set("start_timestamp", String(Math.floor(new Date(startDate).getTime() / 1000)));
+            if (endDate) params.set("end_timestamp", String(Math.floor(new Date(endDate).getTime() / 1000)));
 
-        return () => { cancelled = true; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [page, trigger]);
+            const res = await fetch(`/api/newapi/logs?${params.toString()}`);
+            const data = await res.json();
+            if (data.success) {
+                setLogs(data.data?.items ?? []);
+                setTotal(data.data?.total ?? 0);
+            } else {
+                setError(data.message ?? "Failed to fetch logs");
+            }
+        } catch (e) {
+            setError(String(e));
+        } finally {
+            setLoading(false);
+        }
+    }, [modelFilter, tokenFilter, startDate, endDate]);
+
+    useEffect(() => {
+        setPage(0);
+        fetchLogs(0);
+    }, [fetchLogs]);
 
     const totalPages = Math.ceil(total / PAGE_SIZE);
-
-    function applyFilters() {
-        setPage(0);
-        setTrigger(t => t + 1);
-    }
 
     return (
         <DashboardLayout>
@@ -114,7 +110,6 @@ export default function ActivityPage() {
                                 value={modelFilter}
                                 onChange={e => setModelFilter(e.target.value)}
                                 style={{ appearance: "none", backgroundImage: "none" }}
-                                onKeyDown={e => { if (e.key === "Enter") applyFilters(); }}
                             />
                         </div>
                         <div className={styles.filterGroup}>
@@ -125,12 +120,7 @@ export default function ActivityPage() {
                                 value={tokenFilter}
                                 onChange={e => setTokenFilter(e.target.value)}
                                 style={{ appearance: "none", backgroundImage: "none" }}
-                                onKeyDown={e => { if (e.key === "Enter") applyFilters(); }}
                             />
-                        </div>
-                        <div className={styles.filterGroup} style={{ justifyContent: "flex-end" }}>
-                            <span className={styles.filterLabel}>&nbsp;</span>
-                            <button className={styles.applyBtn} onClick={applyFilters}>Search</button>
                         </div>
                     </div>
                     <div className={styles.dateFilters}>
@@ -194,18 +184,18 @@ export default function ActivityPage() {
                                     </thead>
                                     <tbody>
                                         {logs.map((log) => {
-                                            const t = LOG_TYPE_LABEL[log.type];
+                                            const typeInfo = LOG_TYPES[log.type] ?? LOG_TYPES[0];
                                             return (
                                                 <tr key={log.id}>
                                                     <td className={styles.cellMono}>{formatDate(log.created_at)}</td>
                                                     <td>
-                                                        {t ? (
-                                                            <span className={styles.typeBadge} style={{ background: t.color + "22", color: t.color }}>
-                                                                {t.label}
-                                                            </span>
-                                                        ) : "—"}
+                                                        <span className={styles.typeBadge} style={{ background: typeInfo.color + "22", color: typeInfo.color }}>
+                                                            {typeInfo.label}
+                                                        </span>
                                                     </td>
-                                                    <td><span className={styles.modelTag}>{log.model_name || "—"}</span></td>
+                                                    <td>
+                                                        <span className={styles.modelTag}>{log.model_name || "—"}</span>
+                                                    </td>
                                                     <td className={styles.cellMuted}>{log.token_name || "—"}</td>
                                                     <td className={styles.cellNum}>{log.prompt_tokens.toLocaleString()}</td>
                                                     <td className={styles.cellNum}>{log.completion_tokens.toLocaleString()}</td>
@@ -219,22 +209,23 @@ export default function ActivityPage() {
                                 </table>
                             </div>
 
+                            {/* Pagination */}
                             {totalPages > 1 && (
                                 <div className={styles.pagination}>
                                     <button
                                         className={styles.pageBtn}
                                         disabled={page === 0}
-                                        onClick={() => setPage(p => p - 1)}
+                                        onClick={() => { setPage(p => p - 1); fetchLogs(page - 1); }}
                                     >
                                         ← Prev
                                     </button>
                                     <span className={styles.pageInfo}>
-                                        Page {page + 1} of {totalPages} · {total} total
+                                        Page {page + 1} of {totalPages} &nbsp;·&nbsp; {total} total
                                     </span>
                                     <button
                                         className={styles.pageBtn}
                                         disabled={page >= totalPages - 1}
-                                        onClick={() => setPage(p => p + 1)}
+                                        onClick={() => { setPage(p => p + 1); fetchLogs(page + 1); }}
                                     >
                                         Next →
                                     </button>
