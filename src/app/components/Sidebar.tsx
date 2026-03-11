@@ -1,12 +1,37 @@
 "use client";
 
-import React from "react";
+import React, { useEffect, useState } from "react";
 import styles from "./layout.module.css";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const Sidebar = () => {
     const pathname = usePathname();
+
+    // Balance state (from New-API)
+    const [balance, setBalance] = useState<{ remainingUSD: number; usedUSD: number } | null>(null);
+    const [balanceLoading, setBalanceLoading] = useState(true);
+
+    // ─── Fetch balance from New-API ──────────────────────────────────────────
+    useEffect(() => {
+        const fetchBalance = async () => {
+            setBalanceLoading(true);
+            try {
+                const res = await fetch("/api/newapi/balance");
+                const data = await res.json() as { success: boolean; remainingUSD?: number; usedUSD?: number };
+                if (data.success) {
+                    setBalance({ remainingUSD: data.remainingUSD ?? 0, usedUSD: data.usedUSD ?? 0 });
+                }
+            } catch {
+                // silently fail
+            } finally {
+                setBalanceLoading(false);
+            }
+        };
+        fetchBalance();
+        const interval = setInterval(fetchBalance, 60_000);
+        return () => clearInterval(interval);
+    }, []);
 
     const navItems = [
         { name: "Dashboard", icon: "📊", path: "/dashboard" },
@@ -65,7 +90,11 @@ const Sidebar = () => {
                     <span>Settings</span>
                 </Link>
                 <div className={styles.balance}>
-                    Balance: <strong>$5.00</strong>
+                    {balanceLoading ? (
+                        <span>Balance: <strong>...</strong></span>
+                    ) : (
+                        <span>Balance: <strong>${balance?.remainingUSD.toFixed(4) ?? "0.0000"}</strong></span>
+                    )}
                 </div>
             </div>
         </aside>
