@@ -58,6 +58,10 @@ export default function DashboardPage() {
     const [balance, setBalance] = useState<{ remainingUSD: number; usedUSD: number } | null>(null);
     const [balanceLoading, setBalanceLoading] = useState(true);
 
+    // Logs state for Recent Activity
+    const [recentLogs, setRecentLogs] = useState<any[]>([]);
+    const [logsLoading, setLogsLoading] = useState(true);
+
     // ─── Auth redirect ───────────────────────────────────────────────────────
     useEffect(() => {
         if (status === "unauthenticated") {
@@ -85,6 +89,26 @@ export default function DashboardPage() {
         fetchBalance();
         const interval = setInterval(fetchBalance, 60_000);
         return () => clearInterval(interval);
+    }, [status]);
+
+    // ─── Fetch recent logs ───────────────────────────────────────────────────
+    useEffect(() => {
+        if (status !== "authenticated") return;
+        const fetchLogs = async () => {
+            setLogsLoading(true);
+            try {
+                const res = await fetch("/api/newapi/logs?page=0&size=5");
+                const data = await res.json();
+                if (data.success && data.logs) {
+                    setRecentLogs(data.logs);
+                }
+            } catch {
+                // silently fail
+            } finally {
+                setLogsLoading(false);
+            }
+        };
+        fetchLogs();
     }, [status]);
 
     // ─── Fetch keys to persist "Getting Started" checklist ───────────────────
@@ -514,13 +538,49 @@ export default function DashboardPage() {
                                     View All
                                 </Link>
                             </div>
-                            <div className={styles.noActivity}>
-                                <div style={{ fontSize: 32, marginBottom: 12, color: "#333" }}>〜</div>
-                                <div style={{ fontWeight: 500, marginBottom: 8 }}>No recent activity</div>
-                                <div style={{ fontSize: 12, lineHeight: 1.5, color: "#555", maxWidth: 160, margin: "0 auto" }}>
-                                    Transactions will appear here once your agents start making requests
+                            {logsLoading ? (
+                                <div style={{ padding: "20px", textAlign: "center", color: "#888", fontSize: 13 }}>Loading...</div>
+                            ) : recentLogs.length === 0 ? (
+                                <div className={styles.noActivity}>
+                                    <div style={{ fontSize: 32, marginBottom: 12, color: "#333" }}>〜</div>
+                                    <div style={{ fontWeight: 500, marginBottom: 8 }}>No recent activity</div>
+                                    <div style={{ fontSize: 12, lineHeight: 1.5, color: "#555", maxWidth: 160, margin: "0 auto" }}>
+                                        Transactions will appear here once your agents start making requests
+                                    </div>
                                 </div>
-                            </div>
+                            ) : (
+                                <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: "8px" }}>
+                                    {recentLogs.map((log: any) => {
+                                        const isError = log.type === 2 && log.content !== "";
+                                        const isConsume = log.type === 2 && !isError;
+                                        const amountColor = isError ? "#ef4444" : isConsume ? "#00dc82" : (log.costUSD > 0 ? "#3b82f6" : "#888");
+                                        const displaySign = log.type === 2 && log.costUSD > 0 ? "-" : (log.costUSD > 0 ? "+" : "");
+                                        
+                                        return (
+                                            <div key={log.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px", background: "rgba(255,255,255,0.03)", borderRadius: "8px", border: "1px solid rgba(255,255,255,0.05)" }}>
+                                                <div style={{ display: "flex", flexDirection: "column", gap: "4px", overflow: "hidden", textOverflow: "ellipsis" }}>
+                                                    <span style={{ fontSize: "13px", fontWeight: 500, color: "#e2e8f0" }} className={styles.truncate}>
+                                                        {log.model_name || (isError ? "Error" : "System")}
+                                                    </span>
+                                                    <span style={{ fontSize: "11px", color: "#888" }} className={styles.truncate}>
+                                                        {log.token_name ? `🔑 ${log.token_name}` : (isError ? log.content : "No key")}
+                                                    </span>
+                                                </div>
+                                                <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "4px" }}>
+                                                    <span style={{ fontSize: "13px", fontWeight: 600, color: amountColor }}>
+                                                        {displaySign}${log.costUSD.toFixed(4)}
+                                                    </span>
+                                                    {(log.prompt_tokens > 0 || log.completion_tokens > 0) && (
+                                                        <span style={{ fontSize: "10px", color: "#666" }}>
+                                                            {log.prompt_tokens + log.completion_tokens} tkns
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            )}
                         </div>
                     </div>
                 </div>
