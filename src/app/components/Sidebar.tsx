@@ -91,7 +91,7 @@ const Sidebar = () => {
                     <span>Settings</span>
                 </Link>
                 <div className={styles.balance}>
-                    Balance: <strong>${balanceLoading || !balance ? "0.00" : balance.remainingUSD.toFixed(2)}</strong>
+                    Balance: <strong>${balanceLoading || !balance ? "..." : balance.remainingUSD.toFixed(2)}</strong>
                 </div>
             </div>
         </aside>
