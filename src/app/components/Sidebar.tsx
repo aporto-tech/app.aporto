@@ -1,12 +1,34 @@
 "use client";
 
-import React from "react";
+import React, { useEffect, useState } from "react";
 import styles from "./layout.module.css";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const Sidebar = () => {
     const pathname = usePathname();
+    const [balance, setBalance] = useState<number | null>(null);
+
+    useEffect(() => {
+        const fetchBalance = async () => {
+            try {
+                const res = await fetch("/api/newapi/balance", { cache: "no-store" });
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data.success && typeof data.remainingUSD === "number") {
+                        setBalance(data.remainingUSD);
+                    }
+                }
+            } catch {
+                // silently fail
+            }
+        };
+
+        fetchBalance();
+        // Refresh every 60 seconds
+        const interval = setInterval(fetchBalance, 60_000);
+        return () => clearInterval(interval);
+    }, []);
 
     const navItems = [
         { name: "Dashboard", icon: "📊", path: "/dashboard" },
@@ -65,7 +87,7 @@ const Sidebar = () => {
                     <span>Settings</span>
                 </Link>
                 <div className={styles.balance}>
-                    Balance: <strong>$5.00</strong>
+                    Balance: <strong>${balance !== null ? balance.toFixed(4) : "0.0000"}</strong>
                 </div>
             </div>
         </aside>
