@@ -248,6 +248,55 @@ export async function newApiListTokens(userId: number): Promise<NewApiToken[]> {
 }
 
 /**
+ * Fetch logs for a specific user.
+ * We query Prisma directly because New-API prevents Admins from fetching other users' logs via API.
+ */
+export async function newApiGetLogs(opts: {
+    userId: number;
+    page: number;
+    size: number;
+}): Promise<{ logs: any[]; total: number }> {
+    try {
+        const offset = opts.page * opts.size;
+        
+        // Ensure standard numbers
+        const totalResult = await prisma.$queryRawUnsafe<any[]>(
+            `SELECT COUNT(*) as count FROM logs WHERE user_id = $1`,
+            opts.userId
+        );
+        const total = totalResult[0]?.count ? Number(totalResult[0].count) : 0;
+
+        const logsResult = await prisma.$queryRawUnsafe<any[]>(
+            `SELECT id, type, created_at, content, model_name, quota, prompt_tokens, completion_tokens
+             FROM logs
+             WHERE user_id = $1
+             ORDER BY id DESC
+             LIMIT $2 OFFSET $3`,
+            opts.userId,
+            opts.size,
+            offset
+        );
+
+        // Convert Prisma BigInts and properly map the columns
+        const formattedLogs = logsResult.map(l => ({
+            id: Number(l.id),
+            type: Number(l.type),
+            created_at: Number(l.created_at),
+            content: l.content || "",
+            model_name: l.model_name || "",
+            quota: Number(l.quota || 0),
+            prompt_tokens: Number(l.prompt_tokens || 0),
+            completion_tokens: Number(l.completion_tokens || 0)
+        }));
+
+        return { logs: formattedLogs, total };
+    } catch (err) {
+        console.error("[newapi] Error fetching logs via Prisma:", err);
+        return { logs: [], total: 0 };
+    }
+}
+
+/**
  * Delete a specific token.
  */
 export async function newApiDeleteToken(tokenId: number, userId: number): Promise<boolean> {

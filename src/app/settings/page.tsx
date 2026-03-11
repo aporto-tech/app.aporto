@@ -263,6 +263,18 @@ function SettingsContent() {
                             <p>Copy your key now. You won&apos;t see it again.</p>
                             <div className={dashboardStyles.keyDisplayBox}>
                                 <div className={dashboardStyles.keyValue}>{generatedKey}</div>
+                                <button className={dashboardStyles.copyButton} onClick={() => {
+                                    navigator.clipboard.writeText(generatedKey);
+                                    // Normally we show "Copied" here, but for simplicity we rely on the same logic 
+                                    const btn = document.activeElement as HTMLButtonElement;
+                                    if(btn) {
+                                      const old = btn.innerText;
+                                      btn.innerText = "✓ Copied!";
+                                      setTimeout(() => btn.innerText = old, 2000);
+                                    }
+                                }}>
+                                    📋 Copy
+                                </button>
                             </div>
                         </div>
                         <div className={dashboardStyles.modalFooter}>

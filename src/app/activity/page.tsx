@@ -111,9 +111,9 @@ export default function ActivityPage() {
                                 <tbody>
                                     {logs.map(log => {
                                         const date = new Date(log.created_at * 1000).toLocaleString();
-                                        // log.type mapping (New-API typical enum format: 1=consume, 2=top-up, 3=system admin modify, 4=system consume)
-                                        const typeStr = log.type === 1 ? "Consume" 
-                                            : log.type === 2 ? "Top-up" 
+                                        // log.type mapping (New-API typical enum format: 2=consume, 1=top-up, 3=system admin modify, 4=system consume)
+                                        const typeStr = log.type === 2 ? "Consume" 
+                                            : log.type === 1 ? "Top-up" 
                                             : log.type === 3 ? "System"
                                             : "Other";
                                             
@@ -122,16 +122,16 @@ export default function ActivityPage() {
                                                 <td style={{ padding: "12px 16px", color: "#ccc" }}>{date}</td>
                                                 <td style={{ padding: "12px 16px" }}>
                                                     <span style={{ 
-                                                        background: log.type === 1 ? "rgba(239, 68, 68, 0.1)" : "rgba(0, 220, 130, 0.1)", 
-                                                        color: log.type === 1 ? "#ef4444" : "#00dc82",
+                                                        background: log.type === 2 ? "rgba(239, 68, 68, 0.1)" : "rgba(0, 220, 130, 0.1)", 
+                                                        color: log.type === 2 ? "#ef4444" : "#00dc82",
                                                         padding: "4px 8px", borderRadius: "4px", fontSize: "12px"
                                                     }}>
                                                         {typeStr}
                                                     </span>
                                                 </td>
                                                 <td style={{ padding: "12px 16px" }}>
-                                                    <div style={{ fontWeight: 500, color: log.type === 1 ? "#ef4444" : (log.costUSD > 0 ? "#00dc82" : "#ccc") }}>
-                                                        {log.type === 1 && log.costUSD > 0 ? "-" : (log.costUSD > 0 ? "+" : "")}
+                                                    <div style={{ fontWeight: 500, color: log.type === 2 ? "#ef4444" : (log.costUSD > 0 ? "#00dc82" : "#ccc") }}>
+                                                        {log.type === 2 && log.costUSD > 0 ? "-" : (log.costUSD > 0 ? "+" : "")}
                                                         ${log.costUSD.toFixed(4)}
                                                     </div>
                                                     {log.prompt_tokens + log.completion_tokens > 0 && (
