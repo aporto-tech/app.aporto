@@ -80,8 +80,8 @@ services:
       - NODE_ENV=production
       - PORT=3001
       # NextAuth
-      - NEXTAUTH_URL=http://localhost:3001
-      - NEXTAUTH_SECRET=aporto_nextauth_secret_change_in_prod
+      - NEXTAUTH_URL=${NEXTAUTH_URL:-https://app.aporto.tech}
+      - NEXTAUTH_SECRET=${NEXTAUTH_SECRET:-aporto_nextauth_secret_change_in_prod}
       # Database (PostgreSQL via Prisma)
       - DATABASE_URL=${DATABASE_URL}
       # New-API integration
