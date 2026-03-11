@@ -158,12 +158,17 @@ export async function newApiCreateToken(opts: {
             // Find the most recently created token that matches the name
             const createdToken = listData.data.items.find((t) => t.name === opts.name);
             if (createdToken) {
-                if (opts.userId) {
-                    try {
+                try {
+                    if (opts.userId) {
                         await prisma.$executeRawUnsafe('UPDATE "tokens" SET "user_id" = $1 WHERE "id" = $2', opts.userId, createdToken.id);
-                    } catch (e) {
-                        console.error("[newapi] Failed to update token ownership via Prisma:", e);
                     }
+                    // Fetch the REAL key from Database (New-API GET /api/token masks it)
+                    const rawToken = await prisma.$queryRawUnsafe<any[]>('SELECT key FROM tokens WHERE id = $1', createdToken.id);
+                    if (rawToken && rawToken.length > 0) {
+                        createdToken.key = rawToken[0].key;
+                    }
+                } catch (e) {
+                    console.error("[newapi] Failed to update/fetch token ownership via Prisma:", e);
                 }
                 return createdToken;
             }

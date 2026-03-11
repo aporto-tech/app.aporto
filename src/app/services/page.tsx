@@ -70,9 +70,8 @@ export default function ServicesPage() {
             // Fetch an API key to display in the modal
             fetch("/api/newapi/keys").then(r => r.json()).then(data => {
                 if (data.success && data.tokens && data.tokens.length > 0) {
-                    // Try to construct standard key format for newapi or just use the first available
-                    // Real keys from New-API are hashed, usually we show what we can or a placeholder
-                    setApiKey(`sk-live-${data.tokens[0].key.substring(0, 16)}...`);
+                    // Provide the full usable key so the Copy button works correctly!
+                    setApiKey(`sk-live-${data.tokens[0].key}`);
                 } else {
                     setApiKey("sk-live-CREATE_API_KEY_FIRST");
                 }
