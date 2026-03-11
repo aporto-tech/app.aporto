@@ -70,11 +70,9 @@ export default function ServicesPage() {
             // Fetch an API key to display in the modal
             fetch("/api/newapi/keys").then(r => r.json()).then(data => {
                 if (data.success && data.tokens && data.tokens.length > 0) {
-                    // Try to construct standard key format for newapi or just use the first available
-                    // Real keys from New-API are hashed, usually we show what we can or a placeholder
-                    setApiKey(`sk-live-${data.tokens[0].key.substring(0, 16)}...`);
+                    setApiKey("<YOUR_API_KEY>");
                 } else {
-                    setApiKey("sk-live-CREATE_API_KEY_FIRST");
+                    setApiKey("<CREATE_API_KEY_FIRST>");
                 }
             }).catch(() => { });
         }
@@ -245,12 +243,22 @@ export default function ServicesPage() {
 
                             <div className={styles.apiKeyBox}>
                                 <div className={styles.apiKeyHeader}>
-                                    <span>Your API Key</span>
-                                    <button className={styles.copyBtn} onClick={() => handleCopy("key", apiKey)}>
-                                        {copySuccess.key ? "✓ Copied" : "📋 Copy"}
-                                    </button>
+                                    <span>Enter Your API Key</span>
+                                    <span style={{ fontSize: 11, color: "#888", fontWeight: "normal" }}>
+                                        Keys are only shown once upon creation.
+                                    </span>
                                 </div>
-                                <div className={styles.apiKeyText}>{apiKey}</div>
+                                <input
+                                    type="text"
+                                    value={apiKey.startsWith("<") ? "" : apiKey}
+                                    onChange={(e) => setApiKey(e.target.value)}
+                                    placeholder="Paste your sk-live-... key here"
+                                    style={{
+                                        width: "100%", background: "rgba(0,0,0,0.2)", border: "1px solid rgba(255,255,255,0.1)", 
+                                        color: "#fff", outline: "none", fontSize: "14px", padding: "10px", borderRadius: "6px", marginTop: "12px",
+                                        fontFamily: "monospace"
+                                    }}
+                                />
                             </div>
 
                             <div className={styles.codeBox}>
