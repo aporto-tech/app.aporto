@@ -11,6 +11,7 @@ interface LogItem {
     type: number;
     content: string;
     model_name: string;
+    token_name: string;
     quota: number;
     costUSD: number;
     prompt_tokens: number;
@@ -103,50 +104,68 @@ export default function ActivityPage() {
                                 <thead>
                                     <tr style={{ borderBottom: "1px solid rgba(255,255,255,0.1)", color: "#888" }}>
                                         <th style={{ padding: "12px 16px", fontWeight: 500 }}>Time</th>
+                                        <th style={{ padding: "12px 16px", fontWeight: 500 }}>API Key</th>
                                         <th style={{ padding: "12px 16px", fontWeight: 500 }}>Type</th>
                                         <th style={{ padding: "12px 16px", fontWeight: 500 }}>Amount</th>
+                                        <th style={{ padding: "12px 16px", fontWeight: 500 }}>Tokens (In / Out)</th>
                                         <th style={{ padding: "12px 16px", fontWeight: 500 }}>Model / Details</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {logs.map(log => {
                                         const date = new Date(log.created_at * 1000).toLocaleString();
-                                        // log.type mapping (New-API typical enum format: 2=consume, 1=top-up, 3=system admin modify, 4=system consume)
-                                        const typeStr = log.type === 2 ? "Consume" 
-                                            : log.type === 1 ? "Top-up" 
-                                            : log.type === 3 ? "System"
-                                            : "Other";
-                                            
+                                        
+                                        // An error in NewAPI is usually a consume (2) with a non-empty error message in 'content'
+                                        // Sometimes a completely failed prompt has 0 tokens and 0 quota, but 'content' holds the err.
+                                        const isError = log.type === 2 && log.content !== "";
+                                        const isConsume = log.type === 2 && !isError;
+                                        
+                                        const typeStr = isError ? "Error" : isConsume ? "Consume" : log.type === 1 ? "Top-up" : "Other";
+                                        const typeColor = isError ? "#ef4444" : isConsume ? "#00dc82" : (log.type === 1 ? "#3b82f6" : "#888");
+                                        const typeBg = isError ? "rgba(239, 68, 68, 0.1)" : isConsume ? "rgba(0, 220, 130, 0.1)" : (log.type === 1 ? "rgba(59, 130, 246, 0.1)" : "rgba(255, 255, 255, 0.05)");
+
                                         return (
                                             <tr key={log.id} style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
-                                                <td style={{ padding: "12px 16px", color: "#ccc" }}>{date}</td>
+                                                <td style={{ padding: "12px 16px", color: "#ccc", whiteSpace: "nowrap" }}>{date}</td>
+                                                <td style={{ padding: "12px 16px", color: "#e2e8f0", fontWeight: 500 }}>
+                                                    {log.token_name || <span style={{ color: "#64748b" }}>—</span>}
+                                                </td>
                                                 <td style={{ padding: "12px 16px" }}>
                                                     <span style={{ 
-                                                        background: log.type === 2 ? "rgba(239, 68, 68, 0.1)" : "rgba(0, 220, 130, 0.1)", 
-                                                        color: log.type === 2 ? "#ef4444" : "#00dc82",
-                                                        padding: "4px 8px", borderRadius: "4px", fontSize: "12px"
+                                                        background: typeBg, 
+                                                        color: typeColor,
+                                                        padding: "4px 8px", borderRadius: "4px", fontSize: "12px",
+                                                        fontWeight: 500
                                                     }}>
                                                         {typeStr}
                                                     </span>
                                                 </td>
                                                 <td style={{ padding: "12px 16px" }}>
-                                                    <div style={{ fontWeight: 500, color: log.type === 2 ? "#ef4444" : (log.costUSD > 0 ? "#00dc82" : "#ccc") }}>
+                                                    <div style={{ fontWeight: 500, color: isError ? "#ef4444" : (log.costUSD > 0 ? typeColor : "#ccc") }}>
                                                         {log.type === 2 && log.costUSD > 0 ? "-" : (log.costUSD > 0 ? "+" : "")}
                                                         ${log.costUSD.toFixed(4)}
                                                     </div>
-                                                    {log.prompt_tokens + log.completion_tokens > 0 && (
-                                                        <div style={{ fontSize: "11px", color: "#666", marginTop: "2px" }}>
-                                                            {log.prompt_tokens + log.completion_tokens} tkns
-                                                        </div>
-                                                    )}
+                                                </td>
+                                                <td style={{ padding: "12px 16px" }}>
+                                                    <div style={{ display: "flex", gap: "12px", fontSize: "12px" }}>
+                                                        <span style={{ color: "#3b82f6" }} title="Incoming (Prompt) Tokens">
+                                                            IN: {log.prompt_tokens}
+                                                        </span>
+                                                        <span style={{ color: "#a855f7" }} title="Outgoing (Completion) Tokens">
+                                                            OUT: {log.completion_tokens}
+                                                        </span>
+                                                    </div>
                                                 </td>
                                                 <td style={{ padding: "12px 16px", color: "#ccc" }}>
-                                                    {log.model_name ? (
+                                                    {log.model_name && (
                                                         <span style={{ background: "rgba(255,255,255,0.05)", padding: "2px 6px", borderRadius: "4px", fontSize: "12px" }}>
                                                             {log.model_name}
                                                         </span>
-                                                    ) : (
-                                                        <span style={{ fontSize: "13px", color: "#888" }}>{log.content}</span>
+                                                    )}
+                                                    {log.content && (
+                                                        <div style={{ fontSize: "12px", color: isError ? "#ef4444" : "#888", marginTop: log.model_name ? "6px" : "0", maxWidth: "250px", wordBreak: "break-word" }}>
+                                                            {log.content}
+                                                        </div>
                                                     )}
                                                 </td>
                                             </tr>

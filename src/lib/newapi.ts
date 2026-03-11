@@ -261,15 +261,15 @@ export async function newApiGetLogs(opts: {
         
         // Ensure standard numbers
         const totalResult = await prisma.$queryRawUnsafe<any[]>(
-            `SELECT COUNT(*) as count FROM logs WHERE user_id = $1`,
+            `SELECT COUNT(*) as count FROM logs WHERE user_id = $1 AND type IN (1, 2)`,
             opts.userId
         );
         const total = totalResult[0]?.count ? Number(totalResult[0].count) : 0;
 
         const logsResult = await prisma.$queryRawUnsafe<any[]>(
-            `SELECT id, type, created_at, content, model_name, quota, prompt_tokens, completion_tokens
+            `SELECT id, type, created_at, content, model_name, quota, prompt_tokens, completion_tokens, token_name
              FROM logs
-             WHERE user_id = $1
+             WHERE user_id = $1 AND type IN (1, 2)
              ORDER BY id DESC
              LIMIT $2 OFFSET $3`,
             opts.userId,
@@ -284,6 +284,7 @@ export async function newApiGetLogs(opts: {
             created_at: Number(l.created_at),
             content: l.content || "",
             model_name: l.model_name || "",
+            token_name: l.token_name || "",
             quota: Number(l.quota || 0),
             prompt_tokens: Number(l.prompt_tokens || 0),
             completion_tokens: Number(l.completion_tokens || 0)
