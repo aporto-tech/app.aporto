@@ -8,11 +8,11 @@ git pull origin main || git pull origin master
 
 # 2. Update/Install dependencies
 echo "📦 Installing npm dependencies..."
-npm install
+/root/.nvm/versions/node/v24.14.0/bin/npm install
 
 # 3. Build the Next.js application
 echo "🏗️ Building Next.js app..."
-npm run build
+/root/.nvm/versions/node/v24.14.0/bin/npm run build
 
 # 4. Free up port 3000
 echo "🧹 Checking port 3000..."
@@ -27,12 +27,15 @@ fi
 
 # 5. Start/Restart Next.js app with PM2
 echo "🚀 Starting Next.js with PM2 on port 3000..."
-pm2 describe "aporto-app" > /dev/null
+# Using full paths and standalone build for robustness
+NODE_BIN="/root/.nvm/versions/node/v24.14.0/bin/node"
+PM2_BIN="/root/.nvm/versions/node/v24.14.0/lib/node_modules/pm2/bin/pm2"
+
+\$NODE_BIN \$PM2_BIN describe "aporto-app" > /dev/null
 if [ $? -eq 0 ]; then
-    pm2 reload "aporto-app" --update-env
-else
-    PORT=3000 pm2 start "npm start" --name "aporto-app"
+    \$NODE_BIN \$PM2_BIN delete "aporto-app"
 fi
+PORT=3000 \$NODE_BIN \$PM2_BIN start "\$NODE_BIN .next/standalone/server.js" --name "aporto-app"
 
 # 6. Deploy new-api via Docker
 #    new-api binds to host port 3006 → proxied via nginx as https://api.aporto.tech
@@ -52,4 +55,4 @@ done
 
 echo "✅ Deployment finished successfully!"
 # Save PM2 process list to restore on reboot
-pm2 save
+\$NODE_BIN \$PM2_BIN save
