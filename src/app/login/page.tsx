@@ -106,7 +106,7 @@ function LoginForm() {
 
           <button
             className={styles.googleButton}
-            onClick={() => signIn("google")}
+            onClick={() => signIn("google", { callbackUrl: "/dashboard" })}
             type="button"
           >
             <svg width="18" height="18" viewBox="0 0 18 18">
