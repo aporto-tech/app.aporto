@@ -76,49 +76,50 @@
 }
 
 .packageCard.selected {
-    background: #4182f6;
-    border-color: #4182f6;
+    background: #00dc82;
+    border-color: #00dc82;
 }
 
 .price {
     font-size: 24px;
     font-weight: 700;
-    margin-bottom: 8px;
+}
+
+.packageCard.selected .price {
+    color: #000;
 }
 
 .credits {
-    font-size: 13px;
-    color: #a1a1aa;
-}
-
-.packageCard.selected .credits {
-    color: rgba(255, 255, 255, 0.8);
+    display: none; /* User wants to remove credits */
 }
 
 .saveBadge {
     position: absolute;
     top: 0;
     right: 0;
-    background: #7ca8f9;
-    color: #fff;
+    background: #1a1a1a;
+    color: #00dc82;
+    border: 1px solid #00dc82;
     font-size: 10px;
     font-weight: 600;
     padding: 2px 24px;
-    transform: rotate(45deg) translate(8px, -18px); /* Adjust positioning */
+    transform: rotate(45deg) translate(8px, -18px);
     text-align: center;
 }
 
 .packageCard.selected .saveBadge {
-    background: rgba(255,255,255,0.2);
+    background: #000;
+    color: #00dc82;
+    border-color: transparent;
 }
 
 /* Payment Methods Grid */
 .paymentGrid {
     display: flex;
     background: #27272a;
-    border-radius: 8px;
-    padding: 4px;
-    gap: 4px;
+    border-radius: 12px;
+    padding: 6px;
+    gap: 6px;
     margin-bottom: 32px;
 }
 
@@ -127,48 +128,52 @@
     display: flex;
     justify-content: center;
     align-items: center;
-    padding: 12px;
-    border-radius: 6px;
-    color: #888;
+    padding: 14px;
+    border-radius: 8px;
+    color: #a1a1aa;
     cursor: pointer;
-    transition: all 0.2s ease;
-    gap: 8px;
-    font-size: 14px;
-    font-weight: 500;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    gap: 10px;
 }
 
 .paymentMethod:hover {
     color: #fff;
+    background: rgba(255, 255, 255, 0.05);
 }
 
 .paymentMethod.selected {
     background: #1c1c1e;
-    color: #fff;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    color: #00dc82;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
 }
 
 .paymentIcon {
-    width: 20px;
-    height: 20px;
-    fill: currentColor;
+    width: 24px;
+    height: 24px;
+    object-fit: contain;
 }
 
 /* Action Button */
 .buyButton {
     width: 100%;
-    background: #4182f6;
-    color: white;
+    background: #00dc82;
+    color: #000;
     border: none;
-    border-radius: 8px;
-    padding: 16px;
+    border-radius: 12px;
+    padding: 18px;
     font-size: 16px;
-    font-weight: 600;
+    font-weight: 700;
     cursor: pointer;
-    transition: background 0.2s;
+    transition: all 0.2s ease;
 }
 
 .buyButton:hover:not(:disabled) {
-    background: #3b76e0;
+    background: #00c071;
+    transform: translateY(-1px);
+}
+
+.buyButton:active:not(:disabled) {
+    transform: translateY(0);
 }
 
 .buyButton:disabled {
