@@ -95,22 +95,22 @@
 
 .saveBadge {
     position: absolute;
-    top: 0;
-    right: 0;
-    background: #1a1a1a;
-    color: #00dc82;
-    border: 1px solid #00dc82;
+    top: 14px;
+    right: -28px;
+    background: #00dc82;
+    color: #000;
     font-size: 10px;
-    font-weight: 600;
-    padding: 2px 24px;
-    transform: rotate(45deg) translate(8px, -18px);
+    font-weight: 800;
+    padding: 2px 30px;
+    transform: rotate(45deg);
     text-align: center;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    width: 100px;
 }
 
 .packageCard.selected .saveBadge {
     background: #000;
     color: #00dc82;
-    border-color: transparent;
 }
 
 /* Payment Methods Grid */
@@ -119,38 +119,46 @@
     background: #27272a;
     border-radius: 12px;
     padding: 6px;
-    gap: 6px;
+    gap: 8px;
     margin-bottom: 32px;
 }
 
 .paymentMethod {
     flex: 1;
     display: flex;
+    flex-direction: column;
     justify-content: center;
     align-items: center;
-    padding: 14px;
-    border-radius: 8px;
+    padding: 16px 8px;
+    border-radius: 10px;
     color: #a1a1aa;
     cursor: pointer;
-    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-    gap: 10px;
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    gap: 8px;
+    font-size: 12px;
+    font-weight: 600;
+    border: 1px solid transparent;
 }
 
 .paymentMethod:hover {
     color: #fff;
-    background: rgba(255, 255, 255, 0.05);
+    background: rgba(255, 255, 255, 0.03);
+    border-color: rgba(255, 255, 255, 0.05);
 }
 
 .paymentMethod.selected {
     background: #1c1c1e;
     color: #00dc82;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+    border-color: #00dc82;
+    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.4);
 }
 
 .paymentIcon {
-    width: 24px;
-    height: 24px;
-    object-fit: contain;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
 /* Action Button */
