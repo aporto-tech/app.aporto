@@ -41,6 +41,7 @@ export default function DashboardPage() {
     const [copySuccess, setCopySuccess] = useState(false);
     const [isCreatingKey, setIsCreatingKey] = useState(false);
     const [createKeyError, setCreateKeyError] = useState("");
+    const [isFirstTransactionCompleted, setIsFirstTransactionCompleted] = useState(false);
 
     // Rule Modal state
     const [userKeys, setUserKeys] = useState<any[]>([]);
@@ -101,6 +102,9 @@ export default function DashboardPage() {
                 const data = await res.json();
                 if (data.success && data.logs) {
                     setRecentLogs(data.logs);
+                    if (data.logs.length > 0) {
+                        setIsFirstTransactionCompleted(true);
+                    }
                 }
             } catch {
                 // silently fail
@@ -301,7 +305,7 @@ export default function DashboardPage() {
             title: "First Transaction",
             desc: "Make your first API call through Aporto",
             action: null,
-            completed: false,
+            completed: isFirstTransactionCompleted,
         },
         {
             num: 4,
