@@ -1,0 +1,178 @@
+.modalOverlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(0, 0, 0, 0.4);
+    backdrop-filter: blur(4px);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+}
+
+.modalContent {
+    background: #1c1c1e;
+    border-radius: 16px;
+    width: 100%;
+    max-width: 600px;
+    padding: 32px;
+    color: #fff;
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+    position: relative;
+}
+
+.modalTitle {
+    font-size: 20px;
+    font-weight: 600;
+    margin: 0 0 24px 0;
+}
+
+.closeButton {
+    position: absolute;
+    top: 24px;
+    right: 24px;
+    background: none;
+    border: none;
+    color: #888;
+    font-size: 20px;
+    cursor: pointer;
+    transition: color 0.2s;
+}
+
+.closeButton:hover {
+    color: #fff;
+}
+
+.sectionTitle {
+    font-size: 14px;
+    color: #a1a1aa;
+    margin-bottom: 12px;
+    font-weight: 500;
+}
+
+/* Packages Grid */
+.packagesGrid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+    margin-bottom: 24px;
+}
+
+.packageCard {
+    background: #27272a;
+    border-radius: 8px;
+    padding: 20px 16px;
+    cursor: pointer;
+    position: relative;
+    border: 2px solid transparent;
+    transition: all 0.2s ease;
+    overflow: hidden;
+}
+
+.packageCard:hover {
+    background: #3f3f46;
+}
+
+.packageCard.selected {
+    background: #4182f6;
+    border-color: #4182f6;
+}
+
+.price {
+    font-size: 24px;
+    font-weight: 700;
+    margin-bottom: 8px;
+}
+
+.credits {
+    font-size: 13px;
+    color: #a1a1aa;
+}
+
+.packageCard.selected .credits {
+    color: rgba(255, 255, 255, 0.8);
+}
+
+.saveBadge {
+    position: absolute;
+    top: 0;
+    right: 0;
+    background: #7ca8f9;
+    color: #fff;
+    font-size: 10px;
+    font-weight: 600;
+    padding: 2px 24px;
+    transform: rotate(45deg) translate(8px, -18px); /* Adjust positioning */
+    text-align: center;
+}
+
+.packageCard.selected .saveBadge {
+    background: rgba(255,255,255,0.2);
+}
+
+/* Payment Methods Grid */
+.paymentGrid {
+    display: flex;
+    background: #27272a;
+    border-radius: 8px;
+    padding: 4px;
+    gap: 4px;
+    margin-bottom: 32px;
+}
+
+.paymentMethod {
+    flex: 1;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 12px;
+    border-radius: 6px;
+    color: #888;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    gap: 8px;
+    font-size: 14px;
+    font-weight: 500;
+}
+
+.paymentMethod:hover {
+    color: #fff;
+}
+
+.paymentMethod.selected {
+    background: #1c1c1e;
+    color: #fff;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.paymentIcon {
+    width: 20px;
+    height: 20px;
+    fill: currentColor;
+}
+
+/* Action Button */
+.buyButton {
+    width: 100%;
+    background: #4182f6;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    padding: 16px;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.buyButton:hover:not(:disabled) {
+    background: #3b76e0;
+}
+
+.buyButton:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+

@@ -5,6 +5,7 @@ import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import DashboardLayout from "../components/DashboardLayout";
+import AddFundsModal from "../components/AddFundsModal";
 import styles from "../dashboard.module.css";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -30,6 +31,7 @@ export default function DashboardPage() {
     // Modal state
     const [showCreateModal, setShowCreateModal] = useState(false);
     const [showKeyCreatedModal, setShowKeyCreatedModal] = useState(false);
+    const [showAddFundsModal, setShowAddFundsModal] = useState(false);
 
     // Form state
     const [newKeyName, setNewKeyName] = useState("My API Key");
@@ -498,7 +500,7 @@ export default function DashboardPage() {
                                     ${balance?.remainingUSD.toFixed(4) ?? "0.0000"}
                                 </div>
                             )}
-                            <button className={styles.addFundsBtn} onClick={() => router.push("/settings?tab=billing")}>
+                            <button className={styles.addFundsBtn} onClick={() => setShowAddFundsModal(true)}>
                                 + Add Funds
                             </button>
                         </div>
@@ -591,6 +593,10 @@ export default function DashboardPage() {
             </DashboardLayout>
 
             {/* ─── Modals rendered OUTSIDE DashboardLayout to avoid stacking context issues ─── */}
+            
+            {showAddFundsModal && (
+                <AddFundsModal onClose={() => setShowAddFundsModal(false)} />
+            )}
 
             {/* Create API Key Modal */}
             {showCreateModal && (
