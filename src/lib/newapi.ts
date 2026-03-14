@@ -248,31 +248,59 @@ export async function newApiListTokens(userId: number): Promise<NewApiToken[]> {
 }
 
 /**
- * Fetch logs for a specific user.
+ * Fetch logs for a specific user with optional filters.
  * We query Prisma directly because New-API prevents Admins from fetching other users' logs via API.
  */
 export async function newApiGetLogs(opts: {
     userId: number;
     page: number;
     size: number;
+    model_name?: string;
+    token_name?: string;
+    start_date?: number; // timestamp in seconds
+    end_date?: number;   // timestamp in seconds
 }): Promise<{ logs: any[]; total: number }> {
     try {
         const offset = opts.page * opts.size;
         
-        // Ensure standard numbers
+        let whereClause = `WHERE user_id = $1 AND type IN (1, 2)`;
+        const params: any[] = [opts.userId];
+        let pCount = 1;
+
+        if (opts.model_name && opts.model_name !== "All Models") {
+            pCount++;
+            whereClause += ` AND model_name = $${pCount}`;
+            params.push(opts.model_name);
+        }
+        if (opts.token_name && opts.token_name !== "All Agents") {
+            pCount++;
+            whereClause += ` AND token_name = $${pCount}`;
+            params.push(opts.token_name);
+        }
+        if (opts.start_date) {
+            pCount++;
+            whereClause += ` AND created_at >= $${pCount}`;
+            params.push(opts.start_date);
+        }
+        if (opts.end_date) {
+            pCount++;
+            whereClause += ` AND created_at <= $${pCount}`;
+            params.push(opts.end_date);
+        }
+
         const totalResult = await prisma.$queryRawUnsafe<any[]>(
-            `SELECT COUNT(*) as count FROM logs WHERE user_id = $1 AND type IN (1, 2)`,
-            opts.userId
+            `SELECT COUNT(*) as count FROM logs ${whereClause}`,
+            ...params
         );
         const total = totalResult[0]?.count ? Number(totalResult[0].count) : 0;
 
         const logsResult = await prisma.$queryRawUnsafe<any[]>(
             `SELECT id, type, created_at, content, model_name, quota, prompt_tokens, completion_tokens, token_name
              FROM logs
-             WHERE user_id = $1 AND type IN (1, 2)
+             ${whereClause}
              ORDER BY id DESC
-             LIMIT $2 OFFSET $3`,
-            opts.userId,
+             LIMIT $${pCount + 1} OFFSET $${pCount + 2}`,
+            ...params,
             opts.size,
             offset
         );
@@ -294,6 +322,30 @@ export async function newApiGetLogs(opts: {
     } catch (err) {
         console.error("[newapi] Error fetching logs via Prisma:", err);
         return { logs: [], total: 0 };
+    }
+}
+
+/**
+ * Fetch unique filter options (models and token names) for a user.
+ */
+export async function newApiGetFilterOptions(userId: number) {
+    try {
+        const models = await prisma.$queryRawUnsafe<any[]>(
+            `SELECT DISTINCT model_name FROM logs WHERE user_id = $1 AND model_name != '' AND model_name IS NOT NULL`,
+            userId
+        );
+        const tokens = await prisma.$queryRawUnsafe<any[]>(
+            `SELECT DISTINCT token_name FROM logs WHERE user_id = $1 AND token_name != '' AND token_name IS NOT NULL`,
+            userId
+        );
+
+        return {
+            models: models.map(m => m.model_name),
+            tokens: tokens.map(t => t.token_name)
+        };
+    } catch (err) {
+        console.error("[newapi] Error fetching filter options:", err);
+        return { models: [], tokens: [] };
     }
 }
 

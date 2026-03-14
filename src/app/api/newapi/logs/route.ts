@@ -14,15 +14,23 @@ export async function GET(req: NextRequest) {
 
         const newApiUserId = (session.user as any).newApiUserId;
 
-        // Extract pagination params from request
+        // Extract pagination and filter params from request
         const { searchParams } = new URL(req.url);
         const page = parseInt(searchParams.get('page') || '0', 10);
-        const size = parseInt(searchParams.get('size') || '50', 10);
+        const size = parseInt(searchParams.get('size') || '20', 10);
+        const model_name = searchParams.get('model_name') || undefined;
+        const token_name = searchParams.get('token_name') || undefined;
+        const start_date = searchParams.get('start_date') ? parseInt(searchParams.get('start_date')!, 10) : undefined;
+        const end_date = searchParams.get('end_date') ? parseInt(searchParams.get('end_date')!, 10) : undefined;
 
         const { logs, total } = await newApiGetLogs({
             userId: Number(newApiUserId),
             page,
-            size
+            size,
+            model_name,
+            token_name,
+            start_date,
+            end_date
         });
 
         // New-API stores quota in "credits" where 500000 = $1 USD. We convert the `quota` field to USD format.

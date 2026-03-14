@@ -78,7 +78,7 @@ export default function DashboardPage() {
         const fetchBalance = async () => {
             setBalanceLoading(true);
             try {
-                const res = await fetch("/api/newapi/balance");
+                const res = await fetch("/api/newapi/balance", { cache: "no-store" });
                 const data = await res.json() as { success: boolean; remainingUSD?: number; usedUSD?: number };
                 if (data.success) {
                     setBalance({ remainingUSD: data.remainingUSD ?? 0, usedUSD: data.usedUSD ?? 0 });
@@ -100,7 +100,7 @@ export default function DashboardPage() {
         const fetchLogs = async () => {
             setLogsLoading(true);
             try {
-                const res = await fetch("/api/newapi/logs?page=0&size=5");
+                const res = await fetch("/api/newapi/logs?page=0&size=5", { cache: "no-store" });
                 const data = await res.json();
                 if (data.success && data.logs) {
                     setRecentLogs(data.logs);

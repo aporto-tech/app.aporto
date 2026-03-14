@@ -97,14 +97,91 @@
     outline: none;
 }
 
+.dateInput::-webkit-calendar-picker-indicator {
+    filter: invert(1);
+    cursor: pointer;
+}
+
 .dateTo {
     color: #64748b;
     font-size: 14px;
 }
 
 .contentArea {
-    text-align: center;
-    padding: 64px 0;
+    padding: 0;
+    margin-top: 32px;
+}
+
+.tableWrapper {
+    width: 100%;
+    overflow-x: auto;
+    background: rgba(13, 18, 25, 0.5);
+    border: 1px solid #1e293b;
+    border-radius: 8px;
+}
+
+.table {
+    width: 100%;
+    border-collapse: collapse;
+    text-align: left;
+    font-size: 14px;
+}
+
+.table th {
+    padding: 12px 16px;
+    font-weight: 500;
+    color: #64748b;
+    border-bottom: 1px solid #1e293b;
+}
+
+.table td {
+    padding: 12px 16px;
+    border-bottom: 1px solid rgba(30, 41, 59, 0.5);
+    color: #cbd5e1;
+}
+
+.pagination {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 8px;
+    margin-top: 32px;
+    padding-bottom: 32px;
+}
+
+.pageButton {
+    background: #0d1219;
+    border: 1px solid #1e293b;
+    color: #94a3b8;
+    padding: 8px 12px;
+    border-radius: 6px;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.2s;
+    min-width: 40px;
+}
+
+.pageButton:hover:not(:disabled) {
+    border-color: #334155;
+    background: #1e293b;
+    color: #f8fafc;
+}
+
+.pageButtonActive {
+    background: #00dc82;
+    border-color: #00dc82;
+    color: #000;
+    font-weight: 600;
+}
+
+.pageButtonActive:hover {
+    background: #00dc82;
+    color: #000;
+}
+
+.pageButton:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
 }
 
 .emptyState {
@@ -112,6 +189,7 @@
     flex-direction: column;
     align-items: center;
     justify-content: center;
+    padding: 100px 0;
 }
 
 .emptyTitle {
