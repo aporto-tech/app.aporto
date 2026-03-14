@@ -257,6 +257,7 @@ export async function newApiGetLogs(opts: {
     size: number;
     model_name?: string;
     token_name?: string;
+    log_type?: string; 
     start_date?: number; // timestamp in seconds
     end_date?: number;   // timestamp in seconds
 }): Promise<{ logs: any[]; total: number }> {
@@ -276,6 +277,15 @@ export async function newApiGetLogs(opts: {
             pCount++;
             whereClause += ` AND token_name = $${pCount}`;
             params.push(opts.token_name);
+        }
+        if (opts.log_type && opts.log_type !== "All Types") {
+            if (opts.log_type === "Consume") {
+                whereClause += ` AND type = 2 AND (content = '' OR content IS NULL)`;
+            } else if (opts.log_type === "Error") {
+                whereClause += ` AND type = 2 AND content != '' AND content IS NOT NULL`;
+            } else if (opts.log_type === "Top-up") {
+                whereClause += ` AND type = 1`;
+            }
         }
         if (opts.start_date) {
             pCount++;

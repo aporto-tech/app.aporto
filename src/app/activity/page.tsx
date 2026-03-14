@@ -37,6 +37,7 @@ export default function ActivityPage() {
     // Active filters
     const [filterAgent, setFilterAgent] = useState("All Agents");
     const [filterModel, setFilterModel] = useState("All Models");
+    const [filterType, setFilterType] = useState("All Types");
     const [startDate, setStartDate] = useState("");
     const [endDate, setEndDate] = useState("");
 
@@ -64,6 +65,7 @@ export default function ActivityPage() {
 
             if (filterAgent !== "All Agents") params.append("token_name", filterAgent);
             if (filterModel !== "All Models") params.append("model_name", filterModel);
+            if (filterType !== "All Types") params.append("log_type", filterType);
             if (startDate) params.append("start_date", (new Date(startDate).getTime() / 1000).toString());
             if (endDate) {
                 // End of day
@@ -83,7 +85,7 @@ export default function ActivityPage() {
         } finally {
             setLoading(false);
         }
-    }, [status, page, filterAgent, filterModel, startDate, endDate]);
+    }, [status, page, filterAgent, filterModel, filterType, startDate, endDate]);
 
     useEffect(() => {
         if (status === "authenticated") {
@@ -189,6 +191,19 @@ export default function ActivityPage() {
                             >
                                 <option>All Models</option>
                                 {availableModels.map(m => <option key={m} value={m}>{m}</option>)}
+                            </select>
+                        </div>
+                        <div className={styles.filterGroup} style={{ maxWidth: '150px' }}>
+                            <span className={styles.filterLabel}>TYPE</span>
+                            <select 
+                                className={styles.filterSelect}
+                                value={filterType}
+                                onChange={(e) => { setFilterType(e.target.value); setPage(0); }}
+                            >
+                                <option>All Types</option>
+                                <option>Consume</option>
+                                <option>Error</option>
+                                <option>Top-up</option>
                             </select>
                         </div>
                     </div>

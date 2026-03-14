@@ -20,6 +20,7 @@ export async function GET(req: NextRequest) {
         const size = parseInt(searchParams.get('size') || '20', 10);
         const model_name = searchParams.get('model_name') || undefined;
         const token_name = searchParams.get('token_name') || undefined;
+        const log_type = searchParams.get('log_type') || undefined;
         const start_date = searchParams.get('start_date') ? parseInt(searchParams.get('start_date')!, 10) : undefined;
         const end_date = searchParams.get('end_date') ? parseInt(searchParams.get('end_date')!, 10) : undefined;
 
@@ -29,6 +30,7 @@ export async function GET(req: NextRequest) {
             size,
             model_name,
             token_name,
+            log_type,
             start_date,
             end_date
         });
