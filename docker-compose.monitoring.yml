@@ -1,5 +1,3 @@
-version: '3.8'
-
 # ============================================================
 # NewAPI Monitoring Stack (Prometheus + Grafana + mtail)
 # ============================================================
@@ -17,8 +15,6 @@ services:
       - newapi_logs:/var/log/nginx
     networks:
       - aporto-net
-    depends_on:
-      - new-api
 
   # ---- mtail (Log to Metrics) ----
   mtail:
