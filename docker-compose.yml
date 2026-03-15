@@ -18,6 +18,7 @@
 
 networks:
   aporto-net:
+    name: aporto-net
     driver: bridge
 
 volumes:
