@@ -183,6 +183,13 @@
     /* Prevent click since the whole header is clickable */
 }
 
+.connectBtn.connected {
+    background: rgba(0, 220, 130, 0.1);
+    border-color: rgba(0, 220, 130, 0.2);
+    color: #00dc82;
+    pointer-events: auto;
+}
+
 .providerCount {
     color: #94a3b8;
     font-size: 13px;

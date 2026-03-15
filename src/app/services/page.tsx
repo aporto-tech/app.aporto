@@ -13,7 +13,7 @@ const SERVICES = [
     },
     {
         id: "llm", icon: "🤖", title: "LLM Inference", desc: "Access to 400+ language models via unified API", providers: 1,
-        providerDetails: [{ name: "OpenRouter", description: "Unified LLM API", pricing: { "Per Token": "Varies" }, path: "/v1/chat/completions", method: "POST", sampleBody: { model: "openai/gpt-4o-mini", messages: [{ role: "user", content: "Hello from Service Hub!" }] } }]
+        providerDetails: [{ name: "Aporto LLM", description: "Unified LLM API", pricing: { "Per Token": "Varies" }, path: "/v1/chat/completions", method: "POST", sampleBody: { model: "openai/gpt-4o-mini", messages: [{ role: "user", content: "Hello from Service Hub!" }] } }]
     },
     {
         id: "search", icon: "🔍", title: "AI Search", desc: "Real-time web search and information retrieval", providers: 2,
@@ -63,6 +63,12 @@ export default function ServicesPage() {
     const [codeTab, setCodeTab] = useState<"Fetch" | "Axios">("Fetch");
     const [copySuccess, setCopySuccess] = useState({ key: false, code: false });
 
+    // Real data state
+    const [balance, setBalance] = useState<{ remainingUSD: number; usedUSD: number } | null>(null);
+    const [balanceLoading, setBalanceLoading] = useState(true);
+    const [activeRulesCount, setActiveRulesCount] = useState(0);
+    const [llmConnected, setLlmConnected] = useState(false);
+
     useEffect(() => {
         if (status === "unauthenticated") {
             router.push("/login");
@@ -72,10 +78,33 @@ export default function ServicesPage() {
                 if (data.success && data.tokens && data.tokens.length > 0) {
                     // Provide the full usable key so the Copy button works correctly!
                     setApiKey(`sk-live-${data.tokens[0].key}`);
+                    const activeRules = data.tokens.filter((t: any) => t.remain_quota > 0 || !t.unlimited_quota);
+                    setActiveRulesCount(activeRules.length);
                 } else {
                     setApiKey("sk-live-CREATE_API_KEY_FIRST");
                 }
             }).catch(() => { });
+
+            // Fetch balance
+            fetch("/api/newapi/balance", { cache: "no-store" })
+                .then(r => r.json())
+                .then(data => {
+                    if (data.success) {
+                        setBalance({ remainingUSD: data.remainingUSD ?? 0, usedUSD: data.usedUSD ?? 0 });
+                    }
+                })
+                .catch(() => { })
+                .finally(() => setBalanceLoading(false));
+
+            // Fetch logs to check if LLM is "Connected"
+            fetch("/api/newapi/logs?page=0&size=1", { cache: "no-store" })
+                .then(r => r.json())
+                .then(data => {
+                    if (data.success && data.logs && data.logs.length > 0) {
+                        setLlmConnected(true);
+                    }
+                })
+                .catch(() => { });
         }
     }, [status, router]);
 
@@ -154,15 +183,27 @@ export default function ServicesPage() {
                     <div className={styles.headerWidgets}>
                         <div className={styles.widgetBox}>
                             <div className={styles.widgetLabel}>Balance</div>
-                            <div className={styles.widgetValue}>$5.00</div>
+                            <div className={styles.widgetValue}>
+                                {balanceLoading ? "..." : `$${balance?.remainingUSD.toFixed(2) ?? "0.00"}`}
+                            </div>
                             <div className={styles.widgetSub}>Available</div>
                         </div>
                         <div className={styles.widgetBox}>
                             <div className={styles.widgetLabel}>Governance</div>
                             <div className={styles.widgetValue} style={{ fontSize: "16px", display: "flex", alignItems: "center", gap: "6px" }}>
-                                ⚠️ No Services
+                                {activeRulesCount > 0 ? (
+                                    <>
+                                        <span style={{ color: "#00dc82" }}>🛡️</span> Protected
+                                    </>
+                                ) : (
+                                    <>
+                                        ⚠️ Unprotected
+                                    </>
+                                )}
                             </div>
-                            <div className={styles.widgetSub}>Connect a service to start</div>
+                            <div className={styles.widgetSub}>
+                                {activeRulesCount > 0 ? `${activeRulesCount} Active Rules` : "Connect a service to start"}
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -180,8 +221,8 @@ export default function ServicesPage() {
                                     </div>
                                 </div>
                                 <div className={styles.serviceActions}>
-                                    <button className={styles.connectBtn}>
-                                        Connect
+                                    <button className={`${styles.connectBtn} ${srv.id === "llm" && llmConnected ? styles.connected : ""}`}>
+                                        {srv.id === "llm" && llmConnected ? "Connected" : "Connect"}
                                     </button>
                                     <div className={styles.providerCount}>
                                         {srv.providers} provider{srv.providers > 1 ? "s" : ""}
@@ -203,6 +244,17 @@ export default function ServicesPage() {
                                                         </a>
                                                     </div>
                                                     <button className={styles.providerConnectBtn} onClick={(e) => { e.stopPropagation(); handleConnectClick(srv, provider); }}>Connect</button>
+                                                    {srv.id === "llm" && (
+                                                        <a 
+                                                            href="https://docs.aporto.tech" 
+                                                            target="_blank" 
+                                                            rel="noopener noreferrer" 
+                                                            className={styles.modelsBtn}
+                                                            onClick={(e) => e.stopPropagation()}
+                                                        >
+                                                            Models
+                                                        </a>
+                                                    )}
                                                 </div>
                                                 <div className={styles.providerDesc}>{provider.description}</div>
                                                 <div className={styles.providerPricingDivider}></div>
