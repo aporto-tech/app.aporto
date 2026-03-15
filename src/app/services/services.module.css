@@ -269,6 +269,36 @@
     background: #334155;
 }
 
+.providerActions {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    align-items: flex-end;
+}
+
+.modelsBtn {
+    background: #1e293b;
+    border: 1px solid #334155;
+    color: #f8fafc;
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-weight: 500;
+    font-size: 12px;
+    cursor: pointer;
+    text-decoration: none;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 80px;
+    text-align: center;
+}
+
+.modelsBtn:hover {
+    background: #334155;
+    color: #fff;
+}
+
 .providerDesc {
     font-size: 13px;
     color: #94a3b8;
