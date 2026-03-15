@@ -10,7 +10,7 @@ datasources:
     editable: true
 
   - name: PostgreSQL
-    type: postgres
+    type: grafana-postgresql-datasource
     uid: PCC52D03280B7034C
     url: aws-1-eu-north-1.pooler.supabase.com:5432
     user: postgres.rsejjhpkvyaugcbsbzvh
