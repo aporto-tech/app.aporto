@@ -18,7 +18,7 @@ services:
 
   # ---- mtail (Log to Metrics) ----
   mtail:
-    image: b0sh/mtail:latest
+    image: google/mtail:latest
     container_name: aporto-mtail
     restart: unless-stopped
     volumes:
