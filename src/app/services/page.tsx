@@ -184,7 +184,7 @@ export default function ServicesPage() {
                         <div className={styles.widgetBox}>
                             <div className={styles.widgetLabel}>Balance</div>
                             <div className={styles.widgetValue}>
-                                {balanceLoading ? "..." : `$${balance?.remainingUSD.toFixed(2) ?? "0.00"}`}
+                                {balanceLoading ? "..." : `$${balance?.remainingUSD.toFixed(4) ?? "0.0000"}`}
                             </div>
                             <div className={styles.widgetSub}>Available</div>
                         </div>
