@@ -67,13 +67,13 @@ export default function Home() {
                   <p>Try Aporto in action</p>
                 </div>
               </div>
-              <div className={styles.actionCard}>
+              <a href="https://docs.aporto.tech" target="_blank" rel="noopener noreferrer" className={styles.actionCard} style={{ textDecoration: 'none', color: 'inherit' }}>
                 <div className={styles.actionIcon}>📖</div>
                 <div className={styles.actionInfo}>
                   <h3>View Documentation</h3>
                   <p>Integration guides</p>
                 </div>
-              </div>
+              </a>
             </div>
           </div>
 

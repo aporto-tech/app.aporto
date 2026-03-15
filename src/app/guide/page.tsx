@@ -153,9 +153,15 @@ const data = await response.json();`;
                             <p>Experience Aporto in action</p>
                         </div>
                     </div>
-                    <button className={styles.docsBtn}>
+                    <a 
+                        href="https://docs.aporto.tech" 
+                        target="_blank" 
+                        rel="noopener noreferrer" 
+                        className={styles.docsBtn}
+                        style={{ textDecoration: 'none' }}
+                    >
                         📄 Docs ⧉
-                    </button>
+                    </a>
                 </div>
 
                 {renderStepNav()}

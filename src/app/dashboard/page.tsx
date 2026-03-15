@@ -397,7 +397,7 @@ export default function DashboardPage() {
                                         <p>Try Aporto in action</p>
                                     </div>
                                 </div>
-                                <div className={styles.actionCard} role="button" tabIndex={0} onClick={() => alert("Documentation coming soon!")}>
+                                <div className={styles.actionCard} role="button" tabIndex={0} onClick={() => window.open("https://docs.aporto.tech", "_blank", "noopener,noreferrer")}>
                                     <div className={styles.actionIcon} style={{ color: "#60a5fa", background: "rgba(96,165,250,0.1)" }}>📖</div>
                                     <div className={styles.actionInfo}>
                                         <h3>View Documentation</h3>
