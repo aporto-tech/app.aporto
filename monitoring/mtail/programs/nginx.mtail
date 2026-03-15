@@ -1,0 +1,33 @@
+# mtail program to parse Nginx access logs and export Prometheus metrics
+# Log format: '$remote_addr - $remote_user [$time_local] "$request" $status $body_bytes_sent "$http_referer" "$http_user_agent" $request_time $upstream_response_time'
+
+counter http_requests_total by method, status, path
+histogram http_request_duration_seconds by method, status, path buckets 0.01, 0.05, 0.1, 0.2, 0.5, 1.0, 2.5, 5.0, 10.0, 30.0, 60.0, 120.0
+counter http_response_bytes_total by method, status
+
+/^/ +
+/(?P<remote_addr>\S+) - (?P<remote_user>\S+) \[(?P<time_local>[^\]]+)\] / +
+/"(?P<request_method>\S+) (?P<request_uri>\S+) (?P<server_protocol>\S+)" / +
+/(?P<status>\d+) (?P<body_bytes_sent>\d+) / +
+/"(?P<http_referer>[^"]*)" "(?P<http_user_agent>[^"]*)" / +
+/(?P<request_time>\d+\.\d+) (?P<upstream_response_time>\S+)/ +
+/$/ {
+    $path = $request_uri
+
+    # Normalize known API paths to reduce cardinality
+    $path =~ /^(\/v1\/[^?]+)/ {
+        $path = $1
+    }
+    otherwise {
+        $path =~ /^(\/api\/\w+)/ {
+            $path = $1
+        }
+        otherwise {
+            $path = "/other"
+        }
+    }
+
+    http_requests_total[$request_method][$status][$path]++
+    http_request_duration_seconds[$request_method][$status][$path] = $request_time
+    http_response_bytes_total[$request_method][$status] = $body_bytes_sent
+}

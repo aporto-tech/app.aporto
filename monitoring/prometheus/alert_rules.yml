@@ -1,0 +1,45 @@
+groups:
+  - name: newapi_alerts
+    rules:
+      # ---- New API Down (No traffic noticed by proxy) ----
+      - alert: ServiceDown
+        expr: |
+          rate(http_requests_total[3m]) == 0
+        for: 3m
+        labels:
+          severity: critical
+        annotations:
+          summary: "🔴 New API: No Traffic Detected"
+          description: "No requests recorded by Nginx proxy in the last 3 minutes. Service might be down."
+
+      # ---- High Error Rate ----
+      - alert: HighErrorRate
+        expr: |
+          sum(rate(http_requests_total{status=~"5.."}[5m])) / sum(rate(http_requests_total[5m])) > 0.05
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "🔴 New API: High Error Rate (>5%)"
+          description: "Error rate is {{ $value | printf \"%.2f\" }}% over the last 5 minutes."
+
+      # ---- High Latency (P95) ----
+      - alert: HighLatency
+        expr: |
+          histogram_quantile(0.95, sum by (le, path) (rate(http_request_duration_seconds_bucket[5m]))) > 15
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "⚠️ New API: High P95 Latency (>15s)"
+          description: "P95 latency for {{ $labels.path }} is {{ $value }}s."
+
+      # ---- Nginx Proxy Down ----
+      - alert: NginxExporterDown
+        expr: up{job="nginx"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "🔴 Nginx Exporter Down"
+          description: "Prometheus cannot scrape metrics from nginx-exporter. Monitoring visibility is lost."

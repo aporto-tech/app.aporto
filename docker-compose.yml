@@ -24,7 +24,7 @@ networks:
 
 volumes:
   newapi_data:
-  newapi_logs:
+  newapi_logs: # Shared volume for Nginx logs
   app_db:    # SQLite DB for NextAuth
 
 services:
@@ -39,7 +39,7 @@ services:
       - "3006:3000"
     volumes:
       - newapi_data:/data
-      - newapi_logs:/app/logs
+      - newapi_logs:/app/logs # New-API logs are already being written here, but we'll share this volume
     environment:
       - SQL_DSN=${NEWAPI_DATABASE_URL:-$DATABASE_URL}
       - REDIS_CONN_STRING=redis://redis

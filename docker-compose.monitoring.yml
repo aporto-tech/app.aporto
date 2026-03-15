@@ -1,0 +1,102 @@
+version: '3.8'
+
+# ============================================================
+# NewAPI Monitoring Stack (Prometheus + Grafana + mtail)
+# ============================================================
+
+services:
+  # ---- Nginx Proxy (The Frontend) ----
+  nginx:
+    image: nginx:alpine
+    container_name: aporto-nginx-proxy
+    restart: unless-stopped
+    ports:
+      - "3004:80"
+    volumes:
+      - ./monitoring/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - newapi_logs:/var/log/nginx
+    networks:
+      - aporto-net
+    depends_on:
+      - new-api
+
+  # ---- mtail (Log to Metrics) ----
+  mtail:
+    image: b0sh/mtail:latest
+    container_name: aporto-mtail
+    restart: unless-stopped
+    volumes:
+      - newapi_logs:/var/log/nginx:ro
+      - ./monitoring/mtail/programs:/etc/mtail:ro
+    command:
+      - --progs=/etc/mtail
+      - --logs=/var/log/nginx/access.log
+    networks:
+      - aporto-net
+
+  # ---- Nginx Exporter (Basic stats) ----
+  nginx-exporter:
+    image: nginx/nginx-prometheus-exporter:latest
+    container_name: aporto-nginx-exporter
+    restart: unless-stopped
+    command:
+      - --nginx.scrape-uri=http://nginx:80/nginx_status
+    networks:
+      - aporto-net
+
+  # ---- Prometheus ----
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: aporto-prometheus
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/prometheus/alert_rules.yml:/etc/prometheus/alert_rules.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.retention.time=30d
+    networks:
+      - aporto-net
+
+  # ---- Alertmanager ----
+  alertmanager:
+    image: prom/alertmanager:latest
+    container_name: aporto-alertmanager
+    restart: unless-stopped
+    ports:
+      - "9093:9093"
+    volumes:
+      - ./monitoring/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+    networks:
+      - aporto-net
+
+  # ---- Grafana ----
+  grafana:
+    image: grafana/grafana:latest
+    container_name: aporto-grafana
+    restart: unless-stopped
+    ports:
+      - "3030:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_INSTALL_PLUGINS=grafana-postgresql-datasource
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    networks:
+      - aporto-net
+
+networks:
+  aporto-net:
+    external: true
+
+volumes:
+  prometheus_data:
+  grafana_data:
+  newapi_logs:
+    external: true
