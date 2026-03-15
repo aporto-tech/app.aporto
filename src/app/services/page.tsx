@@ -12,8 +12,8 @@ const SERVICES = [
         providerDetails: [{ name: "Prelude", description: "Phone verification", pricing: { "Send verification": "$0.015", "Check code": "Free" }, path: "/v1/sms/send", method: "POST", sampleBody: { to: "+1234567890", code: "123456" } }]
     },
     {
-        id: "llm", icon: "🤖", title: "LLM Inference", desc: "Access to 400+ language models via unified API", providers: 1,
-        providerDetails: [{ name: "Aporto LLM", description: "Unified LLM API", pricing: { "Per Token": "Varies" }, path: "/v1/chat/completions", method: "POST", sampleBody: { model: "openai/gpt-4o-mini", messages: [{ role: "user", content: "Hello from Service Hub!" }] } }]
+        id: "llm", icon: "🤖", title: "Aporto AI", desc: "400+ models from OpenAI, Anthropic & more at official prices", providers: 1,
+        providerDetails: [{ name: "Aporto AI", description: "Universal API provider with 400+ world-class models. All pricing is passed through at official rates with zero markup.", pricing: { "Per Token": "Official Rates" }, path: "/v1/chat/completions", method: "POST", sampleBody: { model: "openai/gpt-4o-mini", messages: [{ role: "user", content: "Hello from Service Hub!" }] } }]
     },
     {
         id: "search", icon: "🔍", title: "AI Search", desc: "Real-time web search and information retrieval", providers: 2,
