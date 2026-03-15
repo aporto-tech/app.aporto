@@ -1,0 +1,22 @@
+apiVersion: 1
+
+providers:
+  - name: 'Admin Dashboards'
+    orgId: 1
+    folder: 'Admin'
+    type: file
+    disableDeletion: false
+    editable: true
+    options:
+      path: /var/lib/grafana/dashboards
+      foldersFromFilesStructure: false
+
+  - name: 'Viewer Dashboards'
+    orgId: 1
+    folder: 'Viewer Dashboards'
+    type: file
+    disableDeletion: false
+    editable: true
+    options:
+      path: /var/lib/grafana/dashboards-viewer
+      foldersFromFilesStructure: false

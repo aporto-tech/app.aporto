@@ -15,14 +15,7 @@ rule_files:
 
 # ---- Scrape targets ----
 scrape_configs:
-  # mtail metrics (from nginx access logs)
-  - job_name: 'mtail'
-    static_configs:
-      - targets: ['mtail:3903']
-        labels:
-          service: 'newapi'
-
-  # Nginx Prometheus Exporter (stub_status metrics)
+  # Nginx Prometheus Exporter
   - job_name: 'nginx'
     static_configs:
       - targets: ['nginx-exporter:9113']

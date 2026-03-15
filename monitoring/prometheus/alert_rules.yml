@@ -1,45 +1,43 @@
 groups:
   - name: newapi_alerts
     rules:
-      # ---- New API Down (No traffic noticed by proxy) ----
+      # ---- Nginx недоступен ----
+      - alert: NginxDown
+        expr: nginx_up == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "🔴 Nginx Proxy недоступен"
+          description: "Nginx reverse proxy перед New API не отвечает."
+
+      # ---- New API недоступен (0 запросов за 3 минуты) ----
       - alert: ServiceDown
         expr: |
-          rate(http_requests_total[3m]) == 0
+          rate(nginx_http_requests_total[3m]) == 0
         for: 3m
         labels:
           severity: critical
         annotations:
-          summary: "🔴 New API: No Traffic Detected"
-          description: "No requests recorded by Nginx proxy in the last 3 minutes. Service might be down."
+          summary: "🔴 New API: Нет запросов"
+          description: "0 запросов за последние 3 минуты. Возможно, сервис упал."
 
-      # ---- High Error Rate ----
-      - alert: HighErrorRate
-        expr: |
-          sum(rate(http_requests_total{status=~"5.."}[5m])) / sum(rate(http_requests_total[5m])) > 0.05
+      # ---- Слишком много активных соединений ----
+      - alert: HighConnectionCount
+        expr: nginx_connections_active > 100
         for: 2m
-        labels:
-          severity: critical
-        annotations:
-          summary: "🔴 New API: High Error Rate (>5%)"
-          description: "Error rate is {{ $value | printf \"%.2f\" }}% over the last 5 minutes."
-
-      # ---- High Latency (P95) ----
-      - alert: HighLatency
-        expr: |
-          histogram_quantile(0.95, sum by (le, path) (rate(http_request_duration_seconds_bucket[5m]))) > 15
-        for: 5m
         labels:
           severity: warning
         annotations:
-          summary: "⚠️ New API: High P95 Latency (>15s)"
-          description: "P95 latency for {{ $labels.path }} is {{ $value }}s."
+          summary: "⚠️ New API: Много активных соединений"
+          description: "Активных соединений: {{ $value }}. Возможна перегрузка."
 
-      # ---- Nginx Proxy Down ----
-      - alert: NginxExporterDown
+      # ---- Nginx exporter недоступен ----
+      - alert: ExporterDown
         expr: up{job="nginx"} == 0
         for: 1m
         labels:
           severity: critical
         annotations:
-          summary: "🔴 Nginx Exporter Down"
-          description: "Prometheus cannot scrape metrics from nginx-exporter. Monitoring visibility is lost."
+          summary: "🔴 Nginx Exporter недоступен"
+          description: "Prometheus не может собрать метрики. Мониторинг не работает."

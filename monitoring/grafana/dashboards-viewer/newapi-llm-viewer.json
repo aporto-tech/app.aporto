@@ -1,0 +1,293 @@
+{
+    "annotations": {
+        "list": []
+    },
+    "editable": true,
+    "fiscalYearStartMonth": 0,
+    "graphTooltip": 1,
+    "id": null,
+    "links": [],
+    "panels": [
+        {
+            "datasource": {
+                "uid": "PCC52D03280B7034C",
+                "type": "grafana-postgresql-datasource"
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "color": {
+                        "mode": "thresholds"
+                    },
+                    "thresholds": {
+                        "steps": [
+                            {
+                                "color": "blue",
+                                "value": null
+                            }
+                        ]
+                    }
+                }
+            },
+            "gridPos": {
+                "h": 4,
+                "w": 8,
+                "x": 0,
+                "y": 0
+            },
+            "id": 1,
+            "options": {
+                "colorMode": "background",
+                "graphMode": "area",
+                "reduceOptions": {
+                    "calcs": [
+                        "lastNotNull"
+                    ]
+                },
+                "textMode": "auto"
+            },
+            "title": "📊 Запросов",
+            "type": "stat",
+            "targets": [
+                {
+                    "rawSql": "SELECT count(*) FROM logs WHERE type = 2 AND created_at >= ${__from:date:seconds} AND created_at <= ${__to:date:seconds};",
+                    "format": "table",
+                    "refId": "A"
+                }
+            ]
+        },
+        {
+            "datasource": {
+                "uid": "PCC52D03280B7034C",
+                "type": "grafana-postgresql-datasource"
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "color": {
+                        "mode": "thresholds"
+                    },
+                    "thresholds": {
+                        "steps": [
+                            {
+                                "color": "green",
+                                "value": null
+                            },
+                            {
+                                "color": "red",
+                                "value": 1
+                            }
+                        ]
+                    }
+                }
+            },
+            "gridPos": {
+                "h": 4,
+                "w": 8,
+                "x": 8,
+                "y": 0
+            },
+            "id": 2,
+            "options": {
+                "colorMode": "background",
+                "graphMode": "area",
+                "reduceOptions": {
+                    "calcs": [
+                        "lastNotNull"
+                    ]
+                },
+                "textMode": "auto"
+            },
+            "title": "❌ Ошибки",
+            "type": "stat",
+            "targets": [
+                {
+                    "rawSql": "SELECT count(*) FROM logs WHERE type != 2 AND created_at >= ${__from:date:seconds} AND created_at <= ${__to:date:seconds};",
+                    "format": "table",
+                    "refId": "A"
+                }
+            ]
+        },
+        {
+            "datasource": {
+                "uid": "PCC52D03280B7034C",
+                "type": "grafana-postgresql-datasource"
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "color": {
+                        "mode": "thresholds"
+                    },
+                    "thresholds": {
+                        "steps": [
+                            {
+                                "color": "green",
+                                "value": null
+                            },
+                            {
+                                "color": "yellow",
+                                "value": 30
+                            },
+                            {
+                                "color": "red",
+                                "value": 60
+                            }
+                        ]
+                    },
+                    "unit": "s"
+                }
+            },
+            "gridPos": {
+                "h": 4,
+                "w": 8,
+                "x": 16,
+                "y": 0
+            },
+            "id": 3,
+            "options": {
+                "colorMode": "background",
+                "graphMode": "area",
+                "reduceOptions": {
+                    "calcs": [
+                        "lastNotNull"
+                    ]
+                },
+                "textMode": "auto"
+            },
+            "title": "⏱ Avg Latency",
+            "type": "stat",
+            "targets": [
+                {
+                    "rawSql": "SELECT round(avg(use_time)) FROM logs WHERE type = 2 AND created_at >= ${__from:date:seconds} AND created_at <= ${__to:date:seconds};",
+                    "format": "table",
+                    "refId": "A"
+                }
+            ]
+        },
+        {
+            "datasource": {
+                "uid": "PCC52D03280B7034C",
+                "type": "grafana-postgresql-datasource"
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "color": {
+                        "mode": "palette-classic"
+                    },
+                    "custom": {
+                        "drawStyle": "line",
+                        "fillOpacity": 20,
+                        "lineWidth": 2
+                    },
+                    "unit": "s"
+                }
+            },
+            "gridPos": {
+                "h": 8,
+                "w": 12,
+                "x": 12,
+                "y": 4
+            },
+            "id": 6,
+            "title": "⏱ Latency по времени",
+            "type": "timeseries",
+            "targets": [
+                {
+                    "rawSql": "SELECT to_timestamp(created_at) AS time, use_time AS \"Latency (s)\" FROM logs WHERE type = 2 AND created_at >= ${__from:date:seconds} AND created_at <= ${__to:date:seconds} ORDER BY created_at;",
+                    "format": "table",
+                    "refId": "A"
+                }
+            ]
+        },
+        {
+            "datasource": {
+                "uid": "PCC52D03280B7034C",
+                "type": "grafana-postgresql-datasource"
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "thresholds": {
+                        "steps": [
+                            {
+                                "color": "green",
+                                "value": null
+                            }
+                        ]
+                    }
+                }
+            },
+            "gridPos": {
+                "h": 8,
+                "w": 24,
+                "x": 0,
+                "y": 12
+            },
+            "id": 12,
+            "title": "📊 Статистика по моделям",
+            "type": "table",
+            "targets": [
+                {
+                    "rawSql": "SELECT model_name AS \"Модель\", count(*) AS \"Запросов\", round(avg(use_time)) AS \"Avg Latency (с)\", sum(prompt_tokens) AS \"Prompt Tokens\", sum(completion_tokens) AS \"Completion Tokens\", sum(prompt_tokens + completion_tokens) AS \"Всего Tokens\", count(*) FILTER (WHERE type != 2) AS \"Ошибок\" FROM logs WHERE created_at >= ${__from:date:seconds} AND created_at <= ${__to:date:seconds} GROUP BY model_name ORDER BY count(*) DESC;",
+                    "format": "table",
+                    "refId": "A"
+                }
+            ]
+        },
+        {
+            "datasource": {
+                "uid": "PCC52D03280B7034C",
+                "type": "grafana-postgresql-datasource"
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "thresholds": {
+                        "steps": [
+                            {
+                                "color": "green",
+                                "value": null
+                            },
+                            {
+                                "color": "red",
+                                "value": 80
+                            }
+                        ]
+                    }
+                }
+            },
+            "gridPos": {
+                "h": 8,
+                "w": 24,
+                "x": 0,
+                "y": 20
+            },
+            "id": 11,
+            "title": "📋 Последние ошибки",
+            "type": "table",
+            "targets": [
+                {
+                    "rawSql": "SELECT to_timestamp(created_at) AS \"Время\", model_name AS \"Модель\", COALESCE(channel_name, 'ch_' || channel_id::text) AS \"Канал\", use_time AS \"Latency (с)\", content AS \"Ошибка\" FROM logs WHERE type != 2 ORDER BY created_at DESC LIMIT 20;",
+                    "format": "table",
+                    "refId": "A"
+                }
+            ]
+        }
+    ],
+    "refresh": "30s",
+    "schemaVersion": 38,
+    "style": "dark",
+    "tags": [
+        "newapi",
+        "llm",
+        "models"
+    ],
+    "templating": {
+        "list": []
+    },
+    "time": {
+        "from": "now-24h",
+        "to": "now"
+    },
+    "timepicker": {},
+    "timezone": "",
+    "title": "New API — LLM Overview",
+    "uid": "newapi-llm-viewer",
+    "version": 1
+}

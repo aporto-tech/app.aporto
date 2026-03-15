@@ -1,42 +1,30 @@
-# ============================================================
-# NewAPI Monitoring Stack (Prometheus + Grafana + mtail)
-# ============================================================
+# ============================================
+# Standalone Monitoring Stack for New API
+# Replicated from Reference Project
+# ============================================
 
 services:
-  # ---- Nginx Proxy (The Frontend) ----
+  # ---- Nginx Reverse Proxy ----
   nginx:
     image: nginx:alpine
     container_name: aporto-nginx-proxy
-    restart: unless-stopped
+    restart: always
     ports:
       - "3004:80"
     volumes:
       - ./monitoring/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
-      - newapi_logs:/var/log/nginx
     networks:
       - aporto-net
 
-  # ---- mtail (Log to Metrics) ----
-  mtail:
-    image: mtail/mtail:latest
-    container_name: aporto-mtail
-    restart: unless-stopped
-    volumes:
-      - newapi_logs:/var/log/nginx:ro
-      - ./monitoring/mtail/programs:/etc/mtail:ro
-    command:
-      - --progs=/etc/mtail
-      - --logs=/var/log/nginx/access.log
-    networks:
-      - aporto-net
-
-  # ---- Nginx Exporter (Basic stats) ----
+  # ---- Nginx Prometheus Exporter ----
   nginx-exporter:
     image: nginx/nginx-prometheus-exporter:latest
     container_name: aporto-nginx-exporter
-    restart: unless-stopped
+    restart: always
     command:
       - --nginx.scrape-uri=http://nginx:80/nginx_status
+    depends_on:
+      - nginx
     networks:
       - aporto-net
 
@@ -44,7 +32,7 @@ services:
   prometheus:
     image: prom/prometheus:latest
     container_name: aporto-prometheus
-    restart: unless-stopped
+    restart: always
     ports:
       - "9090:9090"
     volumes:
@@ -52,20 +40,23 @@ services:
       - ./monitoring/prometheus/alert_rules.yml:/etc/prometheus/alert_rules.yml:ro
       - prometheus_data:/prometheus
     command:
-      - --config.file=/etc/prometheus/prometheus.yml
-      - --storage.tsdb.retention.time=30d
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.retention.time=30d'
+      - '--web.enable-lifecycle'
     networks:
       - aporto-net
 
-  # ---- Alertmanager ----
+  # ---- Alertmanager (Slack alerts) ----
   alertmanager:
     image: prom/alertmanager:latest
     container_name: aporto-alertmanager
-    restart: unless-stopped
+    restart: always
     ports:
       - "9093:9093"
     volumes:
       - ./monitoring/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+    command:
+      - '--config.file=/etc/alertmanager/alertmanager.yml'
     networks:
       - aporto-net
 
@@ -73,13 +64,13 @@ services:
   grafana:
     image: grafana/grafana:latest
     container_name: aporto-grafana
-    restart: unless-stopped
+    restart: always
     ports:
       - "3030:3000"
     environment:
       - GF_SECURITY_ADMIN_USER=admin
       - GF_SECURITY_ADMIN_PASSWORD=admin
-      - GF_INSTALL_PLUGINS=grafana-postgresql-datasource
+      - GF_USERS_ALLOW_SIGN_UP=false
     volumes:
       - grafana_data:/var/lib/grafana
       - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
@@ -94,5 +85,3 @@ networks:
 volumes:
   prometheus_data:
   grafana_data:
-  newapi_logs:
-    external: true
