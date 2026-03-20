@@ -33,10 +33,9 @@ export async function POST(req: NextRequest) {
         if (baseUsername.length > 9) baseUsername = baseUsername.substring(0, 9);
         const username = `${baseUsername}_${Math.random().toString(36).substr(2, 6)}`;
 
-        // Generate a strong random password for the New-API account.
+        // Generate a 12-char password for New-API (must be 8-20 chars per its validation).
         // Users never log into New-API directly — they authenticate through Aporto only.
-        // This avoids New-API's min/max password length validation failing on the user's actual password.
-        const newApiPassword = Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2).toUpperCase() + "!1";
+        const newApiPassword = Math.random().toString(36).slice(2, 8) + "Aa1!" + Math.random().toString(36).slice(2, 6).toUpperCase();
 
         const newApiUser = await newApiCreateUser({
             username,
