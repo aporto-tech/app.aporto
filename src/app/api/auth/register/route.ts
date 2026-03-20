@@ -39,6 +39,14 @@ export async function POST(req: NextRequest) {
             password, // plain password — New-API hashes it internally
         });
 
+        if (!newApiUser) {
+            // Log clearly for debugging — doesn't block user creation in Aporto DB
+            console.error(`[register] WARNING: New-API user creation FAILED for ${email}. Check NEWAPI_URL=${process.env.NEWAPI_URL} and NEWAPI_ADMIN_TOKEN in server .env`);
+        } else {
+            console.log(`[register] New-API user created: id=${newApiUser.id} for ${email}`);
+        }
+
+
         // Create user in local Prisma DB (for NextAuth)
         const user = await prisma.user.create({
             data: {
