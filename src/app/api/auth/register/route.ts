@@ -27,10 +27,14 @@ export async function POST(req: NextRequest) {
 
         const hashedPassword = await bcrypt.hash(password, 10);
 
-        // Create user in New-API (blocking to get the ID)
-        const username = email.split("@")[0].replace(/[^a-zA-Z0-9_]/g, "_");
+        // New-API strictly requires username to be <= 16 characters.
+        // We take the first 9 chars of the email prefix, plus '_' and a 6 char random string.
+        let baseUsername = email.split("@")[0].replace(/[^a-zA-Z0-9_]/g, "_");
+        if (baseUsername.length > 9) baseUsername = baseUsername.substring(0, 9);
+        const username = `${baseUsername}_${Math.random().toString(36).substr(2, 6)}`;
+
         const newApiUser = await newApiCreateUser({
-            username: `${username}_${Math.random().toString(36).substr(2, 6)}`,
+            username,
             email,
             password, // plain password — New-API hashes it internally
         });
