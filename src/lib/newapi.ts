@@ -38,8 +38,9 @@ function getConfig() {
 }
 
 /**
- * Create a user in New-API.
- * Called on registration so the aporto user has a corresponding New-API account.
+ * Create a user in New-API using the admin endpoint.
+ * This bypasses public registration restrictions and works regardless of
+ * the "Enable password registration" setting in New-API's admin panel.
  */
 export async function newApiCreateUser(opts: {
     username: string;
@@ -53,18 +54,22 @@ export async function newApiCreateUser(opts: {
     }
 
     try {
-        const res = await fetch(`${cfg.url}/api/user/register`, {
+        // Use the admin endpoint (POST /api/user/) instead of the public /api/user/register.
+        // This avoids registration restrictions (username length, password complexity, public reg toggle).
+        const res = await fetch(`${cfg.url}/api/user/`, {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
                 Authorization: `Bearer ${cfg.token}`,
-                "New-Api-User": "1", // Needed if using a console access_token instead of an sk- key
+                "New-Api-User": "1",
             },
             body: JSON.stringify({
                 username: opts.username,
                 password: opts.password,
-                password2: opts.password,
+                display_name: opts.username,
                 email: opts.email,
+                role: 1,    // common user
+                status: 1,  // enabled
             }),
         });
 
@@ -75,8 +80,8 @@ export async function newApiCreateUser(opts: {
             return null;
         }
 
-        // New-API's register endpoint doesn't return the created user object in `data`.
-        // We must fetch the user list filtering by username to get the assigned ID.
+        // The admin endpoint also doesn't return the user object with ID in data,
+        // so we search by username to get the assigned ID.
         const listRes = await fetch(`${cfg.url}/api/user/?keyword=${opts.username}`, {
             method: "GET",
             headers: {
