@@ -4,7 +4,7 @@ import React, { useState, useEffect } from "react";
 import styles from "./addFundsModal.module.css";
 import { useRouter } from "next/navigation";
 import { initializePaddle, Paddle } from "@paddle/paddle-js";
-import { FaCcVisa, FaCcMastercard, FaPaypal, FaApplePay, FaBitcoin } from "react-icons/fa";
+import { FaCreditCard, FaPaypal, FaApplePay, FaBitcoin } from "react-icons/fa";
 
 interface AddFundsModalProps {
     onClose: () => void;
@@ -156,10 +156,7 @@ export default function AddFundsModal({ onClose }: AddFundsModalProps) {
                             >
                                 <div className={styles.paymentIcon}>
                                     {method.id === "card" && (
-                                        <div style={{ display: "flex", gap: "4px", alignItems: "center" }}>
-                                            <FaCcMastercard size={32} color="#ff5f00" />
-                                            <FaCcVisa size={32} color="#1a1f71" />
-                                        </div>
+                                        <FaCreditCard size={28} />
                                     )}
 
                                     {method.id === "paypal" && (

@@ -7,7 +7,7 @@ import DashboardLayout from "../components/DashboardLayout";
 import styles from "./settings.module.css";
 import dashboardStyles from "../dashboard.module.css";
 import { Suspense } from "react";
-import { FaCcVisa, FaCcMastercard, FaCreditCard } from "react-icons/fa";
+import { FaCreditCard } from "react-icons/fa";
 
 interface ApiToken {
     id: number;
@@ -304,8 +304,7 @@ function SettingsContent() {
                             <div className={styles.paymentInputWrapper}>
                                 <input type="text" className={styles.paymentInput} placeholder="1234 1234 1234 1234" />
                                 <div className={styles.cardIcons}>
-                                    <FaCcMastercard size={26} color="#ff5f00" className={styles.cardIconImg} />
-                                    <FaCcVisa size={26} color="#1a1f71" className={styles.cardIconImg} />
+                                    <FaCreditCard size={24} color="#64748b" style={{ marginRight: 4 }} />
                                 </div>
                             </div>
                         </div>
