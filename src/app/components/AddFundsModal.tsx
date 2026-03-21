@@ -4,6 +4,7 @@ import React, { useState, useEffect } from "react";
 import styles from "./addFundsModal.module.css";
 import { useRouter } from "next/navigation";
 import { initializePaddle, Paddle } from "@paddle/paddle-js";
+import { FaCcVisa, FaCcMastercard, FaPaypal, FaApplePay, FaBitcoin } from "react-icons/fa";
 
 interface AddFundsModalProps {
     onClose: () => void;
@@ -156,35 +157,19 @@ export default function AddFundsModal({ onClose }: AddFundsModalProps) {
                                 <div className={styles.paymentIcon}>
                                     {method.id === "card" && (
                                         <div style={{ display: "flex", gap: "4px", alignItems: "center" }}>
-                                            {/* Mastercard */}
-                                            <svg width="32" height="20" viewBox="0 0 32 20" xmlns="http://www.w3.org/2000/svg">
-                                                <rect width="32" height="20" rx="3" fill="#252525"/>
-                                                <circle cx="12" cy="10" r="6" fill="#EB001B"/>
-                                                <circle cx="20" cy="10" r="6" fill="#F79E1B"/>
-                                                <path d="M16 5.1a6 6 0 0 1 0 9.8A6 6 0 0 1 16 5.1z" fill="#FF5F00"/>
-                                            </svg>
-                                            {/* Visa */}
-                                            <svg width="32" height="20" viewBox="0 0 32 20" xmlns="http://www.w3.org/2000/svg">
-                                                <rect width="32" height="20" rx="3" fill="#1A1F71"/>
-                                                <text x="4" y="14" fontFamily="Arial, sans-serif" fontWeight="bold" fontSize="10" fill="#FFFFFF" letterSpacing="0.5">VISA</text>
-                                            </svg>
+                                            <FaCcMastercard size={32} color="#ff5f00" />
+                                            <FaCcVisa size={32} color="#1a1f71" />
                                         </div>
                                     )}
 
                                     {method.id === "paypal" && (
-                                        <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
-                                            <path d="M7.076 21.337H2.47a.64.64 0 01-.633-.74L4.944.901C5.026.382 5.474 0 5.998 0h7.46c2.57 0 4.578.543 5.69 1.81 1.01 1.15 1.304 2.42 1.012 4.287-.023.143-.047.288-.077.437-.983 5.05-4.349 6.797-8.647 6.797h-2.19c-.524 0-.968.382-1.05.9l-1.12 7.106z"/>
-                                        </svg>
+                                        <FaPaypal size={24} />
                                     )}
                                     {method.id === "apple" && (
-                                        <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
-                                            <path d="M17.057 12.783c.032 2.585 2.117 3.445 2.148 3.462-.011.054-.319 1.084-1.069 2.179-.648.944-1.32 1.884-2.387 1.903-1.048.02-1.385-.613-2.585-.613-1.2 0-1.571.613-2.56.632-.992.02-1.746-.864-2.397-1.808-1.334-1.93-2.35-5.452-.977-7.828.683-1.176 1.911-1.92 3.232-1.94 1.012-.02 1.968.679 2.585.679.617 0 1.791-.865 2.997-.743.504.021 1.919.202 2.829 1.531-.073.045-1.693.982-1.671 2.943zm-2.164-10.271c.544-.659.911-1.575.811-2.491-.787.031-1.734.524-2.3 1.183-.509.593-.956 1.503-.838 2.399.876.068 1.782-.432 2.327-1.091z"/>
-                                        </svg>
+                                        <FaApplePay size={36} />
                                     )}
                                     {method.id === "crypto" && (
-                                        <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
-                                            <path d="M23.638 14.904c-1.602 6.43-8.113 10.34-14.542 8.736C2.67 22.05-1.244 15.525.362 9.105 1.962 2.67 8.471-1.24 14.912.364c6.417 1.594 10.334 8.119 8.726 14.54zm-6.72-6.38c.313-2.09-1.282-3.217-3.462-3.962l.708-2.84-1.728-.43-.69 2.766c-.454-.114-.92-.22-1.385-.326l.695-2.783L9.33 1.498l-.708 2.84c-.376-.086-.746-.17-1.104-.26L5.794 5.2l.432 1.72.682-.17c.373-.092.556.02.54.218l-.544 2.19c.03.01.076.024.12.043l-.122-.03-.765 3.07c-.046.113-.16.282-.418.216l.011.045-.684.173.232.923c.321.08.636.164.945.242l-.715 2.863 1.727.432.708-2.84c.472.13.93.253 1.378.37l-.693 2.782 1.73.43.714-2.868c2.947.558 5.16.333 6.095-2.333.754-2.146-.037-3.384-1.585-4.192 1.13-.26 1.98-1.002 2.207-2.536zm-3.95 5.538c-.534 2.147-4.148.987-5.32.695l.95-3.81c1.17.293 4.929.873 4.37 3.115zm.535-5.567c-.487 1.953-3.495.962-4.47.72l.862-3.456c.974.243 4.118.696 3.608 2.736z"/>
-                                        </svg>
+                                        <FaBitcoin size={26} />
                                     )}
                                     {method.id === "more" && (
                                         <span>...</span>

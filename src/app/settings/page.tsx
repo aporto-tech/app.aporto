@@ -7,6 +7,7 @@ import DashboardLayout from "../components/DashboardLayout";
 import styles from "./settings.module.css";
 import dashboardStyles from "../dashboard.module.css";
 import { Suspense } from "react";
+import { FaCcVisa, FaCcMastercard, FaCreditCard } from "react-icons/fa";
 
 interface ApiToken {
     id: number;
@@ -303,18 +304,8 @@ function SettingsContent() {
                             <div className={styles.paymentInputWrapper}>
                                 <input type="text" className={styles.paymentInput} placeholder="1234 1234 1234 1234" />
                                 <div className={styles.cardIcons}>
-                                    {/* Mastercard inline SVG */}
-                                    <svg className={styles.cardIconImg} width="38" height="24" viewBox="0 0 38 24" xmlns="http://www.w3.org/2000/svg">
-                                        <rect width="38" height="24" rx="4" fill="#252525"/>
-                                        <circle cx="15" cy="12" r="7" fill="#EB001B"/>
-                                        <circle cx="23" cy="12" r="7" fill="#F79E1B"/>
-                                        <path d="M19 6.8a7 7 0 0 1 0 10.4A7 7 0 0 1 19 6.8z" fill="#FF5F00"/>
-                                    </svg>
-                                    {/* Visa inline SVG */}
-                                    <svg className={styles.cardIconImg} width="38" height="24" viewBox="0 0 38 24" xmlns="http://www.w3.org/2000/svg">
-                                        <rect width="38" height="24" rx="4" fill="#1A1F71"/>
-                                        <text x="5" y="17" fontFamily="Arial, sans-serif" fontWeight="bold" fontSize="12" fill="#FFFFFF" letterSpacing="1">VISA</text>
-                                    </svg>
+                                    <FaCcMastercard size={26} color="#ff5f00" className={styles.cardIconImg} />
+                                    <FaCcVisa size={26} color="#1a1f71" className={styles.cardIconImg} />
                                 </div>
                             </div>
                         </div>
@@ -329,11 +320,7 @@ function SettingsContent() {
                                 <div className={styles.paymentInputWrapper}>
                                     <input type="text" className={styles.paymentInput} placeholder="CVC" />
                                     <span style={{ position: 'absolute', right: 16, color: '#94a3b8', display: 'flex', alignItems: 'center' }}>
-                                        <svg width="24" height="16" viewBox="0 0 24 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                            <rect width="24" height="16" rx="2" fill="#94a3b8" fillOpacity="0.3"/>
-                                            <rect y="4" width="24" height="4" fill="#94a3b8" fillOpacity="0.7"/>
-                                            <rect x="14" y="10" width="7" height="3" rx="1" fill="#94a3b8"/>
-                                        </svg>
+                                        <FaCreditCard size={18} />
                                     </span>
                                 </div>
                             </div>
