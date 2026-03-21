@@ -155,13 +155,22 @@ export default function AddFundsModal({ onClose }: AddFundsModalProps) {
                             >
                                 <div className={styles.paymentIcon}>
                                     {method.id === "card" && (
-                                        <svg width="32" height="32" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                            <rect width="48" height="32" rx="4" fill="#2D2D2D"/>
-                                            <path d="M12 24H36M12 28H24" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
-                                            <circle cx="36" cy="12" r="4" fill="#EB001B"/>
-                                            <circle cx="40" cy="12" r="4" fill="#F79E1B" fillOpacity="0.8"/>
-                                        </svg>
+                                        <div style={{ display: "flex", gap: "4px", alignItems: "center" }}>
+                                            {/* Mastercard */}
+                                            <svg width="32" height="20" viewBox="0 0 32 20" xmlns="http://www.w3.org/2000/svg">
+                                                <rect width="32" height="20" rx="3" fill="#252525"/>
+                                                <circle cx="12" cy="10" r="6" fill="#EB001B"/>
+                                                <circle cx="20" cy="10" r="6" fill="#F79E1B"/>
+                                                <path d="M16 5.1a6 6 0 0 1 0 9.8A6 6 0 0 1 16 5.1z" fill="#FF5F00"/>
+                                            </svg>
+                                            {/* Visa */}
+                                            <svg width="32" height="20" viewBox="0 0 32 20" xmlns="http://www.w3.org/2000/svg">
+                                                <rect width="32" height="20" rx="3" fill="#1A1F71"/>
+                                                <text x="4" y="14" fontFamily="Arial, sans-serif" fontWeight="bold" fontSize="10" fill="#FFFFFF" letterSpacing="0.5">VISA</text>
+                                            </svg>
+                                        </div>
                                     )}
+
                                     {method.id === "paypal" && (
                                         <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
                                             <path d="M7.076 21.337H2.47a.64.64 0 01-.633-.74L4.944.901C5.026.382 5.474 0 5.998 0h7.46c2.57 0 4.578.543 5.69 1.81 1.01 1.15 1.304 2.42 1.012 4.287-.023.143-.047.288-.077.437-.983 5.05-4.349 6.797-8.647 6.797h-2.19c-.524 0-.968.382-1.05.9l-1.12 7.106z"/>
