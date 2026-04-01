@@ -1,0 +1,41 @@
+{
+  "name": "@aporto/sdk",
+  "version": "0.1.0",
+  "description": "Official SDK for the Aporto platform — LLM, search, audio, images, browser, compute, messaging, DB, and SMS via a single API key",
+  "keywords": ["aporto", "ai", "sdk", "llm", "search", "agent"],
+  "homepage": "https://aporto.tech",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Pevznergo/app.aporto.git",
+    "directory": "packages/sdk"
+  },
+  "license": "MIT",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "prepublishOnly": "npm run build"
+  },
+  "dependencies": {
+    "openai": "^4.0.0"
+  },
+  "devDependencies": {
+    "tsup": "^8.0.0",
+    "typescript": "^5.0.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

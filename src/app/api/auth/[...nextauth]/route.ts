@@ -38,6 +38,13 @@ export const authOptions: NextAuthOptions = {
                     return null;
                 }
 
+                // Block unverified users — they must complete OTP before logging in.
+                // NOTE: run `UPDATE "User" SET "emailVerified" = NOW() WHERE "emailVerified" IS NULL`
+                // in Supabase BEFORE deploying this change, or existing users will be locked out.
+                if (user.emailVerified === null) {
+                    return null;
+                }
+
                 return {
                     id: user.id,
                     email: user.email,
