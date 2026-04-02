@@ -9,26 +9,35 @@ const NEWAPI_URL = process.env.NEWAPI_URL || "https://api.aporto.tech";
 const QUOTA_PER_USD = 500_000;
 
 async function topUpUserQuota(newApiUserId: number, usdAmount: number) {
-    const authHeader = { "Authorization": `Bearer ${NEWAPI_ADMIN_TOKEN}` };
+    const adminHeaders = {
+        "Authorization": `Bearer ${NEWAPI_ADMIN_TOKEN}`,
+        "New-Api-User": "1",
+    };
 
     // Fetch current user quota
     const userRes = await fetch(`${NEWAPI_URL}/api/user/${newApiUserId}`, {
-        headers: authHeader,
+        headers: adminHeaders,
+        cache: "no-store",
     });
 
     if (!userRes.ok) {
-        throw new Error(`Failed to fetch user ${newApiUserId}: ${userRes.status}`);
+        const errText = await userRes.text();
+        throw new Error(`Failed to fetch user ${newApiUserId}: ${userRes.status} — ${errText}`);
     }
 
     const userData = await userRes.json();
+    console.log(`NOWPayments: fetched user ${newApiUserId} data:`, JSON.stringify(userData));
+
     const currentQuota: number = userData.data?.quota ?? 0;
     const addQuota = Math.floor(usdAmount * QUOTA_PER_USD);
     const newQuota = currentQuota + addQuota;
 
+    console.log(`NOWPayments: quota update — current: ${currentQuota}, adding: ${addQuota}, new: ${newQuota}`);
+
     // Update quota
     const updateRes = await fetch(`${NEWAPI_URL}/api/user/`, {
         method: "PUT",
-        headers: { ...authHeader, "Content-Type": "application/json" },
+        headers: { ...adminHeaders, "Content-Type": "application/json" },
         body: JSON.stringify({ id: newApiUserId, quota: newQuota }),
     });
 
@@ -50,7 +59,11 @@ export async function POST(req: Request) {
         const bodyText = await req.text();
         const signature = req.headers.get("x-nowpayments-sig");
 
+        console.log("NOWPayments IPN received. Signature:", signature ? "present" : "MISSING");
+        console.log("NOWPayments IPN body:", bodyText.slice(0, 500));
+
         if (!signature || !NOWPAYMENTS_IPN_SECRET) {
+            console.error("NOWPayments IPN: missing signature or IPN secret not configured");
             return NextResponse.json({ success: false, message: "Missing IPN secret or signature" }, { status: 400 });
         }
 
@@ -68,9 +81,11 @@ export async function POST(req: Request) {
         const calculatedSignature = hmac.digest("hex");
 
         if (calculatedSignature !== signature) {
-            console.error("NOWPayments IPN: invalid signature");
+            console.error("NOWPayments IPN: invalid signature. Got:", signature, "Expected:", calculatedSignature);
             return NextResponse.json({ success: false, message: "Invalid signature" }, { status: 403 });
         }
+
+        console.log("NOWPayments IPN: signature valid");
 
         // order_id format: {newApiUserId}_{timestamp}_{packageId}
         const { payment_status, price_amount, order_id } = parsed;
