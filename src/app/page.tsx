@@ -1,20 +1,36 @@
 "use client";
 
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import DashboardLayout from "./components/DashboardLayout";
 import styles from "./dashboard.module.css";
 
 export default function Home() {
-  const { data: session, status } = useSession();
+  const { data: session, status, update } = useSession();
   const router = useRouter();
+
+  const [balance, setBalance] = useState<number | null>(null);
+
+  // Force-refresh JWT so newApiUserId is present (important after register→OTP→login)
+  useEffect(() => {
+    update();
+  }, []);
 
   useEffect(() => {
     if (status === "unauthenticated") {
       router.push("/login");
     }
   }, [status, router]);
+
+  // Fetch real balance once session is ready
+  useEffect(() => {
+    if (status !== "authenticated") return;
+    fetch("/api/newapi/balance")
+      .then(r => r.json())
+      .then(d => { if (d.success) setBalance(d.remainingUSD ?? 0); })
+      .catch(() => {});
+  }, [status, session]);
 
   if (status === "loading") {
     return (
@@ -141,7 +157,9 @@ export default function Home() {
             <div className={styles.widgetHeader}>
               <span>$ Available Balance</span>
             </div>
-            <div className={styles.balanceAmount}>$5.00</div>
+            <div className={styles.balanceAmount}>
+              {balance === null ? "..." : `$${balance.toFixed(4)}`}
+            </div>
             <button
               className={styles.addFundsBtn}
               onClick={() => router.push("/settings?tab=billing")}

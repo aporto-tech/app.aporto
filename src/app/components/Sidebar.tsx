@@ -4,16 +4,20 @@ import React, { useEffect, useState } from "react";
 import styles from "./layout.module.css";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useSession } from "next-auth/react";
 
 const Sidebar = () => {
     const pathname = usePathname();
+    const { data: session, status } = useSession();
 
     // Balance state (from New-API)
     const [balance, setBalance] = useState<{ remainingUSD: number; usedUSD: number } | null>(null);
     const [balanceLoading, setBalanceLoading] = useState(true);
 
     // ─── Fetch balance from New-API ──────────────────────────────────────────
+    // Re-fetch whenever session changes so we use the correct newApiUserId
     useEffect(() => {
+        if (status === "loading") return;
         const fetchBalance = async () => {
             setBalanceLoading(true);
             try {
@@ -31,7 +35,7 @@ const Sidebar = () => {
         fetchBalance();
         const interval = setInterval(fetchBalance, 60_000);
         return () => clearInterval(interval);
-    }, []);
+    }, [status, session]);
 
     const navItems = [
         { name: "Dashboard", icon: "📊", path: "/dashboard" },
