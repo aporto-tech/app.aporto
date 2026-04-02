@@ -2,8 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import DashboardLayout from "../components/DashboardLayout";
-import styles from "./services.module.css";
-import { useSession } from "next-auth/react";
+import AddServiceModal from "../components/AddServiceModal";
 import { useRouter } from "next/navigation";
 
 const SERVICES = [
@@ -57,6 +56,7 @@ export default function ServicesPage() {
     const router = useRouter();
     const [apiKey, setApiKey] = useState("");
     const [showModal, setShowModal] = useState(false);
+    const [showAddServiceModal, setShowAddServiceModal] = useState(false);
     const [selectedService, setSelectedService] = useState<any>(null);
     const [selectedProvider, setSelectedProvider] = useState<any>(null);
     const [expandedServiceId, setExpandedServiceId] = useState<string | null>(null);
@@ -178,6 +178,22 @@ export default function ServicesPage() {
                             Instant access to search, communications, inference, and more.<br />
                             Built-in metering and governance keeps your agents safe.
                         </p>
+                        <button
+                            onClick={() => setShowAddServiceModal(true)}
+                            style={{
+                                marginTop: 16,
+                                padding: "10px 20px",
+                                background: "#22c55e",
+                                color: "#000",
+                                border: "none",
+                                borderRadius: 8,
+                                fontWeight: 600,
+                                fontSize: 14,
+                                cursor: "pointer",
+                            }}
+                        >
+                            + Add a Service
+                        </button>
                     </div>
 
                     <div className={styles.headerWidgets}>
@@ -349,6 +365,13 @@ export default function ServicesPage() {
                         </div>
                     </div>
                 </div>
+            )}
+
+            {showAddServiceModal && (
+                <AddServiceModal
+                    apiKey={apiKey}
+                    onClose={() => setShowAddServiceModal(false)}
+                />
             )}
         </DashboardLayout>
     );

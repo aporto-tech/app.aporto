@@ -21,7 +21,10 @@ interface ChecklistItem {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function DashboardPage() {
-    const { data: session, status } = useSession();
+    const { data: session, status, update } = useSession();
+
+    // Force-refresh session on mount so newApiUserId is always populated
+    useEffect(() => { update(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
     const router = useRouter();
 
     // UI state
@@ -90,9 +93,7 @@ export default function DashboardPage() {
             }
         };
         fetchBalance();
-        const interval = setInterval(fetchBalance, 60_000);
-        return () => clearInterval(interval);
-    }, [status]);
+    }, [status, session]);
 
     // ─── Fetch recent logs ───────────────────────────────────────────────────
     useEffect(() => {
@@ -115,7 +116,7 @@ export default function DashboardPage() {
             }
         };
         fetchLogs();
-    }, [status]);
+    }, [status, session]);
 
     // ─── Fetch keys to persist "Getting Started" checklist ───────────────────
     useEffect(() => {
@@ -140,7 +141,7 @@ export default function DashboardPage() {
             }
         };
         fetchKeys();
-    }, [status]);
+    }, [status, session]);
 
     // ─── Close modal on Escape ───────────────────────────────────────────────
     useEffect(() => {
