@@ -1,7 +1,6 @@
 "use client";
 
-import React, { useEffect, useState, useCallback } from "react";
-import { useSession } from "next-auth/react";
+import React, { useEffect, useState, useCallback } from "react";import { useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import DashboardLayout from "../components/DashboardLayout";
 import styles from "./settings.module.css";
@@ -23,7 +22,7 @@ function SettingsContent() {
     const { data: session, status } = useSession();
     const router = useRouter();
     const searchParams = useSearchParams();
-    const [activeTab, setActiveTab] = useState<"api-keys" | "billing">("api-keys");
+    const [activeTab, setActiveTab] = useState<"api-keys" | "billing" | "history">("api-keys");
 
     useEffect(() => {
         const tab = searchParams.get("tab");
@@ -31,6 +30,8 @@ function SettingsContent() {
             setActiveTab("billing");
         } else if (tab === "api-keys") {
             setActiveTab("api-keys");
+        } else if (tab === "history") {
+            setActiveTab("history");
         }
     }, [searchParams]);
 
@@ -50,6 +51,29 @@ function SettingsContent() {
 
     // Payment Modal state
     const [showPaymentModal, setShowPaymentModal] = useState(false);
+
+    // History tab state
+    interface TopUp { id: string; usdPaid: number; creditedUSD: number; createdAt: string; orderId: string; }
+    interface DaySpend { date: string; spentUSD: number; }
+    const [topUps, setTopUps] = useState<TopUp[]>([]);
+    const [dailySpend, setDailySpend] = useState<DaySpend[]>([]);
+    const [historyLoading, setHistoryLoading] = useState(false);
+
+    const fetchHistory = useCallback(async () => {
+        setHistoryLoading(true);
+        try {
+            const res = await fetch("/api/transactions");
+            const data = await res.json();
+            if (data.success) {
+                setTopUps(data.topUps);
+                setDailySpend(data.dailySpend);
+            }
+        } catch (err) {
+            console.error("Failed to fetch transaction history", err);
+        } finally {
+            setHistoryLoading(false);
+        }
+    }, []);
 
     const fetchTokens = useCallback(async () => {
         setLoading(true);
@@ -71,8 +95,10 @@ function SettingsContent() {
             router.push("/login");
         } else if (status === "authenticated" && activeTab === "api-keys") {
             fetchTokens();
+        } else if (status === "authenticated" && activeTab === "history") {
+            fetchHistory();
         }
-    }, [status, router, fetchTokens, activeTab]);
+    }, [status, router, fetchTokens, fetchHistory, activeTab]);
 
     const handleRevoke = async (tokenId: number) => {
         if (!confirm("Are you sure you want to revoke this API key? This action cannot be undone.")) return;
@@ -141,6 +167,12 @@ function SettingsContent() {
                         onClick={() => setActiveTab("billing")}
                     >
                         Billing
+                    </button>
+                    <button
+                        className={`${styles.tab} ${activeTab === "history" ? styles.active : ""}`}
+                        onClick={() => setActiveTab("history")}
+                    >
+                        History
                     </button>
                 </div>
 
@@ -214,6 +246,73 @@ function SettingsContent() {
                             <p className={styles.billingDesc}>Add a payment method to enable automatic billing</p>
                             <button className={styles.createBtn} onClick={() => setShowPaymentModal(true)}>+ Add Payment Method</button>
                         </div>
+                    </div>
+                )}
+
+                {activeTab === "history" && (
+                    <div className={styles.historyCard}>
+                        {historyLoading ? (
+                            <div style={{ color: "#64748b", padding: "40px 0", textAlign: "center" }}>Loading history...</div>
+                        ) : (
+                            <>
+                                {/* Top-up History */}
+                                <div className={styles.historySection}>
+                                    <h3>Top-up History</h3>
+                                    {topUps.length === 0 ? (
+                                        <div className={styles.historyEmpty}>No top-ups yet.</div>
+                                    ) : (
+                                        <table className={styles.historyTable}>
+                                            <thead>
+                                                <tr>
+                                                    <th>Date</th>
+                                                    <th>Paid</th>
+                                                    <th>Credited</th>
+                                                    <th>Source</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {topUps.map(tx => (
+                                                    <tr key={tx.id}>
+                                                        <td>{new Date(tx.createdAt).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" })}</td>
+                                                        <td>${tx.usdPaid.toFixed(2)}</td>
+                                                        <td className={styles.txTopup}>+${tx.creditedUSD.toFixed(2)}</td>
+                                                        <td style={{ color: "#64748b", fontSize: "13px" }}>Crypto (NOWPayments)</td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    )}
+                                </div>
+
+                                {/* Daily Spending */}
+                                <div className={styles.historySection}>
+                                    <h3>Daily Spending</h3>
+                                    {dailySpend.length === 0 ? (
+                                        <div className={styles.historyEmpty}>No spending history yet.</div>
+                                    ) : (
+                                        <>
+                                            <table className={styles.historyTable}>
+                                                <thead>
+                                                    <tr>
+                                                        <th>Date</th>
+                                                        <th>Spent</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {dailySpend.map(d => (
+                                                        <tr key={d.date}>
+                                                            <td>{new Date(d.date + "T00:00:00Z").toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric", timeZone: "UTC" })}</td>
+                                                            <td className={styles.txSpend}>−${d.spentUSD.toFixed(4)}</td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                            <p className={styles.historyNote}>* Today&apos;s transactions are not shown. History refreshes at midnight UTC.</p>
+                                        </>
+                                    )}
+                                </div>
+                            </>
+                        )}
                     </div>
                 )}
             </div>

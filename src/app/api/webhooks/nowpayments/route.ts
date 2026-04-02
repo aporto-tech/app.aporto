@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import crypto from "crypto";
+import { prisma } from "@/lib/prisma";
 
 const NOWPAYMENTS_IPN_SECRET = process.env.NOWPAYMENTS_IPN_SECRET || "";
 const NEWAPI_ADMIN_TOKEN = process.env.NEWAPI_ADMIN_TOKEN || "";
@@ -59,7 +60,7 @@ async function topUpUserQuota(newApiUserId: number, usdAmount: number) {
         throw new Error(`New-API rejected quota update: ${updateData.message}`);
     }
 
-    return { added: addQuota, newQuota };
+    return { added: addQuota, newQuota, email: user.email ?? "" };
 }
 
 export async function POST(req: Request) {
@@ -114,6 +115,23 @@ export async function POST(req: Request) {
 
             const result = await topUpUserQuota(newApiUserId, usdAmount);
             console.log(`NOWPayments: topped up user ${newApiUserId} by ${result.added} quota (new total: ${result.newQuota})`);
+
+            // Persist to DB for transaction history (best-effort, don't fail the webhook if this errors)
+            try {
+                await prisma.topUpTransaction.create({
+                    data: {
+                        newApiUserId,
+                        email: result.email,
+                        orderId: String(order_id),
+                        usdPaid: usdAmount,
+                        creditedUSD: parseFloat((usdAmount / APORTO_DISCOUNT).toFixed(6)),
+                        quotaAdded: result.added,
+                    },
+                });
+            } catch (dbErr) {
+                // Duplicate orderId = already processed (e.g. race between webhooks), ignore
+                console.warn("NOWPayments: failed to save TopUpTransaction (may be duplicate):", dbErr);
+            }
 
             return NextResponse.json({ success: true, message: "Balance updated" });
         }

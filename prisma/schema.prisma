@@ -63,3 +63,14 @@ model VerificationToken {
 
   @@unique([identifier, token])
 }
+
+model TopUpTransaction {
+  id           String   @id @default(cuid())
+  newApiUserId Int
+  email        String
+  orderId      String   @unique
+  usdPaid      Float
+  creditedUSD  Float
+  quotaAdded   Int
+  createdAt    DateTime @default(now())
+}

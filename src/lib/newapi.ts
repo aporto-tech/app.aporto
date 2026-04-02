@@ -383,8 +383,37 @@ export async function newApiDeleteToken(tokenId: number, userId: number): Promis
 }
 
 /**
- * Update a token's quota.
+ * Aggregate daily API spending for a user from the New-API logs table.
+ * Excludes today (data for today is partial and excluded by design).
+ * Returns last 60 days with non-zero spend, newest first.
  */
+export async function newApiGetDailySpend(userId: number): Promise<{ date: string; spentUSD: number }[]> {
+    try {
+        const rows = await prisma.$queryRawUnsafe<any[]>(
+            `SELECT
+                to_char(date_trunc('day', to_timestamp(created_at)), 'YYYY-MM-DD') AS date,
+                SUM(quota) AS total_quota
+             FROM logs
+             WHERE user_id = $1
+               AND type = 2
+               AND (content = '' OR content IS NULL)
+               AND created_at < EXTRACT(EPOCH FROM date_trunc('day', NOW()))
+             GROUP BY date_trunc('day', to_timestamp(created_at))
+             ORDER BY date_trunc('day', to_timestamp(created_at)) DESC
+             LIMIT 60`,
+            userId
+        );
+
+        const QUOTA_PER_DOLLAR = 500_000;
+        return rows.map(r => ({
+            date: r.date,
+            spentUSD: Number(r.total_quota) / QUOTA_PER_DOLLAR,
+        }));
+    } catch (err) {
+        console.error("[newapi] Error fetching daily spend:", err);
+        return [];
+    }
+}
 export async function newApiUpdateTokenQuota(opts: {
     tokenId: number;
     userId: number;
