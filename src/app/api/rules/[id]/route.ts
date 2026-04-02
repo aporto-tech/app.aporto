@@ -6,8 +6,9 @@ import { newApiUpdateTokenQuota, newApiSetTokenModels, newApiSetTokenStatus } fr
 
 export const dynamic = "force-dynamic";
 
-export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
     try {
+        const { id } = await params;
         const session = await getServerSession(authOptions);
         if (!session?.user || !(session.user as any).newApiUserId) {
             return NextResponse.json({ success: false, message: "Unauthorized" }, { status: 401 });
@@ -15,7 +16,7 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
         const newApiUserId = Number((session.user as any).newApiUserId);
 
         const rule = await prisma.rule.findFirst({
-            where: { id: params.id, newApiUserId },
+            where: { id, newApiUserId },
         });
         if (!rule) {
             return NextResponse.json({ success: false, message: "Rule not found" }, { status: 404 });
@@ -36,7 +37,7 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
             await newApiSetTokenModels(rule.tokenId, newApiUserId, ""); // clear restriction
         }
 
-        await prisma.rule.delete({ where: { id: params.id } });
+        await prisma.rule.delete({ where: { id } });
 
         return NextResponse.json({ success: true });
     } catch (error) {
