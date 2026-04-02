@@ -98,7 +98,9 @@ export async function POST(req: Request) {
         // order_id format: {newApiUserId}_{timestamp}_{packageId}
         const { payment_status, price_amount, order_id } = parsed;
 
-        if (payment_status === "finished" || payment_status === "confirmed") {
+        // Only process "finished" — NOWPayments also sends "confirmed" before it,
+        // and processing both would double-credit the user.
+        if (payment_status === "finished") {
             const [rawUserId] = String(order_id).split("_");
             const newApiUserId = parseInt(rawUserId, 10);
             const usdAmount = Number(price_amount);
