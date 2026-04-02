@@ -3,6 +3,8 @@
 import React, { useState, useEffect } from "react";
 import DashboardLayout from "../components/DashboardLayout";
 import AddServiceModal from "../components/AddServiceModal";
+import styles from "./services.module.css";
+import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 
 const SERVICES = [
