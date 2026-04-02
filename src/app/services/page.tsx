@@ -113,7 +113,7 @@ export default function ServicesPage() {
     const handleConnectClick = (service: any, provider: any) => {
         setSelectedService(service);
         setSelectedProvider(provider);
-        setShowModal(true);
+        setShowAddServiceModal(true);
     };
 
     const handleCopy = (type: "key" | "code", text: string) => {
@@ -239,7 +239,10 @@ export default function ServicesPage() {
                                     </div>
                                 </div>
                                 <div className={styles.serviceActions}>
-                                    <button className={`${styles.connectBtn} ${srv.id === "llm" && llmConnected ? styles.connected : ""}`}>
+                                    <button
+                                        className={`${styles.connectBtn} ${srv.id === "llm" && llmConnected ? styles.connected : ""}`}
+                                        onClick={(e) => { e.stopPropagation(); handleConnectClick(srv, srv.providerDetails[0]); }}
+                                    >
                                         {srv.id === "llm" && llmConnected ? "Connected" : "Connect"}
                                     </button>
                                     <div className={styles.providerCount}>
