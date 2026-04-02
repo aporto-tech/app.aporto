@@ -5,8 +5,13 @@ const NOWPAYMENTS_IPN_SECRET = process.env.NOWPAYMENTS_IPN_SECRET || "";
 const NEWAPI_ADMIN_TOKEN = process.env.NEWAPI_ADMIN_TOKEN || "";
 const NEWAPI_URL = process.env.NEWAPI_URL || "https://api.aporto.tech";
 
-// 1 USD = 500,000 quota units in New-API
+// 1 USD at official API prices = 500,000 quota units in New-API.
+// Aporto is 30% cheaper than official prices, so $1 deposited
+// buys $1/0.70 ≈ $1.43 of official API usage.
+// Webhook must apply this same multiplier so the credited balance
+// matches what the UI promises (e.g. $5 deposit → $7.14 shown).
 const QUOTA_PER_USD = 500_000;
+const APORTO_DISCOUNT = 0.7; // user pays 70% of official price
 
 async function topUpUserQuota(newApiUserId: number, usdAmount: number) {
     const adminHeaders = {
@@ -30,7 +35,7 @@ async function topUpUserQuota(newApiUserId: number, usdAmount: number) {
 
     const user = userData.data;
     const currentQuota: number = user?.quota ?? 0;
-    const addQuota = Math.floor(usdAmount * QUOTA_PER_USD);
+    const addQuota = Math.floor((usdAmount / APORTO_DISCOUNT) * QUOTA_PER_USD);
     const newQuota = currentQuota + addQuota;
 
     console.log(`NOWPayments: quota update — current: ${currentQuota}, adding: ${addQuota}, new: ${newQuota}`);

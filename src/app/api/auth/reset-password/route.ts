@@ -6,6 +6,7 @@ import crypto from "crypto";
 export async function POST(req: NextRequest) {
     try {
         const { email } = await req.json();
+        console.log("PasswordReset: request for email:", email);
 
         if (!email) {
             return NextResponse.json({ error: "Email is required" }, { status: 400 });
@@ -16,9 +17,12 @@ export async function POST(req: NextRequest) {
         });
 
         if (!user) {
+            console.log("PasswordReset: user not found for email:", email);
             // For security reasons, don't reveal if user exists
             return NextResponse.json({ message: "If an account exists, a reset email has been sent" });
         }
+
+        console.log("PasswordReset: user found, id:", user.id, "emailVerified:", user.emailVerified);
 
         const token = crypto.randomBytes(32).toString("hex");
         const expires = new Date(Date.now() + 3600000); // 1 hour
@@ -31,14 +35,19 @@ export async function POST(req: NextRequest) {
             },
         });
 
-        const resetLink = `${process.env.NEXTAUTH_URL}/reset-password?token=${token}`;
+        console.log("PasswordReset: token created, expires:", expires);
 
-        await resend.emails.send({
+        const resetLink = `${process.env.NEXTAUTH_URL}/reset-password?token=${token}`;
+        console.log("PasswordReset: sending email to:", email, "link:", resetLink);
+
+        const sendResult = await resend.emails.send({
             from: "Aporto <noreply@aporto.tech>",
             to: email,
             subject: "Reset your password",
             html: `<p>Click the link below to reset your password:</p><a href="${resetLink}">${resetLink}</a>`,
         });
+
+        console.log("PasswordReset: email send result:", JSON.stringify(sendResult));
 
         return NextResponse.json({ message: "If an account exists, a reset email has been sent" });
     } catch (error) {
