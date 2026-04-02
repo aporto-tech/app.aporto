@@ -68,7 +68,6 @@
     position: relative;
     border: 2px solid transparent;
     transition: all 0.2s ease;
-    overflow: hidden;
 }
 
 .packageCard:hover {
@@ -94,23 +93,20 @@
 }
 
 .saveBadge {
-    position: absolute;
-    top: 16px;
-    right: -24px;
-    background: #00dc82;
-    color: #000;
+    display: inline-block;
+    background: rgba(0, 220, 130, 0.15);
+    color: #00dc82;
     font-size: 11px;
     font-weight: 800;
-    padding: 4px 30px;
-    transform: rotate(45deg);
-    text-align: center;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-    width: 120px;
+    padding: 3px 8px;
+    border-radius: 4px;
+    margin-bottom: 8px;
+    letter-spacing: 0.3px;
 }
 
 .packageCard.selected .saveBadge {
-    background: #000;
-    color: #00dc82;
+    background: rgba(0, 0, 0, 0.2);
+    color: #000;
 }
 
 /* Payment Methods Grid */

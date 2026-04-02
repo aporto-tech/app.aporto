@@ -9,9 +9,9 @@ interface AddFundsModalProps {
 }
 
 const PACKAGES = [
-    { id: "pkg_50", price: 50, badge: null },
-    { id: "pkg_500", price: 500, badge: "SAVE 5%" },
-    { id: "pkg_1250", price: 1250, badge: "SAVE 10%" },
+    { id: "pkg_50", price: 50 },
+    { id: "pkg_500", price: 500 },
+    { id: "pkg_1250", price: 1250 },
 ];
 
 // Aporto is 30% cheaper than official API prices.
@@ -90,9 +90,7 @@ export default function AddFundsModal({ onClose }: AddFundsModalProps) {
                             className={`${styles.packageCard} ${selectedPackage === pkg.id && !isCustomActive ? styles.selected : ""}`}
                             onClick={() => handleSelectPackage(pkg.id)}
                         >
-                            {pkg.badge && (
-                                <div className={styles.saveBadge}>{pkg.badge}</div>
-                            )}
+                            <div className={styles.saveBadge}>+${savings(pkg.price).toFixed(0)} value</div>
                             <div className={styles.price}>${pkg.price}</div>
                         </div>
                     ))}
