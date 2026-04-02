@@ -74,3 +74,15 @@ model TopUpTransaction {
   quotaAdded   Int
   createdAt    DateTime @default(now())
 }
+
+model Rule {
+  id           String   @id @default(cuid())
+  newApiUserId Int
+  tokenId      Int
+  tokenName    String
+  type         String   // "total_limit" | "daily_limit" | "model_allowlist"
+  limitUSD     Float?
+  models       String?
+  enabled      Boolean  @default(true)
+  createdAt    DateTime @default(now())
+}

@@ -1,23 +1,51 @@
 .container {
     padding: 24px;
+    color: #fff;
+    max-width: 1200px;
+    margin: 0 auto;
 }
 
 .header {
     display: flex;
     justify-content: space-between;
-    align-items: center;
-    margin-bottom: 32px;
+    align-items: flex-start;
+    margin-bottom: 28px;
 }
 
 .header h1 {
-    font-size: 24px;
+    font-size: 26px;
     font-weight: 700;
-    margin: 0;
+    margin: 0 0 6px;
+    color: #f8fafc;
 }
 
+.header p {
+    color: #94a3b8;
+    margin: 0;
+    font-size: 14px;
+}
+
+.addBtn {
+    background: #00dc82;
+    color: #000;
+    border: none;
+    padding: 10px 18px;
+    border-radius: 8px;
+    font-weight: 600;
+    font-size: 14px;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background 0.2s;
+}
+
+.addBtn:hover {
+    background: #00c675;
+}
+
+/* Rules table card */
 .rulesCard {
-    background-color: #111111;
-    border: 1px solid #222222;
+    background: #11151c;
+    border: 1px solid #222c3b;
     border-radius: 12px;
     overflow: hidden;
 }
@@ -29,20 +57,20 @@
 }
 
 .table th {
-    padding: 16px 24px;
-    border-bottom: 1px solid #222222;
-    font-size: 13px;
+    padding: 14px 20px;
+    border-bottom: 1px solid #222c3b;
+    font-size: 12px;
     font-weight: 600;
-    color: #888888;
+    color: #64748b;
     text-transform: uppercase;
     letter-spacing: 0.05em;
 }
 
 .table td {
-    padding: 16px 24px;
-    border-bottom: 1px solid #222222;
+    padding: 16px 20px;
+    border-bottom: 1px solid #1a2332;
     font-size: 14px;
-    color: #eeeeee;
+    color: #e2e8f0;
 }
 
 .table tr:last-child td {
@@ -51,45 +79,52 @@
 
 .ruleName {
     font-weight: 600;
+    color: #f8fafc;
 }
 
-.targetKey {
-    font-family: monospace;
-    color: #666;
-    background: #1a1a1a;
-    padding: 2px 6px;
-    border-radius: 4px;
-    font-size: 13px;
+.typeBadge {
+    background: #1e293b;
+    color: #94a3b8;
+    padding: 3px 10px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 500;
 }
 
 .status {
     display: inline-flex;
     align-items: center;
-    gap: 6px;
-    font-size: 12px;
+    gap: 5px;
+    font-size: 13px;
 }
 
 .statusActive {
     color: #00dc82;
 }
 
-.actions {
-    display: flex;
-    gap: 12px;
+.statusDisabled {
+    color: #ef4444;
+}
+
+.overLimit {
+    color: #ef4444;
+    font-weight: 600;
 }
 
 .actionBtn {
     background: none;
     border: none;
     cursor: pointer;
-    color: #666;
-    font-size: 18px;
-    padding: 4px;
-    transition: color 0.2s;
+    color: #64748b;
+    font-size: 16px;
+    padding: 4px 8px;
+    border-radius: 4px;
+    transition: color 0.2s, background 0.2s;
 }
 
 .actionBtn:hover {
-    color: #ffffff;
+    color: #f8fafc;
+    background: #1e293b;
 }
 
 .revokeBtn:hover {
@@ -105,13 +140,282 @@
 }
 
 .empty {
-    padding: 60px 0;
+    padding: 72px 0;
     text-align: center;
-    color: #666;
+    color: #64748b;
+    font-size: 14px;
 }
 
 .emptyIcon {
-    font-size: 48px;
+    font-size: 40px;
     margin-bottom: 16px;
-    opacity: 0.2;
+    opacity: 0.3;
+}
+
+/* Modal */
+.modalOverlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.65);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    backdrop-filter: blur(4px);
+}
+
+.modal {
+    background: #0f1218;
+    border: 1px solid #222c3b;
+    border-radius: 14px;
+    width: 480px;
+    max-width: calc(100vw - 32px);
+    padding: 0;
+    overflow: hidden;
+}
+
+.modalHeader {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px 24px;
+    border-bottom: 1px solid #1e293b;
+}
+
+.modalHeader h2 {
+    font-size: 18px;
+    font-weight: 600;
+    margin: 0;
+    color: #f8fafc;
+}
+
+.closeBtn {
+    background: transparent;
+    border: 1px solid #334155;
+    border-radius: 6px;
+    color: #94a3b8;
+    width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 13px;
+    transition: all 0.2s;
+}
+
+.closeBtn:hover {
+    color: #fff;
+    border-color: #475569;
+}
+
+.step {
+    padding: 24px;
+}
+
+.stepLabel {
+    font-size: 12px;
+    color: #64748b;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin: 0 0 16px;
+}
+
+.select {
+    width: 100%;
+    background: #0d1219;
+    border: 1px solid #1e293b;
+    color: #fff;
+    padding: 12px 14px;
+    border-radius: 8px;
+    font-size: 14px;
+    outline: none;
+    cursor: pointer;
+    appearance: none;
+    background-image: url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%2394a3b8%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E");
+    background-repeat: no-repeat;
+    background-position: right 14px top 50%;
+    background-size: 10px auto;
+}
+
+.select:focus {
+    border-color: #334155;
+}
+
+/* Rule type cards */
+.ruleTypeGrid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+    margin-bottom: 4px;
+}
+
+.ruleTypeCard {
+    background: #0d1219;
+    border: 1px solid #1e293b;
+    border-radius: 10px;
+    padding: 16px 12px;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    text-align: center;
+    transition: border-color 0.2s, background 0.2s;
+}
+
+.ruleTypeCard:hover {
+    border-color: #334155;
+    background: #111827;
+}
+
+.ruleTypeCardSelected {
+    border-color: #00dc82 !important;
+    background: #0a1a12 !important;
+}
+
+.ruleTypeIcon {
+    font-size: 22px;
+}
+
+.ruleTypeTitle {
+    font-size: 13px;
+    font-weight: 600;
+    color: #f8fafc;
+}
+
+.ruleTypeDesc {
+    font-size: 11px;
+    color: #64748b;
+    line-height: 1.4;
+}
+
+/* Model grid */
+.modelGrid {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    max-height: 200px;
+    overflow-y: auto;
+    padding-right: 4px;
+}
+
+.modelLabel {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 14px;
+    background: #0d1219;
+    border: 1px solid #1e293b;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 14px;
+    color: #e2e8f0;
+    transition: border-color 0.2s;
+}
+
+.modelLabel:hover {
+    border-color: #334155;
+}
+
+.modelLabel input {
+    accent-color: #00dc82;
+}
+
+.emptyModels {
+    color: #64748b;
+    font-size: 13px;
+    text-align: center;
+    padding: 24px 0;
+}
+
+/* Dollar input */
+.fieldLabel {
+    display: block;
+    font-size: 14px;
+    font-weight: 500;
+    color: #f8fafc;
+    margin-bottom: 10px;
+}
+
+.dollarInput {
+    display: flex;
+    align-items: center;
+    background: #0d1219;
+    border: 1px solid #1e293b;
+    border-radius: 8px;
+    padding: 0 14px;
+    font-size: 15px;
+    color: #94a3b8;
+    gap: 4px;
+    transition: border-color 0.2s;
+}
+
+.dollarInput:focus-within {
+    border-color: #334155;
+}
+
+.numberInput {
+    background: transparent;
+    border: none;
+    color: #fff;
+    font-size: 15px;
+    padding: 12px 4px;
+    outline: none;
+    width: 100%;
+}
+
+.numberInput::placeholder {
+    color: #475569;
+}
+
+.errorMsg {
+    color: #ef4444;
+    font-size: 13px;
+    margin: 12px 0 0;
+}
+
+/* Modal footer */
+.modalFooter {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    margin-top: 24px;
+}
+
+.cancelBtn {
+    background: transparent;
+    border: 1px solid #1e293b;
+    color: #f8fafc;
+    padding: 10px 18px;
+    border-radius: 6px;
+    font-weight: 500;
+    font-size: 14px;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.cancelBtn:hover {
+    background: #1e293b;
+}
+
+.primaryBtn {
+    background: #00dc82;
+    color: #000;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 6px;
+    font-weight: 600;
+    font-size: 14px;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.primaryBtn:hover:not(:disabled) {
+    background: #00c675;
+}
+
+.primaryBtn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
 }

@@ -414,6 +414,68 @@ export async function newApiGetDailySpend(userId: number): Promise<{ date: strin
         return [];
     }
 }
+/**
+ * Set allowed models on a token.
+ * models="" clears restriction (sets model_limits_enabled=false).
+ * The New-API schema uses model_limits (comma-separated) + model_limits_enabled (boolean).
+ */
+export async function newApiSetTokenModels(tokenId: number, userId: number, models: string): Promise<boolean> {
+    try {
+        const enabled = models.length > 0;
+        const count = await prisma.$executeRawUnsafe(
+            `UPDATE tokens SET model_limits = $1, model_limits_enabled = $2 WHERE id = $3 AND user_id = $4`,
+            models,
+            enabled,
+            tokenId,
+            userId
+        );
+        return count > 0;
+    } catch (err) {
+        console.error("[newapi] Error setting token models:", err);
+        return false;
+    }
+}
+
+/**
+ * Enable (status=1) or disable (status=0) a token.
+ */
+export async function newApiSetTokenStatus(tokenId: number, userId: number, status: 0 | 1): Promise<boolean> {
+    try {
+        const count = await prisma.$executeRawUnsafe(
+            `UPDATE tokens SET status = $1 WHERE id = $2 AND user_id = $3`,
+            status,
+            tokenId,
+            userId
+        );
+        return count > 0;
+    } catch (err) {
+        console.error("[newapi] Error setting token status:", err);
+        return false;
+    }
+}
+
+/**
+ * Get today's USD spend for a specific token (by token_id in logs).
+ * "Today" = since midnight UTC.
+ */
+export async function newApiGetTodayTokenSpend(tokenId: number): Promise<number> {
+    try {
+        const rows = await prisma.$queryRawUnsafe<any[]>(
+            `SELECT COALESCE(SUM(quota), 0) AS total_quota
+             FROM logs
+             WHERE token_id = $1
+               AND type = 2
+               AND (content = '' OR content IS NULL)
+               AND created_at >= EXTRACT(EPOCH FROM date_trunc('day', NOW()))`,
+            tokenId
+        );
+        return Number(rows[0]?.total_quota ?? 0) / 500_000;
+    } catch (err) {
+        console.error("[newapi] Error getting today token spend:", err);
+        return 0;
+    }
+}
+
 export async function newApiUpdateTokenQuota(opts: {
     tokenId: number;
     userId: number;
