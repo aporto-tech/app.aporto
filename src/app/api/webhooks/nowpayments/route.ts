@@ -28,17 +28,20 @@ async function topUpUserQuota(newApiUserId: number, usdAmount: number) {
     const userData = await userRes.json();
     console.log(`NOWPayments: fetched user ${newApiUserId} data:`, JSON.stringify(userData));
 
-    const currentQuota: number = userData.data?.quota ?? 0;
+    const user = userData.data;
+    const currentQuota: number = user?.quota ?? 0;
     const addQuota = Math.floor(usdAmount * QUOTA_PER_USD);
     const newQuota = currentQuota + addQuota;
 
     console.log(`NOWPayments: quota update — current: ${currentQuota}, adding: ${addQuota}, new: ${newQuota}`);
 
-    // Update quota
+    // PUT back the full user object with only quota changed.
+    // New-API does a full replace on PUT, so we must send all existing fields
+    // to avoid resetting username, group, etc.
     const updateRes = await fetch(`${NEWAPI_URL}/api/user/`, {
         method: "PUT",
         headers: { ...adminHeaders, "Content-Type": "application/json" },
-        body: JSON.stringify({ id: newApiUserId, quota: newQuota }),
+        body: JSON.stringify({ ...user, quota: newQuota }),
     });
 
     if (!updateRes.ok) {
