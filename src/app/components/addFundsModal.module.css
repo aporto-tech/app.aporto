@@ -189,3 +189,86 @@
     cursor: not-allowed;
 }
 
+/* Custom amount input */
+.customAmountRow {
+    display: flex;
+    align-items: center;
+    background: #27272a;
+    border: 2px solid #3f3f46;
+    border-radius: 10px;
+    padding: 0 14px;
+    margin-bottom: 20px;
+    transition: border-color 0.2s;
+}
+
+.customAmountRow:focus-within {
+    border-color: #00dc82;
+}
+
+.currencyPrefix {
+    color: #a1a1aa;
+    font-size: 18px;
+    font-weight: 600;
+    margin-right: 6px;
+}
+
+.customInput {
+    flex: 1;
+    background: transparent;
+    border: none;
+    outline: none;
+    color: #fff;
+    font-size: 18px;
+    font-weight: 600;
+    padding: 14px 0;
+}
+
+.customInput::placeholder {
+    color: #52525b;
+}
+
+.customInputActive {
+    color: #00dc82;
+}
+
+/* Savings callout */
+.savingsCallout {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    background: rgba(0, 220, 130, 0.08);
+    border: 1px solid rgba(0, 220, 130, 0.25);
+    border-radius: 10px;
+    padding: 12px 16px;
+    margin-bottom: 20px;
+    font-size: 13px;
+}
+
+.savingsLabel {
+    color: #a1a1aa;
+}
+
+.savingsValue {
+    color: #00dc82;
+    font-weight: 700;
+    font-size: 15px;
+}
+
+.savingsPill {
+    background: #00dc82;
+    color: #000;
+    font-size: 11px;
+    font-weight: 800;
+    padding: 3px 10px;
+    border-radius: 20px;
+    margin-left: 4px;
+}
+
+.savingsSubtext {
+    color: #52525b;
+    font-size: 11px;
+    width: 100%;
+    margin-top: 2px;
+}
+
