@@ -31,7 +31,7 @@ export default function AddServiceModal({ apiKey, onClose, provider }: Props) {
     const [ruleError, setRuleError] = useState("");
     const [ruleCreated, setRuleCreated] = useState(false);
 
-    const displayKey = apiKey || "sk-live-CREATE_API_KEY_FIRST";
+    const displayKey = apiKey || "sk-CREATE_API_KEY_FIRST";
     const baseUrl = (provider as any)?.baseUrl ?? "https://api.aporto.tech/v1";
 
     // ── Polling for Step 3 ─────────────────────────────────────────────────

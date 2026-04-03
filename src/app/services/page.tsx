@@ -79,11 +79,11 @@ export default function ServicesPage() {
             fetch("/api/newapi/keys").then(r => r.json()).then(data => {
                 if (data.success && data.tokens && data.tokens.length > 0) {
                     // Provide the full usable key so the Copy button works correctly!
-                    setApiKey(`sk-live-${data.tokens[0].key}`);
+                    setApiKey(`sk-${data.tokens[0].key}`);
                     const activeRules = data.tokens.filter((t: any) => t.remain_quota > 0 || !t.unlimited_quota);
                     setActiveRulesCount(activeRules.length);
                 } else {
-                    setApiKey("sk-live-CREATE_API_KEY_FIRST");
+                    setApiKey("sk-CREATE_API_KEY_FIRST");
                 }
             }).catch(() => { });
 

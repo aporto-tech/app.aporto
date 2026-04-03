@@ -41,7 +41,12 @@ export async function validateApiKeyOrSession(
     // 2. Fall back to Bearer token (agent use)
     const authHeader = req.headers.get("authorization") || "";
     const raw = authHeader.replace(/^Bearer\s+/i, "").trim();
-    const key = raw.startsWith("sk-live-") ? raw.slice("sk-live-".length) : raw;
+    // Accept both sk-live-{key} (Aporto dashboard) and sk-{key} (New-API format)
+    const key = raw.startsWith("sk-live-")
+        ? raw.slice("sk-live-".length)
+        : raw.startsWith("sk-")
+        ? raw.slice("sk-".length)
+        : raw;
 
     if (!key) return null;
 
