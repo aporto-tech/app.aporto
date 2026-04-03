@@ -1,6 +1,6 @@
 {
   "name": "@aporto-tech/sdk",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Official SDK for the Aporto platform — LLM, search, audio, images, browser, compute, messaging, DB, and SMS via a single API key",
   "keywords": ["aporto", "ai", "sdk", "llm", "search", "agent"],
   "homepage": "https://aporto.tech",

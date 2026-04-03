@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import DashboardLayout from "../components/DashboardLayout";
 import AddFundsModal from "../components/AddFundsModal";
+import { Skeleton, SkeletonRow } from "../components/Skeleton";
 import styles from "../dashboard.module.css";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -69,6 +70,10 @@ export default function DashboardPage() {
     const [recentLogs, setRecentLogs] = useState<any[]>([]);
     const [logsLoading, setLogsLoading] = useState(true);
 
+    // Analytics state
+    const [analyticsLogs, setAnalyticsLogs] = useState<any[]>([]);
+    const [analyticsLoading, setAnalyticsLoading] = useState(false);
+
     // ─── Auth redirect ───────────────────────────────────────────────────────
     useEffect(() => {
         if (status === "unauthenticated") {
@@ -118,6 +123,19 @@ export default function DashboardPage() {
         };
         fetchLogs();
     }, [status, session]);
+
+    // ─── Fetch analytics logs when analytics tab opens ───────────────────────
+    useEffect(() => {
+        if (status !== "authenticated" || activeTab !== "analytics") return;
+        setAnalyticsLoading(true);
+        const rangeSeconds: Record<string, number> = { "1h": 3600, "24h": 86400, "7d": 604800, "30d": 2592000 };
+        const since = Math.floor(Date.now() / 1000) - (rangeSeconds[timeRange] ?? 86400);
+        fetch(`/api/newapi/logs?page=0&size=500&start_date=${since}`, { cache: "no-store" })
+            .then(r => r.json())
+            .then(d => { if (d.success) setAnalyticsLogs(d.logs ?? []); })
+            .catch(() => {})
+            .finally(() => setAnalyticsLoading(false));
+    }, [status, activeTab, timeRange]);
 
     // ─── Fetch keys to persist "Getting Started" checklist ───────────────────
     useEffect(() => {
@@ -453,97 +471,101 @@ export default function DashboardPage() {
 
                         {/* Analytics Tab Content */}
                         {activeTab === "analytics" && (() => {
-                            const GRAFANA = process.env.NEXT_PUBLIC_GRAFANA_URL || "http://74.208.193.3:3030";
-                            const timeMap: Record<string, string> = {
-                                "1h": "now-1h",
-                                "24h": "now-24h",
-                                "7d": "now-7d",
-                                "30d": "now-30d",
-                            };
-                            const from = timeMap[timeRange] ?? "now-24h";
-                            const baseParams = `orgId=1&from=${from}&to=now&theme=dark&refresh=30s`;
-                            const iframeUrl = (uid: string, panelId: number) =>
-                                `${GRAFANA}/d-solo/${uid}/${uid}?${baseParams}&panelId=${panelId}`;
+                            // Compute stats from logs
+                            const totalRequests = analyticsLogs.length;
+                            const totalCost = analyticsLogs.reduce((s, l) => s + (l.costUSD ?? 0), 0);
+                            const totalTokens = analyticsLogs.reduce((s, l) => s + (l.prompt_tokens ?? 0) + (l.completion_tokens ?? 0), 0);
+                            const modelCounts: Record<string, number> = {};
+                            analyticsLogs.forEach(l => { if (l.model_name) modelCounts[l.model_name] = (modelCounts[l.model_name] ?? 0) + 1; });
+                            const topModel = Object.entries(modelCounts).sort((a, b) => b[1] - a[1])[0]?.[0] ?? "—";
 
-                            const statPanels = [
-                                { uid: "newapi-llm", id: 1, label: "Запросов" },
-                                { uid: "newapi-llm", id: 2, label: "Ошибки" },
-                                { uid: "newapi-llm", id: 3, label: "Avg Latency" },
-                                { uid: "newapi-overview", id: 2, label: "Req/sec" },
-                            ];
+                            // Group by day for bar chart
+                            const dayMap: Record<string, number> = {};
+                            analyticsLogs.forEach(l => {
+                                const d = new Date((l.created_at ?? 0) * 1000).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+                                dayMap[d] = (dayMap[d] ?? 0) + 1;
+                            });
+                            const days = Object.entries(dayMap).slice(-14);
+                            const maxDay = Math.max(1, ...days.map(d => d[1]));
 
-                            const iframeStyle: React.CSSProperties = {
-                                border: "none",
-                                borderRadius: 10,
-                                background: "#0d1219",
-                                width: "100%",
-                                display: "block",
-                            };
+                            const statCard = (label: string, value: string, sub?: string) => (
+                                <div style={{ background: "#0d1117", border: "1px solid #1a1a1a", borderRadius: 10, padding: "16px 20px" }}>
+                                    <div style={{ fontSize: 11, color: "#555", marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.05em" }}>{label}</div>
+                                    <div style={{ fontSize: 24, fontWeight: 700, color: "#fff" }}>{value}</div>
+                                    {sub && <div style={{ fontSize: 11, color: "#555", marginTop: 4 }}>{sub}</div>}
+                                </div>
+                            );
 
                             return (
                                 <div>
                                     {/* Time range selector */}
                                     <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 14, gap: 6 }}>
                                         {(["1h", "24h", "7d", "30d"] as const).map((r) => (
-                                            <button
-                                                key={r}
-                                                onClick={() => setTimeRange(r)}
-                                                style={{
-                                                    background: timeRange === r ? "#00dc82" : "#1a1a1a",
-                                                    color: timeRange === r ? "#000" : "#888",
-                                                    border: "none",
-                                                    borderRadius: 6,
-                                                    padding: "5px 12px",
-                                                    fontSize: 12,
-                                                    fontWeight: 600,
-                                                    cursor: "pointer",
-                                                    transition: "all 0.15s",
-                                                }}
-                                            >
-                                                {r}
-                                            </button>
+                                            <button key={r} onClick={() => setTimeRange(r)} style={{
+                                                background: timeRange === r ? "#00dc82" : "#1a1a1a",
+                                                color: timeRange === r ? "#000" : "#888",
+                                                border: "none", borderRadius: 6, padding: "5px 12px",
+                                                fontSize: 12, fontWeight: 600, cursor: "pointer", transition: "all 0.15s",
+                                            }}>{r}</button>
                                         ))}
                                     </div>
 
-                                    {/* Stat cards */}
-                                    <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10, marginBottom: 10 }}>
-                                        {statPanels.map((p) => (
-                                            <iframe
-                                                key={`${p.uid}-${p.id}`}
-                                                src={iframeUrl(p.uid, p.id)}
-                                                style={{ ...iframeStyle, height: 100 }}
-                                                title={p.label}
-                                            />
-                                        ))}
-                                    </div>
+                                    {analyticsLoading ? (
+                                        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                                            <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 10 }}>
+                                                {[0,1,2,3].map(i => <Skeleton key={i} height={80} />)}
+                                            </div>
+                                            <Skeleton height={180} />
+                                            <Skeleton height={120} />
+                                        </div>
+                                    ) : totalRequests === 0 ? (
+                                        <div style={{ textAlign: "center", padding: "60px 0", color: "#555" }}>
+                                            <div style={{ fontSize: 32, marginBottom: 12 }}>📊</div>
+                                            <div style={{ fontSize: 15, fontWeight: 600, color: "#666" }}>No data for this period</div>
+                                            <div style={{ fontSize: 13, color: "#444", marginTop: 6 }}>Make your first API request to see analytics here</div>
+                                        </div>
+                                    ) : (
+                                        <>
+                                            {/* Stat cards */}
+                                            <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 10, marginBottom: 14 }}>
+                                                {statCard("Requests", totalRequests.toLocaleString())}
+                                                {statCard("Total Cost", `$${totalCost.toFixed(4)}`)}
+                                                {statCard("Total Tokens", totalTokens.toLocaleString())}
+                                                {statCard("Top Model", topModel.split("/").pop() ?? topModel)}
+                                            </div>
 
-                                    {/* Latency over time */}
-                                    <iframe
-                                        src={iframeUrl("newapi-llm", 6)}
-                                        style={{ ...iframeStyle, height: 240, marginBottom: 10 }}
-                                        title="Latency over time"
-                                    />
+                                            {/* Bar chart */}
+                                            {days.length > 0 && (
+                                                <div style={{ background: "#0d1117", border: "1px solid #1a1a1a", borderRadius: 10, padding: "16px 20px", marginBottom: 14 }}>
+                                                    <div style={{ fontSize: 12, color: "#555", marginBottom: 14, textTransform: "uppercase", letterSpacing: "0.05em" }}>Requests over time</div>
+                                                    <div style={{ display: "flex", alignItems: "flex-end", gap: 6, height: 100 }}>
+                                                        {days.map(([day, count]) => (
+                                                            <div key={day} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
+                                                                <div style={{ fontSize: 10, color: "#555" }}>{count}</div>
+                                                                <div style={{ width: "100%", background: "#00dc82", borderRadius: "3px 3px 0 0", height: `${Math.max(4, (count / maxDay) * 80)}px`, transition: "height 0.3s" }} />
+                                                                <div style={{ fontSize: 9, color: "#444", whiteSpace: "nowrap", overflow: "hidden", maxWidth: "100%", textAlign: "center" }}>{day}</div>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            )}
 
-                                    {/* Model stats + Channel status */}
-                                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
-                                        <iframe
-                                            src={iframeUrl("newapi-llm", 12)}
-                                            style={{ ...iframeStyle, height: 240 }}
-                                            title="Model statistics"
-                                        />
-                                        <iframe
-                                            src={iframeUrl("newapi-llm", 13)}
-                                            style={{ ...iframeStyle, height: 240 }}
-                                            title="Channel status"
-                                        />
-                                    </div>
-
-                                    {/* Request rate from overview */}
-                                    <iframe
-                                        src={iframeUrl("newapi-overview", 5)}
-                                        style={{ ...iframeStyle, height: 220 }}
-                                        title="Request rate"
-                                    />
+                                            {/* Top models table */}
+                                            <div style={{ background: "#0d1117", border: "1px solid #1a1a1a", borderRadius: 10, padding: "16px 20px" }}>
+                                                <div style={{ fontSize: 12, color: "#555", marginBottom: 12, textTransform: "uppercase", letterSpacing: "0.05em" }}>Models used</div>
+                                                {Object.entries(modelCounts).sort((a, b) => b[1] - a[1]).slice(0, 8).map(([model, count]) => {
+                                                    const cost = analyticsLogs.filter(l => l.model_name === model).reduce((s, l) => s + (l.costUSD ?? 0), 0);
+                                                    return (
+                                                        <div key={model} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderBottom: "1px solid #111" }}>
+                                                            <div style={{ flex: 1, fontSize: 13, color: "#ccc" }}>{model}</div>
+                                                            <div style={{ fontSize: 12, color: "#555", width: 70, textAlign: "right" }}>{count} req</div>
+                                                            <div style={{ fontSize: 12, color: "#00dc82", width: 70, textAlign: "right" }}>${cost.toFixed(4)}</div>
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        </>
+                                    )}
                                 </div>
                             );
                         })()}
@@ -588,14 +610,10 @@ export default function DashboardPage() {
                                 )}
                             </div>
                             {balanceLoading ? (
-                                <div style={{
-                                    background: "rgba(255,255,255,0.05)",
-                                    borderRadius: 6,
-                                    height: 36,
-                                    width: 110,
-                                    marginBottom: 16,
-                                    animation: "pulse 1.5s cubic-bezier(0.4,0,0.6,1) infinite",
-                                }} />
+                                <div style={{ marginBottom: 16 }}>
+                                    <Skeleton width={110} height={36} style={{ marginBottom: 8 }} />
+                                    <Skeleton width={80} height={13} />
+                                </div>
                             ) : (
                                 <div className={styles.balanceAmount}>
                                     ${balance?.remainingUSD.toFixed(4) ?? "0.0000"}
@@ -646,7 +664,9 @@ export default function DashboardPage() {
                                 </Link>
                             </div>
                             {logsLoading ? (
-                                <div style={{ padding: "20px", textAlign: "center", color: "#888", fontSize: 13 }}>Loading...</div>
+                                <div style={{ padding: "12px 0", display: "flex", flexDirection: "column", gap: 2 }}>
+                                    {[0,1,2].map(i => <SkeletonRow key={i} />)}
+                                </div>
                             ) : recentLogs.length === 0 ? (
                                 <div className={styles.noActivity}>
                                     <div style={{ fontSize: 32, marginBottom: 12, color: "#333" }}>〜</div>

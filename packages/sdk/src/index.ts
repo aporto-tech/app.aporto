@@ -1,32 +1,36 @@
 /**
- * @aporto/sdk — Official SDK for the Aporto platform.
+ * @aporto-tech/sdk — Official SDK for the Aporto platform.
  *
- * Access 400+ LLM models, search, audio, images, browser, compute,
- * messaging, database, and SMS through a single API key.
+ * Access 400+ LLM models, search, audio, images, and SMS through a single API key.
  *
  * Usage:
- *   import { AportoClient } from "@aporto/sdk";
+ *   import { AportoClient } from "@aporto-tech/sdk";
  *
  *   const aporto = new AportoClient({ apiKey: process.env.APORTO_API_KEY });
  *
- *   // LLM — powered by OpenAI-compatible API
+ *   // LLM — 400+ models
  *   const chat = await aporto.llm.chat.completions.create({
  *     model: "openai/gpt-4o-mini",
  *     messages: [{ role: "user", content: "Hello" }],
  *   });
  *
- *   // Search
+ *   // Web search
  *   const results = await aporto.search.linkup({ query: "AI news" });
+ *
+ *   // Image generation
+ *   const img = await aporto.images.generate({ prompt: "a cat on the moon" });
+ *
+ *   // Text-to-speech
+ *   const audio = await aporto.audio.speech({ text: "Hello from Aporto!" });
+ *
+ *   // SMS verification
+ *   await aporto.sms.send({ to: "+1234567890" });
  */
 
 import { createLlmModule } from "./modules/llm";
 import { createSearchModule } from "./modules/search";
 import { createAudioModule } from "./modules/audio";
 import { createImagesModule } from "./modules/images";
-import { createBrowserModule } from "./modules/browser";
-import { createComputeModule } from "./modules/compute";
-import { createMessagingModule } from "./modules/messaging";
-import { createDbModule } from "./modules/db";
 import { createSmsModule } from "./modules/sms";
 import { AportoConfigError } from "./errors";
 
@@ -41,10 +45,6 @@ export class AportoClient {
     readonly search: ReturnType<typeof createSearchModule>;
     readonly audio: ReturnType<typeof createAudioModule>;
     readonly images: ReturnType<typeof createImagesModule>;
-    readonly browser: ReturnType<typeof createBrowserModule>;
-    readonly compute: ReturnType<typeof createComputeModule>;
-    readonly messaging: ReturnType<typeof createMessagingModule>;
-    readonly db: ReturnType<typeof createDbModule>;
     readonly sms: ReturnType<typeof createSmsModule>;
 
     constructor(options: AportoClientOptions) {
@@ -56,15 +56,14 @@ export class AportoClient {
 
         this.llm = createLlmModule(apiKey, agentName);
         this.search = createSearchModule(apiKey, agentName);
-        this.audio = createAudioModule();
-        this.images = createImagesModule();
-        this.browser = createBrowserModule();
-        this.compute = createComputeModule();
-        this.messaging = createMessagingModule();
-        this.db = createDbModule();
-        this.sms = createSmsModule();
+        this.audio = createAudioModule(apiKey, agentName);
+        this.images = createImagesModule(apiKey, agentName);
+        this.sms = createSmsModule(apiKey, agentName);
     }
 }
 
 export { AportoError, AportoConfigError, AportoNotAvailableError } from "./errors";
 export type { LinkupSearchOptions, YouSearchOptions, SearchResult } from "./modules/search";
+export type { GenerateImageOptions, GenerateImageResult } from "./modules/images";
+export type { TextToSpeechOptions } from "./modules/audio";
+export type { SendSmsOptions, CheckSmsOptions, SmsResult } from "./modules/sms";
