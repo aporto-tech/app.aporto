@@ -127,7 +127,7 @@ function SettingsContent() {
             });
             const data = await res.json();
             if (data.success && data.key) {
-                setGeneratedKey(data.key);
+                setGeneratedKey(`sk-${data.key}`);
                 setShowCreateModal(false);
                 setShowKeyCreatedModal(true);
                 fetchTokens();
@@ -215,7 +215,7 @@ function SettingsContent() {
                                         <tr key={token.id}>
                                             <td className={styles.keyName}>🗝️ {token.name}</td>
                                             <td style={{ color: "#64748b" }}>—</td>
-                                            <td><span className={styles.keyString}>sk_live_{token.key?.substring(0, 10)}***</span></td>
+                                            <td><span className={styles.keyString}>sk-{token.key?.substring(0, 10)}***</span></td>
                                             <td style={{ color: "#64748b" }}>Never</td>
                                             <td>{new Date(token.created_time * 1000).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</td>
                                             <td className={styles.actions}>
