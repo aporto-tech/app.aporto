@@ -538,9 +538,9 @@ export default function DashboardPage() {
                                             {days.length > 0 && (
                                                 <div style={{ background: "#0d1117", border: "1px solid #1a1a1a", borderRadius: 10, padding: "16px 20px", marginBottom: 14 }}>
                                                     <div style={{ fontSize: 12, color: "#555", marginBottom: 14, textTransform: "uppercase", letterSpacing: "0.05em" }}>Requests over time</div>
-                                                    <div style={{ display: "flex", alignItems: "flex-end", gap: 6, height: 100 }}>
+                                                    <div style={{ display: "flex", alignItems: "flex-end", gap: 6, height: 100, overflowX: "auto" }}>
                                                         {days.map(([day, count]) => (
-                                                            <div key={day} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
+                                                            <div key={day} style={{ width: 32, minWidth: 32, display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
                                                                 <div style={{ fontSize: 10, color: "#555" }}>{count}</div>
                                                                 <div style={{ width: "100%", background: "#00dc82", borderRadius: "3px 3px 0 0", height: `${Math.max(4, (count / maxDay) * 80)}px`, transition: "height 0.3s" }} />
                                                                 <div style={{ fontSize: 9, color: "#444", whiteSpace: "nowrap", overflow: "hidden", maxWidth: "100%", textAlign: "center" }}>{day}</div>
