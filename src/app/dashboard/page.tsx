@@ -29,6 +29,7 @@ export default function DashboardPage() {
 
     // UI state
     const [activeTab, setActiveTab] = useState<"gettingStarted" | "analytics">("gettingStarted");
+    const [timeRange, setTimeRange] = useState("24h");
     const [activeRulesCount, setActiveRulesCount] = useState(0);
 
     // Modal state
@@ -385,6 +386,7 @@ export default function DashboardPage() {
                             </div>
                         </div>
 
+                        {activeTab === "gettingStarted" && (<>
                         {/* Quick Actions */}
                         <div className={styles.checklistCard}>
                             <h3 className={styles.quickActionsHeader}>
@@ -446,31 +448,129 @@ export default function DashboardPage() {
                                     )}
                                 </div>
                             ))}
+                        </div>
+                        </>)}
 
-                            {/* Tab switcher */}
-                            <div style={{ display: "flex", justifyContent: "center", marginTop: 24 }}>
-                                <div style={{ display: "flex", background: "#1a1a1a", borderRadius: 9999, padding: 4, gap: 4 }}>
-                                    {(["gettingStarted", "analytics"] as const).map((tab) => (
-                                        <button
-                                            key={tab}
-                                            onClick={() => setActiveTab(tab)}
-                                            style={{
-                                                background: activeTab === tab ? "#00dc82" : "transparent",
-                                                color: activeTab === tab ? "#000" : "#888",
-                                                border: "none",
-                                                borderRadius: 9999,
-                                                padding: "8px 20px",
-                                                fontSize: 13,
-                                                fontWeight: 600,
-                                                cursor: "pointer",
-                                                transition: "all 0.2s",
-                                                textTransform: "capitalize",
+                        {/* Analytics Tab Content */}
+                        {activeTab === "analytics" && (() => {
+                            const GRAFANA = process.env.NEXT_PUBLIC_GRAFANA_URL || "http://74.208.193.3:3030";
+                            const timeMap: Record<string, string> = {
+                                "1h": "now-1h",
+                                "24h": "now-24h",
+                                "7d": "now-7d",
+                                "30d": "now-30d",
+                            };
+                            const from = timeMap[timeRange] ?? "now-24h";
+                            const baseParams = `orgId=1&from=${from}&to=now&theme=dark&refresh=30s`;
+                            const iframeUrl = (uid: string, panelId: number) =>
+                                `${GRAFANA}/d-solo/${uid}/${uid}?${baseParams}&panelId=${panelId}`;
+
+                            const statPanels = [
+                                { uid: "newapi-llm", id: 1, label: "Запросов" },
+                                { uid: "newapi-llm", id: 2, label: "Ошибки" },
+                                { uid: "newapi-llm", id: 3, label: "Avg Latency" },
+                                { uid: "newapi-overview", id: 2, label: "Req/sec" },
+                            ];
+
+                            const iframeStyle: React.CSSProperties = {
+                                border: "none",
+                                borderRadius: 10,
+                                background: "#0d1219",
+                                width: "100%",
+                                display: "block",
+                            };
+
+                            return (
+                                <div>
+                                    {/* Time range selector */}
+                                    <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 14, gap: 6 }}>
+                                        {(["1h", "24h", "7d", "30d"] as const).map((r) => (
+                                            <button
+                                                key={r}
+                                                onClick={() => setTimeRange(r)}
+                                                style={{
+                                                    background: timeRange === r ? "#00dc82" : "#1a1a1a",
+                                                    color: timeRange === r ? "#000" : "#888",
+                                                    border: "none",
+                                                    borderRadius: 6,
+                                                    padding: "5px 12px",
+                                                    fontSize: 12,
+                                                    fontWeight: 600,
+                                                    cursor: "pointer",
+                                                    transition: "all 0.15s",
+                                                }}
+                                            >
+                                                {r}
+                                            </button>
+                                        ))}
+                                    </div>
+
+                                    {/* Stat cards */}
+                                    <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10, marginBottom: 10 }}>
+                                        {statPanels.map((p) => (
+                                            <iframe
+                                                key={`${p.uid}-${p.id}`}
+                                                src={iframeUrl(p.uid, p.id)}
+                                                style={{ ...iframeStyle, height: 100 }}
+                                                title={p.label}
+                                            />
+                                        ))}
+                                    </div>
+
+                                    {/* Latency over time */}
+                                    <iframe
+                                        src={iframeUrl("newapi-llm", 6)}
+                                        style={{ ...iframeStyle, height: 240, marginBottom: 10 }}
+                                        title="Latency over time"
+                                    />
+
+                                    {/* Model stats + Channel status */}
+                                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
+                                        <iframe
+                                            src={iframeUrl("newapi-llm", 12)}
+                                            style={{ ...iframeStyle, height: 240 }}
+                                            title="Model statistics"
+                                        />
+                                        <iframe
+                                            src={iframeUrl("newapi-llm", 13)}
+                                            style={{ ...iframeStyle, height: 240 }}
+                                            title="Channel status"
+                                        />
+                                    </div>
+
+                                    {/* Request rate from overview */}
+                                    <iframe
+                                        src={iframeUrl("newapi-overview", 5)}
+                                        style={{ ...iframeStyle, height: 220 }}
+                                        title="Request rate"
+                                    />
+                                </div>
+                            );
+                        })()}
+
+                        {/* Tab switcher */}
+                        <div style={{ display: "flex", justifyContent: "center", marginTop: 24 }}>
+                            <div style={{ display: "flex", background: "#1a1a1a", borderRadius: 9999, padding: 4, gap: 4 }}>
+                                {(["gettingStarted", "analytics"] as const).map((tab) => (
+                                    <button
+                                        key={tab}
+                                        onClick={() => setActiveTab(tab)}
+                                        style={{
+                                            background: activeTab === tab ? "#00dc82" : "transparent",
+                                            color: activeTab === tab ? "#000" : "#888",
+                                            border: "none",
+                                            borderRadius: 9999,
+                                            padding: "8px 20px",
+                                            fontSize: 13,
+                                            fontWeight: 600,
+                                            cursor: "pointer",
+                                            transition: "all 0.2s",
+                                            textTransform: "capitalize",
                                             }}
                                         >
                                             {tab === "gettingStarted" ? "Getting Started" : "Analytics"}
                                         </button>
                                     ))}
-                                </div>
                             </div>
                         </div>
                     </div>
