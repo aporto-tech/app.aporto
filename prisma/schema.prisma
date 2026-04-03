@@ -86,3 +86,16 @@ model Rule {
   enabled      Boolean  @default(true)
   createdAt    DateTime @default(now())
 }
+
+model ServiceUsage {
+  id           String   @id @default(cuid())
+  newApiUserId Int
+  service      String   // "sms" | "search" | "ai-search" | "tts" | "image"
+  provider     String   // "prelude" | "linkup" | "youcom" | "elevenlabs" | "fal"
+  costUSD      Float
+  metadata     String?  // JSON: request params + response metadata
+  createdAt    DateTime @default(now())
+
+  @@index([newApiUserId])
+  @@index([service])
+}

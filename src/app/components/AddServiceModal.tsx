@@ -9,11 +9,12 @@ type Step = 1 | 2 | 3 | 4 | 5;
 interface Props {
     apiKey: string;
     onClose: () => void;
+    provider?: { baseUrl?: string; path?: string; [key: string]: unknown };
 }
 
 const STEP_LABELS = ["Intro", "Install SDK", "Test", "Create Rule", "Success"];
 
-export default function AddServiceModal({ apiKey, onClose }: Props) {
+export default function AddServiceModal({ apiKey, onClose, provider }: Props) {
     const [step, setStep] = useState<Step>(1);
     const [method, setMethod] = useState<ConnectionMethod>("sdk");
     const [copied, setCopied] = useState<"key" | "code" | "url" | null>(null);
@@ -31,7 +32,7 @@ export default function AddServiceModal({ apiKey, onClose }: Props) {
     const [ruleCreated, setRuleCreated] = useState(false);
 
     const displayKey = apiKey || "sk-live-CREATE_API_KEY_FIRST";
-    const baseUrl = "https://api.aporto.tech/v1";
+    const baseUrl = (provider as any)?.baseUrl ?? "https://api.aporto.tech/v1";
 
     // ── Polling for Step 3 ─────────────────────────────────────────────────
     useEffect(() => {

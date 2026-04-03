@@ -10,7 +10,7 @@ import { useRouter } from "next/navigation";
 const SERVICES = [
     {
         id: "sms", icon: "💬", title: "SMS Verification", desc: "Phone number verification and OTP delivery", providers: 1,
-        providerDetails: [{ name: "Prelude", description: "Phone verification", pricing: { "Send verification": "$0.015", "Check code": "Free" }, path: "/v1/sms/send", method: "POST", sampleBody: { to: "+1234567890", code: "123456" } }]
+        providerDetails: [{ name: "Prelude", description: "Phone verification", pricing: { "Send verification": "$0.015", "Check code": "Free" }, path: "/api/services/sms", baseUrl: "https://app.aporto.tech", method: "POST", sampleBody: { to: "+1234567890" } }]
     },
     {
         id: "llm", icon: "🤖", title: "Aporto AI", desc: "400+ models from OpenAI, Anthropic & more at official prices", providers: 1,
@@ -19,17 +19,17 @@ const SERVICES = [
     {
         id: "search", icon: "🔍", title: "AI Search", desc: "Real-time web search and information retrieval", providers: 2,
         providerDetails: [
-            { name: "Linkup", description: "AI web search", pricing: { "Standard depth": "$0.006", "Deep depth": "$0.055" }, path: "/v1/search/linkup", method: "POST", sampleBody: { query: "Latest AI news" } },
-            { name: "You.com", description: "Real-time AI search", pricing: { "Web search": "$0.006", "Extended search": "$0.008", "URL content": "$0.01/request" }, path: "/v1/search/you", method: "POST", sampleBody: { query: "Machine learning" } }
+            { name: "Linkup", description: "AI web search", pricing: { "Standard depth": "$0.006", "Deep depth": "$0.055" }, path: "/api/services/search", baseUrl: "https://app.aporto.tech", method: "POST", sampleBody: { query: "Latest AI news", depth: "standard" } },
+            { name: "You.com", description: "Real-time AI search", pricing: { "Web search": "$0.005", "Research": "$0.0065" }, path: "/api/services/ai-search", baseUrl: "https://app.aporto.tech", method: "POST", sampleBody: { query: "Machine learning trends", type: "search" } }
         ]
     },
     {
         id: "audio", icon: "🔊", title: "Audio", desc: "AI voice synthesis and transcription", providers: 1,
-        providerDetails: [{ name: "ElevenLabs", description: "AI audio synthesis", pricing: { "Text-to-speech": "$0.24/1K chars", "Speech-to-text": "$0.08/min", "Sound effects": "$0.08" }, path: "/v1/audio/speech", method: "POST", sampleBody: { text: "Hello world!", voice_id: "21m00Tcm4TlvDq8ikWAM" } }]
+        providerDetails: [{ name: "ElevenLabs", description: "AI audio synthesis", pricing: { "Text-to-speech": "$0.24/1K chars" }, path: "/api/services/tts", baseUrl: "https://app.aporto.tech", method: "POST", sampleBody: { text: "Hello world!", voice_id: "21m00Tcm4TlvDq8ikWAM" } }]
     },
     {
         id: "image", icon: "🖼️", title: "Image Generation", desc: "AI-powered image creation and editing", providers: 1,
-        providerDetails: [{ name: "Fal.ai", description: "AI image generation", pricing: { "FLUX Dev": "$0.015/MP", "FLUX Schnell": "$0.004/MP", "FLUX Pro": "$0.04/MP" }, path: "/v1/images/generate", method: "POST", sampleBody: { prompt: "A futuristic city", model: "flux-dev" } }]
+        providerDetails: [{ name: "Fal.ai", description: "AI image generation", pricing: { "FLUX Dev": "$0.015/MP", "FLUX Schnell": "$0.004/MP", "FLUX Pro": "$0.04/MP" }, path: "/api/services/image", baseUrl: "https://app.aporto.tech", method: "POST", sampleBody: { prompt: "A futuristic city", model: "flux-schnell" } }]
     },
     {
         id: "web", icon: "🌐", title: "Web Automation", desc: "Headless browser and web scraping", providers: 1,
@@ -130,7 +130,7 @@ export default function ServicesPage() {
 <span class="${styles.keyword}">const</span> <span class="${styles.function}">APORTO_API_KEY</span> = <span class="${styles.string}">'${apiKey}'</span>;
 
 <span class="${styles.keyword}">async function</span> <span class="${styles.function}">runService</span>() {
-  <span class="${styles.keyword}">const</span> response = <span class="${styles.keyword}">await</span> <span class="${styles.function}">fetch</span>(<span class="${styles.string}">\`https://api.aporto.tech\${<span class="${styles.string}">'${selectedProvider.path}'</span>}\`</span>, {
+  <span class="${styles.keyword}">const</span> response = <span class="${styles.keyword}">await</span> <span class="${styles.function}">fetch</span>(<span class="${styles.string}">\`${selectedProvider.baseUrl ?? 'https://api.aporto.tech'}${selectedProvider.path}\`</span>, {
     method: <span class="${styles.string}">'${selectedProvider.method}'</span>,
     headers: {
       <span class="${styles.string}">'Authorization'</span>: <span class="${styles.string}">\`Bearer \${APORTO_API_KEY}\`</span>,
@@ -154,7 +154,7 @@ export default function ServicesPage() {
 <span class="${styles.keyword}">const</span> <span class="${styles.function}">APORTO_API_KEY</span> = <span class="${styles.string}">'${apiKey}'</span>;
 
 <span class="${styles.keyword}">const</span> client = axios.<span class="${styles.function}">create</span>({
-  baseURL: <span class="${styles.string}">'https://api.aporto.tech'</span>,
+  baseURL: <span class="${styles.string}">'${selectedProvider.baseUrl ?? 'https://api.aporto.tech'}'</span>,
   headers: {
     <span class="${styles.string}">'Authorization'</span>: <span class="${styles.string}">\`Bearer \${APORTO_API_KEY}\`</span>
   }
@@ -376,6 +376,7 @@ export default function ServicesPage() {
                 <AddServiceModal
                     apiKey={apiKey}
                     onClose={() => setShowAddServiceModal(false)}
+                    provider={selectedProvider}
                 />
             )}
         </DashboardLayout>
