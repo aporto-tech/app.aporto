@@ -396,6 +396,181 @@
                     "refId": "A"
                 }
             ]
+        },
+        {
+            "collapsed": false,
+            "gridPos": {
+                "h": 1,
+                "w": 24,
+                "x": 0,
+                "y": 28
+            },
+            "id": 16,
+            "title": "💰 Расходы пользователей (из кэша, обновляется раз в сутки)",
+            "type": "row"
+        },
+        {
+            "datasource": {
+                "uid": "PCC52D03280B7034C",
+                "type": "grafana-postgresql-datasource"
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "color": {
+                        "fixedColor": "blue",
+                        "mode": "fixed"
+                    },
+                    "custom": {
+                        "fillOpacity": 75,
+                        "lineWidth": 0
+                    },
+                    "decimals": 4,
+                    "unit": "currencyUSD"
+                },
+                "overrides": []
+            },
+            "gridPos": {
+                "h": 10,
+                "w": 24,
+                "x": 0,
+                "y": 29
+            },
+            "id": 17,
+            "options": {
+                "barRadius": 0,
+                "barWidth": 0.3,
+                "fullHighlight": false,
+                "groupWidth": 0.7,
+                "legend": {
+                    "displayMode": "list",
+                    "placement": "bottom",
+                    "showLegend": false
+                },
+                "orientation": "auto",
+                "showValue": "never",
+                "stacking": "none",
+                "tooltip": {
+                    "mode": "single",
+                    "sort": "none"
+                },
+                "xTickLabelRotation": -45,
+                "xTickLabelSpacing": 0
+            },
+            "title": "💸 Расходы по дням — ${selected_month}",
+            "type": "barchart",
+            "targets": [
+                {
+                    "rawSql": "WITH month_days AS (\n  SELECT generate_series(\n    DATE_TRUNC('month', ('${selected_month}-01')::date),\n    DATE_TRUNC('month', ('${selected_month}-01')::date) + INTERVAL '1 month' - INTERVAL '1 day',\n    INTERVAL '1 day'\n  )::date AS day\n)\nSELECT\n  TO_CHAR(md.day, 'DD') AS \"День\",\n  COALESCE(dsc.total_usd, 0)::float AS \"$\"\nFROM month_days md\nLEFT JOIN daily_spending_cache dsc ON md.day = dsc.day\nORDER BY md.day;",
+                    "format": "table",
+                    "refId": "A"
+                }
+            ]
+        },
+        {
+            "datasource": {
+                "uid": "PCC52D03280B7034C",
+                "type": "grafana-postgresql-datasource"
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "custom": {
+                        "align": "left",
+                        "cellOptions": {
+                            "type": "auto"
+                        }
+                    }
+                },
+                "overrides": [
+                    {
+                        "matcher": {
+                            "id": "byName",
+                            "options": "Расходы ($)"
+                        },
+                        "properties": [
+                            {
+                                "id": "unit",
+                                "value": "currencyUSD"
+                            },
+                            {
+                                "id": "decimals",
+                                "value": 4
+                            },
+                            {
+                                "id": "custom.align",
+                                "value": "right"
+                            },
+                            {
+                                "id": "custom.width",
+                                "value": 160
+                            }
+                        ]
+                    },
+                    {
+                        "matcher": {
+                            "id": "byName",
+                            "options": "Запросов"
+                        },
+                        "properties": [
+                            {
+                                "id": "custom.align",
+                                "value": "right"
+                            },
+                            {
+                                "id": "custom.width",
+                                "value": 120
+                            }
+                        ]
+                    },
+                    {
+                        "matcher": {
+                            "id": "byRegexp",
+                            "options": ".*ИТОГО.*"
+                        },
+                        "properties": [
+                            {
+                                "id": "custom.cellOptions",
+                                "value": {
+                                    "type": "colored-background"
+                                }
+                            },
+                            {
+                                "id": "color",
+                                "value": {
+                                    "fixedColor": "dark-blue",
+                                    "mode": "fixed"
+                                }
+                            }
+                        ]
+                    }
+                ]
+            },
+            "gridPos": {
+                "h": 12,
+                "w": 24,
+                "x": 0,
+                "y": 39
+            },
+            "id": 18,
+            "options": {
+                "footer": {
+                    "show": false
+                },
+                "sortBy": [
+                    {
+                        "displayName": "Период",
+                        "desc": false
+                    }
+                ]
+            },
+            "title": "📅 Расходы по месяцам / итого за год",
+            "type": "table",
+            "targets": [
+                {
+                    "rawSql": "SELECT period AS \"Период\", total_usd AS \"Расходы ($)\", request_count AS \"Запросов\"\nFROM (\n  SELECT\n    TO_CHAR(DATE_TRUNC('month', day), 'YYYY-MM') AS period,\n    ROUND(SUM(total_usd)::numeric, 4)            AS total_usd,\n    SUM(request_count)::bigint                   AS request_count,\n    TO_CHAR(DATE_TRUNC('month', day), 'YYYY-MM') AS sort_key\n  FROM daily_spending_cache\n  GROUP BY DATE_TRUNC('month', day)\n\n  UNION ALL\n\n  SELECT\n    EXTRACT(YEAR FROM day)::text || ' — ИТОГО'  AS period,\n    ROUND(SUM(total_usd)::numeric, 4)            AS total_usd,\n    SUM(request_count)::bigint                   AS request_count,\n    EXTRACT(YEAR FROM day)::text || '-99'        AS sort_key\n  FROM daily_spending_cache\n  GROUP BY EXTRACT(YEAR FROM day)\n) t\nORDER BY sort_key;",
+                    "format": "table",
+                    "refId": "A"
+                }
+            ]
         }
     ],
     "refresh": "30s",
@@ -407,7 +582,31 @@
         "models"
     ],
     "templating": {
-        "list": []
+        "list": [
+            {
+                "current": {
+                    "selected": false,
+                    "text": "2026-04",
+                    "value": "2026-04"
+                },
+                "datasource": {
+                    "type": "grafana-postgresql-datasource",
+                    "uid": "PCC52D03280B7034C"
+                },
+                "definition": "SELECT DISTINCT TO_CHAR(day, 'YYYY-MM') AS month FROM daily_spending_cache ORDER BY month DESC",
+                "hide": 0,
+                "includeAll": false,
+                "label": "Месяц",
+                "multi": false,
+                "name": "selected_month",
+                "options": [],
+                "query": "SELECT DISTINCT TO_CHAR(day, 'YYYY-MM') AS month FROM daily_spending_cache ORDER BY month DESC",
+                "refresh": 2,
+                "regex": "",
+                "sort": 0,
+                "type": "query"
+            }
+        ]
     },
     "time": {
         "from": "now-24h",
@@ -417,5 +616,5 @@
     "timezone": "",
     "title": "New API — LLM Requests",
     "uid": "newapi-llm",
-    "version": 2
+    "version": 3
 }
