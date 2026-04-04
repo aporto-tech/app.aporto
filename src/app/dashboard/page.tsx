@@ -29,7 +29,17 @@ export default function DashboardPage() {
     const router = useRouter();
 
     // UI state
-    const [activeTab, setActiveTab] = useState<"gettingStarted" | "analytics">("gettingStarted");
+    const [activeTab, setActiveTab] = useState<"gettingStarted" | "analytics">(() => {
+        if (typeof window !== "undefined") {
+            return (localStorage.getItem("dashboard_tab") as "gettingStarted" | "analytics") ?? "gettingStarted";
+        }
+        return "gettingStarted";
+    });
+
+    const switchTab = (tab: "gettingStarted" | "analytics") => {
+        setActiveTab(tab);
+        localStorage.setItem("dashboard_tab", tab);
+    };
     const [timeRange, setTimeRange] = useState("24h");
     const [activeRulesCount, setActiveRulesCount] = useState(0);
 
@@ -576,7 +586,7 @@ export default function DashboardPage() {
                                 {(["gettingStarted", "analytics"] as const).map((tab) => (
                                     <button
                                         key={tab}
-                                        onClick={() => setActiveTab(tab)}
+                                        onClick={() => switchTab(tab)}
                                         style={{
                                             background: activeTab === tab ? "#00dc82" : "transparent",
                                             color: activeTab === tab ? "#000" : "#888",
