@@ -417,15 +417,25 @@
             "fieldConfig": {
                 "defaults": {
                     "color": {
-                        "fixedColor": "blue",
-                        "mode": "fixed"
+                        "mode": "palette-classic"
                     },
                     "custom": {
-                        "fillOpacity": 75,
-                        "lineWidth": 0
+                        "drawStyle": "bars",
+                        "barAlignment": 0,
+                        "lineWidth": 0,
+                        "fillOpacity": 80,
+                        "gradientMode": "none",
+                        "spanNulls": false,
+                        "showPoints": "never",
+                        "stacking": {
+                            "mode": "normal",
+                            "group": "A"
+                        },
+                        "axisBorderShow": false,
+                        "axisPlacement": "auto"
                     },
-                    "decimals": 4,
-                    "unit": "currencyUSD"
+                    "unit": "currencyUSD",
+                    "decimals": 4
                 },
                 "overrides": []
             },
@@ -437,31 +447,23 @@
             },
             "id": 17,
             "options": {
-                "barRadius": 0,
-                "barWidth": 0.3,
-                "fullHighlight": false,
-                "groupWidth": 0.7,
-                "legend": {
-                    "displayMode": "list",
-                    "placement": "bottom",
-                    "showLegend": false
-                },
-                "orientation": "auto",
-                "showValue": "never",
-                "stacking": "none",
                 "tooltip": {
-                    "mode": "single",
-                    "sort": "none"
+                    "mode": "all",
+                    "sort": "desc"
                 },
-                "xTickLabelRotation": -45,
-                "xTickLabelSpacing": 0
+                "legend": {
+                    "displayMode": "table",
+                    "placement": "bottom",
+                    "showLegend": true,
+                    "calcs": ["sum"]
+                }
             },
             "title": "💸 Расходы по дням — ${selected_month}",
-            "type": "barchart",
+            "type": "timeseries",
             "targets": [
                 {
-                    "rawSql": "WITH month_days AS (\n  SELECT generate_series(\n    DATE_TRUNC('month', ('${selected_month}-01')::date),\n    DATE_TRUNC('month', ('${selected_month}-01')::date) + INTERVAL '1 month' - INTERVAL '1 day',\n    INTERVAL '1 day'\n  )::date AS day\n)\nSELECT\n  TO_CHAR(md.day, 'DD') AS \"День\",\n  COALESCE(dsc.total_usd, 0)::float AS \"$\"\nFROM month_days md\nLEFT JOIN daily_spending_cache dsc ON md.day = dsc.day\nORDER BY md.day;",
-                    "format": "table",
+                    "rawSql": "WITH\ntarget_month AS (\n  SELECT\n    DATE_TRUNC('month', ('${selected_month}-01')::date)::date AS first_day,\n    (DATE_TRUNC('month', ('${selected_month}-01')::date) + INTERVAL '1 month' - INTERVAL '1 day')::date AS last_day\n),\ntop_users AS (\n  SELECT d.username\n  FROM daily_spending_by_user_cache d\n  JOIN target_month tm ON d.day >= tm.first_day AND d.day <= tm.last_day\n  GROUP BY d.username\n  ORDER BY SUM(d.total_usd) DESC\n  LIMIT 8\n),\nall_labels AS (\n  SELECT username AS label FROM top_users\n  UNION ALL SELECT 'Others'\n),\nmonth_days AS (\n  SELECT generate_series(\n    (SELECT first_day::timestamptz FROM target_month),\n    (SELECT last_day::timestamptz FROM target_month),\n    INTERVAL '1 day'\n  )::date AS day\n),\nskeleton AS (\n  SELECT md.day, al.label AS metric FROM month_days md CROSS JOIN all_labels al\n),\nactuals AS (\n  SELECT\n    d.day,\n    CASE WHEN t.username IS NOT NULL THEN d.username ELSE 'Others' END AS metric,\n    SUM(d.total_usd)::float AS value\n  FROM daily_spending_by_user_cache d\n  JOIN target_month tm ON d.day >= tm.first_day AND d.day <= tm.last_day\n  LEFT JOIN top_users t ON d.username = t.username\n  GROUP BY d.day, CASE WHEN t.username IS NOT NULL THEN d.username ELSE 'Others' END\n)\nSELECT\n  s.day::timestamptz AS \"time\",\n  s.metric AS \"metric\",\n  COALESCE(a.value, 0) AS \"value\"\nFROM skeleton s\nLEFT JOIN actuals a ON s.day = a.day AND s.metric = a.metric\nORDER BY s.day, s.metric;",
+                    "format": "time_series",
                     "refId": "A"
                 }
             ]
