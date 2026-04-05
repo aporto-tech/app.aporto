@@ -1,622 +1,638 @@
 {
-    "annotations": {
-        "list": []
-    },
-    "editable": true,
-    "fiscalYearStartMonth": 0,
-    "graphTooltip": 1,
-    "id": null,
-    "links": [],
-    "panels": [
-        {
-            "datasource": {
-                "uid": "PCC52D03280B7034C",
-                "type": "grafana-postgresql-datasource"
-            },
-            "fieldConfig": {
-                "defaults": {
-                    "color": {
-                        "mode": "thresholds"
-                    },
-                    "thresholds": {
-                        "steps": [
-                            {
-                                "color": "blue",
-                                "value": null
-                            }
-                        ]
-                    }
-                }
-            },
-            "gridPos": {
-                "h": 4,
-                "w": 5,
-                "x": 0,
-                "y": 0
-            },
-            "id": 1,
-            "options": {
-                "colorMode": "background",
-                "graphMode": "area",
-                "reduceOptions": {
-                    "calcs": [
-                        "lastNotNull"
-                    ]
-                },
-                "textMode": "auto"
-            },
-            "title": "📊 Запросов",
-            "type": "stat",
-            "targets": [
-                {
-                    "rawSql": "SELECT count(*) FROM logs WHERE type = 2 AND created_at >= ${__from:date:seconds} AND created_at <= ${__to:date:seconds};",
-                    "format": "table",
-                    "refId": "A"
-                }
+  "annotations": {
+    "list": []
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "datasource": {
+        "uid": "PCC52D03280B7034C",
+        "type": "grafana-postgresql-datasource"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
             ]
-        },
-        {
-            "datasource": {
-                "uid": "PCC52D03280B7034C",
-                "type": "grafana-postgresql-datasource"
-            },
-            "fieldConfig": {
-                "defaults": {
-                    "color": {
-                        "mode": "thresholds"
-                    },
-                    "thresholds": {
-                        "steps": [
-                            {
-                                "color": "green",
-                                "value": null
-                            },
-                            {
-                                "color": "red",
-                                "value": 1
-                            }
-                        ]
-                    }
-                }
-            },
-            "gridPos": {
-                "h": 4,
-                "w": 5,
-                "x": 5,
-                "y": 0
-            },
-            "id": 2,
-            "options": {
-                "colorMode": "background",
-                "graphMode": "area",
-                "reduceOptions": {
-                    "calcs": [
-                        "lastNotNull"
-                    ]
-                },
-                "textMode": "auto"
-            },
-            "title": "❌ Ошибки",
-            "type": "stat",
-            "targets": [
-                {
-                    "rawSql": "SELECT count(*) FROM logs WHERE type != 2 AND created_at >= ${__from:date:seconds} AND created_at <= ${__to:date:seconds};",
-                    "format": "table",
-                    "refId": "A"
-                }
-            ]
-        },
-        {
-            "datasource": {
-                "uid": "PCC52D03280B7034C",
-                "type": "grafana-postgresql-datasource"
-            },
-            "fieldConfig": {
-                "defaults": {
-                    "color": {
-                        "mode": "thresholds"
-                    },
-                    "thresholds": {
-                        "steps": [
-                            {
-                                "color": "green",
-                                "value": null
-                            },
-                            {
-                                "color": "yellow",
-                                "value": 30
-                            },
-                            {
-                                "color": "red",
-                                "value": 60
-                            }
-                        ]
-                    },
-                    "unit": "s"
-                }
-            },
-            "gridPos": {
-                "h": 4,
-                "w": 5,
-                "x": 10,
-                "y": 0
-            },
-            "id": 3,
-            "options": {
-                "colorMode": "background",
-                "graphMode": "area",
-                "reduceOptions": {
-                    "calcs": [
-                        "lastNotNull"
-                    ]
-                },
-                "textMode": "auto"
-            },
-            "title": "⏱ Avg Latency",
-            "type": "stat",
-            "targets": [
-                {
-                    "rawSql": "SELECT round(avg(use_time)) FROM logs WHERE type = 2 AND created_at >= ${__from:date:seconds} AND created_at <= ${__to:date:seconds};",
-                    "format": "table",
-                    "refId": "A"
-                }
-            ]
-        },
-        {
-            "datasource": {
-                "uid": "PCC52D03280B7034C",
-                "type": "grafana-postgresql-datasource"
-            },
-            "fieldConfig": {
-                "defaults": {
-                    "color": {
-                        "mode": "thresholds"
-                    },
-                    "thresholds": {
-                        "steps": [
-                            {
-                                "color": "green",
-                                "value": null
-                            }
-                        ]
-                    }
-                }
-            },
-            "gridPos": {
-                "h": 4,
-                "w": 5,
-                "x": 15,
-                "y": 0
-            },
-            "id": 14,
-            "options": {
-                "colorMode": "background",
-                "graphMode": "area",
-                "reduceOptions": {
-                    "calcs": [
-                        "lastNotNull"
-                    ]
-                },
-                "textMode": "auto"
-            },
-            "title": "📡 Активных каналов",
-            "type": "stat",
-            "targets": [
-                {
-                    "rawSql": "SELECT count(*) FROM channels WHERE status = 1;",
-                    "format": "table",
-                    "refId": "A"
-                }
-            ]
-        },
-        {
-            "datasource": {
-                "uid": "PCC52D03280B7034C",
-                "type": "grafana-postgresql-datasource"
-            },
-            "fieldConfig": {
-                "defaults": {
-                    "color": {
-                        "mode": "thresholds"
-                    },
-                    "thresholds": {
-                        "steps": [
-                            {
-                                "color": "red",
-                                "value": null
-                            }
-                        ]
-                    }
-                }
-            },
-            "gridPos": {
-                "h": 4,
-                "w": 4,
-                "x": 20,
-                "y": 0
-            },
-            "id": 15,
-            "options": {
-                "colorMode": "background",
-                "graphMode": "none",
-                "reduceOptions": {
-                    "calcs": [
-                        "lastNotNull"
-                    ]
-                },
-                "textMode": "auto"
-            },
-            "title": "🔴 Отключённых",
-            "type": "stat",
-            "targets": [
-                {
-                    "rawSql": "SELECT count(*) FROM channels WHERE status != 1;",
-                    "format": "table",
-                    "refId": "A"
-                }
-            ]
-        },
-        {
-            "datasource": {
-                "uid": "PCC52D03280B7034C",
-                "type": "grafana-postgresql-datasource"
-            },
-            "fieldConfig": {
-                "defaults": {
-                    "color": {
-                        "mode": "palette-classic"
-                    },
-                    "custom": {
-                        "drawStyle": "line",
-                        "fillOpacity": 20,
-                        "lineWidth": 2
-                    },
-                    "unit": "s"
-                }
-            },
-            "gridPos": {
-                "h": 8,
-                "w": 12,
-                "x": 12,
-                "y": 4
-            },
-            "id": 6,
-            "title": "⏱ Latency по времени",
-            "type": "timeseries",
-            "targets": [
-                {
-                    "rawSql": "SELECT to_timestamp(created_at) AS time, use_time AS \"Latency (s)\" FROM logs WHERE type = 2 AND created_at >= ${__from:date:seconds} AND created_at <= ${__to:date:seconds} ORDER BY created_at;",
-                    "format": "table",
-                    "refId": "A"
-                }
-            ]
-        },
-        {
-            "datasource": {
-                "uid": "PCC52D03280B7034C",
-                "type": "grafana-postgresql-datasource"
-            },
-            "fieldConfig": {
-                "defaults": {
-                    "thresholds": {
-                        "steps": [
-                            {
-                                "color": "green",
-                                "value": null
-                            }
-                        ]
-                    }
-                }
-            },
-            "gridPos": {
-                "h": 8,
-                "w": 12,
-                "x": 0,
-                "y": 12
-            },
-            "id": 12,
-            "title": "📊 Статистика по моделям",
-            "type": "table",
-            "targets": [
-                {
-                    "rawSql": "SELECT model_name AS \"Модель\", count(*) AS \"Запросов\", round(avg(use_time)) AS \"Avg Latency (с)\", sum(prompt_tokens) AS \"Prompt Tokens\", sum(completion_tokens) AS \"Completion Tokens\", sum(prompt_tokens + completion_tokens) AS \"Всего Tokens\", count(*) FILTER (WHERE type != 2) AS \"Ошибок\" FROM logs WHERE created_at >= ${__from:date:seconds} AND created_at <= ${__to:date:seconds} GROUP BY model_name ORDER BY count(*) DESC;",
-                    "format": "table",
-                    "refId": "A"
-                }
-            ]
-        },
-        {
-            "datasource": {
-                "uid": "PCC52D03280B7034C",
-                "type": "grafana-postgresql-datasource"
-            },
-            "fieldConfig": {
-                "defaults": {
-                    "thresholds": {
-                        "steps": [
-                            {
-                                "color": "green",
-                                "value": null
-                            }
-                        ]
-                    }
-                }
-            },
-            "gridPos": {
-                "h": 8,
-                "w": 12,
-                "x": 12,
-                "y": 12
-            },
-            "id": 13,
-            "title": "📡 Статус каналов",
-            "type": "table",
-            "targets": [
-                {
-                    "rawSql": "SELECT c.name AS \"Канал\", CASE c.status WHEN 1 THEN '🟢 Active' WHEN 2 THEN '🔴 Disabled' ELSE '⚪ Unknown' END AS \"Статус\", c.priority AS \"Приоритет\", c.weight AS \"Вес\", c.response_time AS \"Response Time (мс)\", c.models AS \"Модели\", COALESCE(l.req_count, 0) AS \"Запросов (24ч)\", COALESCE(l.err_count, 0) AS \"Ошибок (24ч)\" FROM channels c LEFT JOIN (SELECT channel_id, count(*) AS req_count, count(*) FILTER (WHERE type != 2) AS err_count FROM logs WHERE created_at > extract(epoch from now() - interval '24 hours') GROUP BY channel_id) l ON c.id = l.channel_id ORDER BY c.status, c.priority DESC;",
-                    "format": "table",
-                    "refId": "A"
-                }
-            ]
-        },
-        {
-            "datasource": {
-                "uid": "PCC52D03280B7034C",
-                "type": "grafana-postgresql-datasource"
-            },
-            "fieldConfig": {
-                "defaults": {
-                    "thresholds": {
-                        "steps": [
-                            {
-                                "color": "green",
-                                "value": null
-                            },
-                            {
-                                "color": "red",
-                                "value": 80
-                            }
-                        ]
-                    }
-                }
-            },
-            "gridPos": {
-                "h": 8,
-                "w": 24,
-                "x": 0,
-                "y": 20
-            },
-            "id": 11,
-            "title": "📋 Последние ошибки",
-            "type": "table",
-            "targets": [
-                {
-                    "rawSql": "SELECT to_timestamp(created_at) AS \"Время\", model_name AS \"Модель\", COALESCE(channel_name, 'ch_' || channel_id::text) AS \"Канал\", use_time AS \"Latency (с)\", content AS \"Ошибка\" FROM logs WHERE type != 2 ORDER BY created_at DESC LIMIT 20;",
-                    "format": "table",
-                    "refId": "A"
-                }
-            ]
-        },
-        {
-            "collapsed": false,
-            "gridPos": {
-                "h": 1,
-                "w": 24,
-                "x": 0,
-                "y": 28
-            },
-            "id": 16,
-            "title": "💰 Расходы пользователей (из кэша, обновляется раз в сутки)",
-            "type": "row"
-        },
-        {
-            "datasource": {
-                "uid": "PCC52D03280B7034C",
-                "type": "grafana-postgresql-datasource"
-            },
-            "fieldConfig": {
-                "defaults": {
-                    "color": {
-                        "mode": "palette-classic"
-                    },
-                    "custom": {
-                        "drawStyle": "bars",
-                        "barAlignment": 0,
-                        "lineWidth": 0,
-                        "fillOpacity": 80,
-                        "gradientMode": "none",
-                        "spanNulls": false,
-                        "showPoints": "never",
-                        "stacking": {
-                            "mode": "normal",
-                            "group": "A"
-                        },
-                        "axisBorderShow": false,
-                        "axisPlacement": "auto"
-                    },
-                    "unit": "currencyUSD",
-                    "decimals": 4
-                },
-                "overrides": []
-            },
-            "gridPos": {
-                "h": 10,
-                "w": 24,
-                "x": 0,
-                "y": 29
-            },
-            "id": 17,
-            "options": {
-                "tooltip": {
-                    "mode": "all",
-                    "sort": "desc"
-                },
-                "legend": {
-                    "displayMode": "table",
-                    "placement": "bottom",
-                    "showLegend": true,
-                    "calcs": ["sum"]
-                }
-            },
-            "title": "💸 Расходы по дням — ${selected_month}",
-            "type": "timeseries",
-            "targets": [
-                {
-                    "rawSql": "WITH\ntarget_month AS (\n  SELECT\n    DATE_TRUNC('month', ('${selected_month}-01')::date)::date AS first_day,\n    (DATE_TRUNC('month', ('${selected_month}-01')::date) + INTERVAL '1 month' - INTERVAL '1 day')::date AS last_day\n),\ntop_users AS (\n  SELECT d.username\n  FROM daily_spending_by_user_cache d\n  JOIN target_month tm ON d.day >= tm.first_day AND d.day <= tm.last_day\n  GROUP BY d.username\n  ORDER BY SUM(d.total_usd) DESC\n  LIMIT 8\n),\nall_labels AS (\n  SELECT username AS label FROM top_users\n  UNION ALL SELECT 'Others'\n),\nmonth_days AS (\n  SELECT generate_series(\n    (SELECT first_day::timestamptz FROM target_month),\n    (SELECT last_day::timestamptz FROM target_month),\n    INTERVAL '1 day'\n  )::date AS day\n),\nskeleton AS (\n  SELECT md.day, al.label AS metric FROM month_days md CROSS JOIN all_labels al\n),\nactuals AS (\n  SELECT\n    d.day,\n    CASE WHEN t.username IS NOT NULL THEN d.username ELSE 'Others' END AS metric,\n    SUM(d.total_usd)::float AS value\n  FROM daily_spending_by_user_cache d\n  JOIN target_month tm ON d.day >= tm.first_day AND d.day <= tm.last_day\n  LEFT JOIN top_users t ON d.username = t.username\n  GROUP BY d.day, CASE WHEN t.username IS NOT NULL THEN d.username ELSE 'Others' END\n)\nSELECT\n  s.day::timestamptz AS \"time\",\n  s.metric AS \"metric\",\n  COALESCE(a.value, 0) AS \"value\"\nFROM skeleton s\nLEFT JOIN actuals a ON s.day = a.day AND s.metric = a.metric\nORDER BY s.day, s.metric;",
-                    "format": "time_series",
-                    "refId": "A"
-                }
-            ]
-        },
-        {
-            "datasource": {
-                "uid": "PCC52D03280B7034C",
-                "type": "grafana-postgresql-datasource"
-            },
-            "fieldConfig": {
-                "defaults": {
-                    "custom": {
-                        "align": "left",
-                        "cellOptions": {
-                            "type": "auto"
-                        }
-                    }
-                },
-                "overrides": [
-                    {
-                        "matcher": {
-                            "id": "byName",
-                            "options": "Расходы ($)"
-                        },
-                        "properties": [
-                            {
-                                "id": "unit",
-                                "value": "currencyUSD"
-                            },
-                            {
-                                "id": "decimals",
-                                "value": 4
-                            },
-                            {
-                                "id": "custom.align",
-                                "value": "right"
-                            },
-                            {
-                                "id": "custom.width",
-                                "value": 160
-                            }
-                        ]
-                    },
-                    {
-                        "matcher": {
-                            "id": "byName",
-                            "options": "Запросов"
-                        },
-                        "properties": [
-                            {
-                                "id": "custom.align",
-                                "value": "right"
-                            },
-                            {
-                                "id": "custom.width",
-                                "value": 120
-                            }
-                        ]
-                    },
-                    {
-                        "matcher": {
-                            "id": "byRegexp",
-                            "options": ".*ИТОГО.*"
-                        },
-                        "properties": [
-                            {
-                                "id": "custom.cellOptions",
-                                "value": {
-                                    "type": "colored-background"
-                                }
-                            },
-                            {
-                                "id": "color",
-                                "value": {
-                                    "fixedColor": "dark-blue",
-                                    "mode": "fixed"
-                                }
-                            }
-                        ]
-                    }
-                ]
-            },
-            "gridPos": {
-                "h": 12,
-                "w": 24,
-                "x": 0,
-                "y": 39
-            },
-            "id": 18,
-            "options": {
-                "footer": {
-                    "show": false
-                },
-                "sortBy": [
-                    {
-                        "displayName": "Период",
-                        "desc": false
-                    }
-                ]
-            },
-            "title": "📅 Расходы по месяцам / итого за год",
-            "type": "table",
-            "targets": [
-                {
-                    "rawSql": "SELECT period AS \"Период\", total_usd AS \"Расходы ($)\", request_count AS \"Запросов\"\nFROM (\n  SELECT\n    TO_CHAR(DATE_TRUNC('month', day), 'YYYY-MM') AS period,\n    ROUND(SUM(total_usd)::numeric, 4)            AS total_usd,\n    SUM(request_count)::bigint                   AS request_count,\n    TO_CHAR(DATE_TRUNC('month', day), 'YYYY-MM') AS sort_key\n  FROM daily_spending_cache\n  GROUP BY DATE_TRUNC('month', day)\n\n  UNION ALL\n\n  SELECT\n    EXTRACT(YEAR FROM day)::text || ' — ИТОГО'  AS period,\n    ROUND(SUM(total_usd)::numeric, 4)            AS total_usd,\n    SUM(request_count)::bigint                   AS request_count,\n    EXTRACT(YEAR FROM day)::text || '-99'        AS sort_key\n  FROM daily_spending_cache\n  GROUP BY EXTRACT(YEAR FROM day)\n) t\nORDER BY sort_key;",
-                    "format": "table",
-                    "refId": "A"
-                }
-            ]
+          }
         }
-    ],
-    "refresh": "30s",
-    "schemaVersion": 38,
-    "style": "dark",
-    "tags": [
-        "newapi",
-        "llm",
-        "models"
-    ],
-    "templating": {
-        "list": [
-            {
-                "current": {
-                    "selected": false,
-                    "text": "2026-04",
-                    "value": "2026-04"
-                },
-                "datasource": {
-                    "type": "grafana-postgresql-datasource",
-                    "uid": "PCC52D03280B7034C"
-                },
-                "definition": "SELECT DISTINCT TO_CHAR(day, 'YYYY-MM') AS month FROM daily_spending_cache ORDER BY month DESC",
-                "hide": 0,
-                "includeAll": false,
-                "label": "Месяц",
-                "multi": false,
-                "name": "selected_month",
-                "options": [],
-                "query": "SELECT DISTINCT TO_CHAR(day, 'YYYY-MM') AS month FROM daily_spending_cache ORDER BY month DESC",
-                "refresh": 2,
-                "regex": "",
-                "sort": 0,
-                "type": "query"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 5,
+        "x": 0,
+        "y": 0
+      },
+      "id": 1,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "area",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "textMode": "auto"
+      },
+      "title": "📊 Запросов",
+      "type": "stat",
+      "targets": [
+        {
+          "rawSql": "SELECT count(*) FROM logs WHERE type = 2 AND created_at >= ${__from:date:seconds} AND created_at <= ${__to:date:seconds};",
+          "format": "table",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "datasource": {
+        "uid": "PCC52D03280B7034C",
+        "type": "grafana-postgresql-datasource"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          }
+        }
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 5,
+        "x": 5,
+        "y": 0
+      },
+      "id": 2,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "area",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "textMode": "auto"
+      },
+      "title": "❌ Ошибки",
+      "type": "stat",
+      "targets": [
+        {
+          "rawSql": "SELECT count(*) FROM logs WHERE type != 2 AND created_at >= ${__from:date:seconds} AND created_at <= ${__to:date:seconds};",
+          "format": "table",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "datasource": {
+        "uid": "PCC52D03280B7034C",
+        "type": "grafana-postgresql-datasource"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 30
+              },
+              {
+                "color": "red",
+                "value": 60
+              }
+            ]
+          },
+          "unit": "s"
+        }
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 5,
+        "x": 10,
+        "y": 0
+      },
+      "id": 3,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "area",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "textMode": "auto"
+      },
+      "title": "⏱ Avg Latency",
+      "type": "stat",
+      "targets": [
+        {
+          "rawSql": "SELECT round(avg(use_time)) FROM logs WHERE type = 2 AND created_at >= ${__from:date:seconds} AND created_at <= ${__to:date:seconds};",
+          "format": "table",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "datasource": {
+        "uid": "PCC52D03280B7034C",
+        "type": "grafana-postgresql-datasource"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        }
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 5,
+        "x": 15,
+        "y": 0
+      },
+      "id": 14,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "area",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "textMode": "auto"
+      },
+      "title": "📡 Активных каналов",
+      "type": "stat",
+      "targets": [
+        {
+          "rawSql": "SELECT count(*) FROM channels WHERE status = 1;",
+          "format": "table",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "datasource": {
+        "uid": "PCC52D03280B7034C",
+        "type": "grafana-postgresql-datasource"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              }
+            ]
+          }
+        }
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 20,
+        "y": 0
+      },
+      "id": 15,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "textMode": "auto"
+      },
+      "title": "🔴 Отключённых",
+      "type": "stat",
+      "targets": [
+        {
+          "rawSql": "SELECT count(*) FROM channels WHERE status != 1;",
+          "format": "table",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "datasource": {
+        "uid": "PCC52D03280B7034C",
+        "type": "grafana-postgresql-datasource"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 20,
+            "lineWidth": 2
+          },
+          "unit": "s"
+        }
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 4
+      },
+      "id": 6,
+      "title": "⏱ Latency по времени",
+      "type": "timeseries",
+      "targets": [
+        {
+          "rawSql": "SELECT to_timestamp(created_at) AS time, use_time AS \"Latency (s)\" FROM logs WHERE type = 2 AND created_at >= ${__from:date:seconds} AND created_at <= ${__to:date:seconds} ORDER BY created_at;",
+          "format": "table",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "datasource": {
+        "uid": "PCC52D03280B7034C",
+        "type": "grafana-postgresql-datasource"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        }
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 12
+      },
+      "id": 12,
+      "title": "📊 Статистика по моделям",
+      "type": "table",
+      "targets": [
+        {
+          "rawSql": "SELECT model_name AS \"Модель\", count(*) AS \"Запросов\", round(avg(use_time)) AS \"Avg Latency (с)\", sum(prompt_tokens) AS \"Prompt Tokens\", sum(completion_tokens) AS \"Completion Tokens\", sum(prompt_tokens + completion_tokens) AS \"Всего Tokens\", count(*) FILTER (WHERE type != 2) AS \"Ошибок\" FROM logs WHERE created_at >= ${__from:date:seconds} AND created_at <= ${__to:date:seconds} GROUP BY model_name ORDER BY count(*) DESC;",
+          "format": "table",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "datasource": {
+        "uid": "PCC52D03280B7034C",
+        "type": "grafana-postgresql-datasource"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        }
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 12
+      },
+      "id": 13,
+      "title": "📡 Статус каналов",
+      "type": "table",
+      "targets": [
+        {
+          "rawSql": "SELECT c.name AS \"Канал\", CASE c.status WHEN 1 THEN '🟢 Active' WHEN 2 THEN '🔴 Disabled' ELSE '⚪ Unknown' END AS \"Статус\", c.priority AS \"Приоритет\", c.weight AS \"Вес\", c.response_time AS \"Response Time (мс)\", c.models AS \"Модели\", COALESCE(l.req_count, 0) AS \"Запросов (24ч)\", COALESCE(l.err_count, 0) AS \"Ошибок (24ч)\" FROM channels c LEFT JOIN (SELECT channel_id, count(*) AS req_count, count(*) FILTER (WHERE type != 2) AS err_count FROM logs WHERE created_at > extract(epoch from now() - interval '24 hours') GROUP BY channel_id) l ON c.id = l.channel_id ORDER BY c.status, c.priority DESC;",
+          "format": "table",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "datasource": {
+        "uid": "PCC52D03280B7034C",
+        "type": "grafana-postgresql-datasource"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          }
+        }
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 20
+      },
+      "id": 11,
+      "title": "📋 Последние ошибки",
+      "type": "table",
+      "targets": [
+        {
+          "rawSql": "SELECT to_timestamp(created_at) AS \"Время\", model_name AS \"Модель\", COALESCE(channel_name, 'ch_' || channel_id::text) AS \"Канал\", use_time AS \"Latency (с)\", content AS \"Ошибка\" FROM logs WHERE type != 2 ORDER BY created_at DESC LIMIT 20;",
+          "format": "table",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 28
+      },
+      "id": 16,
+      "title": "💰 Расходы пользователей (из кэша, обновляется раз в сутки)",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "uid": "PCC52D03280B7034C",
+        "type": "grafana-postgresql-datasource"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "fillOpacity": 80,
+            "gradientMode": "none",
+            "lineWidth": 0,
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
             }
+          },
+          "unit": "currencyUSD",
+          "decimals": 4
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 24,
+        "x": 0,
+        "y": 29
+      },
+      "id": 17,
+      "options": {
+        "xField": "time",
+        "barWidth": 0.97,
+        "groupWidth": 0.7,
+        "stacking": "normal",
+        "fillOpacity": 80,
+        "gradientMode": "none",
+        "orientation": "auto",
+        "showValue": "never",
+        "xTickLabelRotation": -45,
+        "xTickLabelSpacing": 200,
+        "tooltip": {
+          "mode": "all",
+          "sort": "desc"
+        },
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": [
+            "sum"
+          ]
+        }
+      },
+      "title": "💸 Расходы по дням — ${selected_month}",
+      "type": "barchart",
+      "targets": [
+        {
+          "rawSql": "WITH\ntarget_month AS (\n  SELECT\n    DATE_TRUNC('month', ('${selected_month}-01')::date)::date AS first_day,\n    (DATE_TRUNC('month', ('${selected_month}-01')::date) + INTERVAL '1 month' - INTERVAL '1 day')::date AS last_day\n),\ntop_users AS (\n  SELECT d.username\n  FROM daily_spending_by_user_cache d\n  JOIN target_month tm ON d.day >= tm.first_day AND d.day <= tm.last_day\n  GROUP BY d.username\n  ORDER BY SUM(d.total_usd) DESC\n  LIMIT 8\n),\nall_labels AS (\n  SELECT username AS label FROM top_users\n  UNION ALL SELECT 'Others'\n),\nmonth_days AS (\n  SELECT generate_series(\n    (SELECT first_day::timestamptz FROM target_month),\n    (SELECT last_day::timestamptz FROM target_month),\n    INTERVAL '1 day'\n  )::date AS day\n),\nskeleton AS (\n  SELECT md.day, al.label AS metric FROM month_days md CROSS JOIN all_labels al\n),\nactuals AS (\n  SELECT\n    d.day,\n    CASE WHEN t.username IS NOT NULL THEN d.username ELSE 'Others' END AS metric,\n    SUM(d.total_usd)::float AS value\n  FROM daily_spending_by_user_cache d\n  JOIN target_month tm ON d.day >= tm.first_day AND d.day <= tm.last_day\n  LEFT JOIN top_users t ON d.username = t.username\n  GROUP BY d.day, CASE WHEN t.username IS NOT NULL THEN d.username ELSE 'Others' END\n)\nSELECT\n  s.day::timestamptz AS \"time\",\n  s.metric AS \"metric\",\n  COALESCE(a.value, 0) AS \"value\"\nFROM skeleton s\nLEFT JOIN actuals a ON s.day = a.day AND s.metric = a.metric\nORDER BY s.day, s.metric;",
+          "format": "time_series",
+          "refId": "A"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "joinByField",
+          "options": {
+            "byField": "time",
+            "mode": "outer"
+          }
+        }
+      ]
+    },
+    {
+      "datasource": {
+        "uid": "PCC52D03280B7034C",
+        "type": "grafana-postgresql-datasource"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "left",
+            "cellOptions": {
+              "type": "auto"
+            }
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Расходы ($)"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "currencyUSD"
+              },
+              {
+                "id": "decimals",
+                "value": 4
+              },
+              {
+                "id": "custom.align",
+                "value": "right"
+              },
+              {
+                "id": "custom.width",
+                "value": 160
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Запросов"
+            },
+            "properties": [
+              {
+                "id": "custom.align",
+                "value": "right"
+              },
+              {
+                "id": "custom.width",
+                "value": 120
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": ".*ИТОГО.*"
+            },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "colored-background"
+                }
+              },
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "dark-blue",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          }
         ]
-    },
-    "time": {
-        "from": "now-24h",
-        "to": "now"
-    },
-    "timepicker": {},
-    "timezone": "",
-    "title": "New API — LLM Requests",
-    "uid": "newapi-llm",
-    "version": 3
+      },
+      "gridPos": {
+        "h": 12,
+        "w": 24,
+        "x": 0,
+        "y": 39
+      },
+      "id": 18,
+      "options": {
+        "footer": {
+          "show": false
+        },
+        "sortBy": [
+          {
+            "displayName": "Период",
+            "desc": false
+          }
+        ]
+      },
+      "title": "📅 Расходы по месяцам / итого за год",
+      "type": "table",
+      "targets": [
+        {
+          "rawSql": "SELECT period AS \"Период\", total_usd AS \"Расходы ($)\", request_count AS \"Запросов\"\nFROM (\n  SELECT\n    TO_CHAR(DATE_TRUNC('month', day), 'YYYY-MM') AS period,\n    ROUND(SUM(total_usd)::numeric, 4)            AS total_usd,\n    SUM(request_count)::bigint                   AS request_count,\n    TO_CHAR(DATE_TRUNC('month', day), 'YYYY-MM') AS sort_key\n  FROM daily_spending_cache\n  GROUP BY DATE_TRUNC('month', day)\n\n  UNION ALL\n\n  SELECT\n    EXTRACT(YEAR FROM day)::text || ' — ИТОГО'  AS period,\n    ROUND(SUM(total_usd)::numeric, 4)            AS total_usd,\n    SUM(request_count)::bigint                   AS request_count,\n    EXTRACT(YEAR FROM day)::text || '-99'        AS sort_key\n  FROM daily_spending_cache\n  GROUP BY EXTRACT(YEAR FROM day)\n) t\nORDER BY sort_key;",
+          "format": "table",
+          "refId": "A"
+        }
+      ]
+    }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 38,
+  "style": "dark",
+  "tags": [
+    "newapi",
+    "llm",
+    "models"
+  ],
+  "templating": {
+    "list": [
+      {
+        "current": {
+          "selected": false,
+          "text": "2026-04",
+          "value": "2026-04"
+        },
+        "datasource": {
+          "type": "grafana-postgresql-datasource",
+          "uid": "PCC52D03280B7034C"
+        },
+        "definition": "SELECT DISTINCT TO_CHAR(day, 'YYYY-MM') AS month FROM daily_spending_cache ORDER BY month DESC",
+        "hide": 0,
+        "includeAll": false,
+        "label": "Месяц",
+        "multi": false,
+        "name": "selected_month",
+        "options": [],
+        "query": "SELECT DISTINCT TO_CHAR(day, 'YYYY-MM') AS month FROM daily_spending_cache ORDER BY month DESC",
+        "refresh": 2,
+        "regex": "",
+        "sort": 0,
+        "type": "query"
+      }
+    ]
+  },
+  "time": {
+    "from": "now-24h",
+    "to": "now"
+  },
+  "timepicker": {},
+  "timezone": "",
+  "title": "New API — LLM Requests",
+  "uid": "newapi-llm",
+  "version": 3
 }
