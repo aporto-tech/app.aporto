@@ -1,0 +1,59 @@
+name: Cron Jobs
+
+on:
+  schedule:
+    # Spending alerts — every hour
+    - cron: "0 * * * *"
+    # Weekly digest — every Monday at 9:00 UTC
+    - cron: "0 9 * * 1"
+  # Allow manual trigger from GitHub Actions UI
+  workflow_dispatch:
+    inputs:
+      job:
+        description: "Which job to run"
+        required: true
+        type: choice
+        options:
+          - spending-alerts
+          - weekly-digest
+
+jobs:
+  spending-alerts:
+    name: Spending Alerts
+    # Run on every-hour schedule OR manual trigger for spending-alerts
+    if: |
+      github.event_name == 'workflow_dispatch' && github.event.inputs.job == 'spending-alerts' ||
+      github.event_name == 'schedule' && github.event.schedule == '0 * * * *'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger spending alerts
+        run: |
+          response=$(curl -s -o /dev/null -w "%{http_code}" \
+            -X POST "${{ secrets.APP_URL }}/api/cron/spending-alerts" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            -H "Content-Type: application/json")
+          echo "Response: $response"
+          if [ "$response" != "200" ]; then
+            echo "ERROR: spending-alerts returned HTTP $response"
+            exit 1
+          fi
+
+  weekly-digest:
+    name: Weekly Digest
+    # Run on Monday 9am schedule OR manual trigger for weekly-digest
+    if: |
+      github.event_name == 'workflow_dispatch' && github.event.inputs.job == 'weekly-digest' ||
+      github.event_name == 'schedule' && github.event.schedule == '0 9 * * 1'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger weekly digest
+        run: |
+          response=$(curl -s -o /dev/null -w "%{http_code}" \
+            -X POST "${{ secrets.APP_URL }}/api/cron/weekly-digest" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            -H "Content-Type: application/json")
+          echo "Response: $response"
+          if [ "$response" != "200" ]; then
+            echo "ERROR: weekly-digest returned HTTP $response"
+            exit 1
+          fi

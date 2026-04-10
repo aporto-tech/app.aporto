@@ -81,15 +81,18 @@ model TopUpTransaction {
 }
 
 model Rule {
-  id           String   @id @default(cuid())
-  newApiUserId Int
-  tokenId      Int
-  tokenName    String
-  type         String   // "total_limit" | "daily_limit" | "model_allowlist"
-  limitUSD     Float?
-  models       String?
-  enabled      Boolean  @default(true)
-  createdAt    DateTime @default(now())
+  id             String    @id @default(cuid())
+  newApiUserId   Int
+  tokenId        Int
+  tokenName      String
+  type           String    // "total_limit" | "daily_limit" | "model_allowlist"
+  limitUSD       Float?
+  models         String?
+  enabled        Boolean   @default(true)
+  createdAt      DateTime  @default(now())
+  alert80SentAt  DateTime?
+  alert100SentAt DateTime?
+  webhookUrl     String?
 }
 
 model ServiceUsage {

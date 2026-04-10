@@ -161,6 +161,20 @@ export default function ActivityPage() {
         );
     }, [page, totalPages]);
 
+    const handleExportCsv = () => {
+        const params = new URLSearchParams();
+        if (filterAgent !== "All Agents") params.append("token_name", filterAgent);
+        if (filterModel !== "All Models") params.append("model_name", filterModel);
+        if (filterType !== "All Types") params.append("log_type", filterType);
+        if (startDate) params.append("start_date", (new Date(startDate).getTime() / 1000).toString());
+        if (endDate) {
+            const end = new Date(endDate);
+            end.setHours(23, 59, 59, 999);
+            params.append("end_date", (end.getTime() / 1000).toString());
+        }
+        window.location.href = `/api/activity/export?${params.toString()}`;
+    };
+
     return (
         <DashboardLayout>
             <div className={styles.container}>
@@ -234,6 +248,15 @@ export default function ActivityPage() {
                             </div>
                         </div>
                     </div>
+                </div>
+
+                <div className={styles.exportRow}>
+                    <button className={styles.exportBtn} onClick={handleExportCsv}>
+                        ↓ Export CSV
+                    </button>
+                    <button className={styles.exportBtn} onClick={() => window.print()}>
+                        ⎙ Print PDF
+                    </button>
                 </div>
 
                 <div className={styles.contentArea}>
@@ -342,6 +365,13 @@ export default function ActivityPage() {
                 @keyframes spin {
                     from { transform: rotate(0deg); }
                     to { transform: rotate(360deg); }
+                }
+                @media print {
+                    nav, header, [class*="sidebar"], [class*="DashboardLayout"] > *:not([class*="container"]) { display: none !important; }
+                    [class*="toolbar"], [class*="exportRow"] { display: none !important; }
+                    [class*="pagination"] { display: none !important; }
+                    body { background: #fff !important; color: #000 !important; }
+                    table { font-size: 11px; }
                 }
             `}</style>
         </DashboardLayout>

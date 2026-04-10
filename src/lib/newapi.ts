@@ -476,6 +476,105 @@ export async function newApiGetTodayTokenSpend(tokenId: number): Promise<number>
     }
 }
 
+/**
+ * Get all-time USD spend for a specific token (no date filter).
+ */
+export async function newApiGetTotalTokenSpend(tokenId: number): Promise<number> {
+    try {
+        const rows = await prisma.$queryRawUnsafe<any[]>(
+            `SELECT COALESCE(SUM(quota), 0) AS total_quota
+             FROM logs
+             WHERE token_id = $1
+               AND type = 2
+               AND (content = '' OR content IS NULL)`,
+            tokenId
+        );
+        return Number(rows[0]?.total_quota ?? 0) / 500_000;
+    } catch (err) {
+        console.error("[newapi] Error getting total token spend:", err);
+        return 0;
+    }
+}
+
+/**
+ * Get total USD spend for a user over the last 7 days.
+ */
+export async function newApiGetWeeklySpend(userId: number): Promise<number> {
+    try {
+        const sevenDaysAgo = Math.floor(Date.now() / 1000) - 7 * 86400;
+        const rows = await prisma.$queryRawUnsafe<any[]>(
+            `SELECT COALESCE(SUM(quota), 0) AS total_quota
+             FROM logs
+             WHERE user_id = $1
+               AND type = 2
+               AND (content = '' OR content IS NULL)
+               AND created_at >= $2`,
+            userId,
+            sevenDaysAgo
+        );
+        return Number(rows[0]?.total_quota ?? 0) / 500_000;
+    } catch (err) {
+        console.error("[newapi] Error getting weekly spend:", err);
+        return 0;
+    }
+}
+
+/**
+ * Get per-agent (token) USD spend for a user over the last 7 days.
+ * Returns array sorted by spend descending.
+ */
+export async function newApiGetWeeklyAgentSpend(userId: number): Promise<{ tokenName: string; usdAmount: number }[]> {
+    try {
+        const sevenDaysAgo = Math.floor(Date.now() / 1000) - 7 * 86400;
+        const rows = await prisma.$queryRawUnsafe<any[]>(
+            `SELECT token_name, COALESCE(SUM(quota), 0) AS total_quota
+             FROM logs
+             WHERE user_id = $1
+               AND type = 2
+               AND (content = '' OR content IS NULL)
+               AND created_at >= $2
+               AND token_name IS NOT NULL AND token_name != ''
+             GROUP BY token_name
+             ORDER BY total_quota DESC`,
+            userId,
+            sevenDaysAgo
+        );
+        return rows.map(r => ({
+            tokenName: r.token_name,
+            usdAmount: Number(r.total_quota) / 500_000,
+        }));
+    } catch (err) {
+        console.error("[newapi] Error getting weekly agent spend:", err);
+        return [];
+    }
+}
+
+/**
+ * Get the most-used model for a user over the last 7 days.
+ */
+export async function newApiGetTopModelThisWeek(userId: number): Promise<string> {
+    try {
+        const sevenDaysAgo = Math.floor(Date.now() / 1000) - 7 * 86400;
+        const rows = await prisma.$queryRawUnsafe<any[]>(
+            `SELECT model_name, COUNT(*) AS cnt
+             FROM logs
+             WHERE user_id = $1
+               AND type = 2
+               AND model_name IS NOT NULL AND model_name != ''
+               AND created_at >= $2
+             GROUP BY model_name
+             ORDER BY cnt DESC
+             LIMIT 1`,
+            userId,
+            sevenDaysAgo
+        );
+        return rows[0]?.model_name ?? "—";
+    } catch (err) {
+        console.error("[newapi] Error getting top model:", err);
+        return "—";
+    }
+}
+
 export async function newApiUpdateTokenQuota(opts: {
     tokenId: number;
     userId: number;

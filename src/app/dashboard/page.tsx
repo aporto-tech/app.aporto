@@ -85,6 +85,8 @@ export default function DashboardPage() {
     // Analytics state
     const [analyticsLogs, setAnalyticsLogs] = useState<any[]>([]);
     const [analyticsLoading, setAnalyticsLoading] = useState(false);
+    const [analyticsAgent, setAnalyticsAgent] = useState("All Agents");
+    const [analyticsAgents, setAnalyticsAgents] = useState<string[]>([]);
 
     // ─── Auth redirect ───────────────────────────────────────────────────────
     useEffect(() => {
@@ -142,12 +144,23 @@ export default function DashboardPage() {
         setAnalyticsLoading(true);
         const rangeSeconds: Record<string, number> = { "1h": 3600, "24h": 86400, "7d": 604800, "30d": 2592000 };
         const since = Math.floor(Date.now() / 1000) - (rangeSeconds[timeRange] ?? 86400);
-        fetch(`/api/newapi/logs?page=0&size=500&start_date=${since}`, { cache: "no-store" })
+        const params = new URLSearchParams({ page: "0", size: "500", start_date: String(since) });
+        if (analyticsAgent !== "All Agents") params.append("token_name", analyticsAgent);
+        fetch(`/api/newapi/logs?${params.toString()}`, { cache: "no-store" })
             .then(r => r.json())
             .then(d => { if (d.success) setAnalyticsLogs(d.logs ?? []); })
             .catch(() => {})
             .finally(() => setAnalyticsLoading(false));
-    }, [status, activeTab, timeRange]);
+    }, [status, activeTab, timeRange, analyticsAgent]);
+
+    // ─── Fetch filter options when analytics tab opens ────────────────────────
+    useEffect(() => {
+        if (status !== "authenticated" || activeTab !== "analytics") return;
+        fetch("/api/newapi/filters")
+            .then(r => r.json())
+            .then(d => { if (d.success) setAnalyticsAgents(d.tokens ?? []); })
+            .catch(() => {});
+    }, [status, activeTab]);
 
     // ─── Fetch keys to persist "Getting Started" checklist ───────────────────
     useEffect(() => {
@@ -530,16 +543,31 @@ export default function DashboardPage() {
 
                             return (
                                 <div>
-                                    {/* Time range selector */}
-                                    <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 14, gap: 6 }}>
-                                        {(["1h", "24h", "7d", "30d"] as const).map((r) => (
-                                            <button key={r} onClick={() => setTimeRange(r)} style={{
-                                                background: timeRange === r ? "#00dc82" : "#1a1a1a",
-                                                color: timeRange === r ? "#000" : "#888",
-                                                border: "none", borderRadius: 6, padding: "5px 12px",
-                                                fontSize: 12, fontWeight: 600, cursor: "pointer", transition: "all 0.15s",
-                                            }}>{r}</button>
-                                        ))}
+                                    {/* Filters row: time range + agent */}
+                                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14, gap: 8 }}>
+                                        {analyticsAgents.length > 0 && (
+                                            <select
+                                                value={analyticsAgent}
+                                                onChange={e => setAnalyticsAgent(e.target.value)}
+                                                style={{
+                                                    background: "#1a1a1a", border: "1px solid #333", color: "#ccc",
+                                                    borderRadius: 6, padding: "5px 10px", fontSize: 12, cursor: "pointer",
+                                                }}
+                                            >
+                                                <option value="All Agents">All Agents</option>
+                                                {analyticsAgents.map(t => <option key={t} value={t}>{t}</option>)}
+                                            </select>
+                                        )}
+                                        <div style={{ display: "flex", gap: 6, marginLeft: "auto" }}>
+                                            {(["1h", "24h", "7d", "30d"] as const).map((r) => (
+                                                <button key={r} onClick={() => setTimeRange(r)} style={{
+                                                    background: timeRange === r ? "#00dc82" : "#1a1a1a",
+                                                    color: timeRange === r ? "#000" : "#888",
+                                                    border: "none", borderRadius: 6, padding: "5px 12px",
+                                                    fontSize: 12, fontWeight: 600, cursor: "pointer", transition: "all 0.15s",
+                                                }}>{r}</button>
+                                            ))}
+                                        </div>
                                     </div>
 
                                     {analyticsLoading ? (
