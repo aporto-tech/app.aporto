@@ -1,67 +1,8 @@
 import { NextResponse } from "next/server";
 import crypto from "crypto";
-import { prisma } from "@/lib/prisma";
+import { safeTopUp } from "@/lib/topup";
 
 const NOWPAYMENTS_IPN_SECRET = process.env.NOWPAYMENTS_IPN_SECRET || "";
-const NEWAPI_ADMIN_TOKEN = process.env.NEWAPI_ADMIN_TOKEN || "";
-const NEWAPI_URL = process.env.NEWAPI_URL || "https://api.aporto.tech";
-
-// 1 USD at official API prices = 500,000 quota units in New-API.
-// Aporto is 30% cheaper than official prices, so $1 deposited
-// buys $1/0.70 ≈ $1.43 of official API usage.
-// Webhook must apply this same multiplier so the credited balance
-// matches what the UI promises (e.g. $5 deposit → $7.14 shown).
-const QUOTA_PER_USD = 500_000;
-const APORTO_DISCOUNT = 0.7; // user pays 70% of official price
-
-async function topUpUserQuota(newApiUserId: number, usdAmount: number) {
-    const adminHeaders = {
-        "Authorization": `Bearer ${NEWAPI_ADMIN_TOKEN}`,
-        "New-Api-User": "1",
-    };
-
-    // Fetch current user quota
-    const userRes = await fetch(`${NEWAPI_URL}/api/user/${newApiUserId}`, {
-        headers: adminHeaders,
-        cache: "no-store",
-    });
-
-    if (!userRes.ok) {
-        const errText = await userRes.text();
-        throw new Error(`Failed to fetch user ${newApiUserId}: ${userRes.status} — ${errText}`);
-    }
-
-    const userData = await userRes.json();
-    console.log(`NOWPayments: fetched user ${newApiUserId} data:`, JSON.stringify(userData));
-
-    const user = userData.data;
-    const currentQuota: number = user?.quota ?? 0;
-    const addQuota = Math.floor((usdAmount / APORTO_DISCOUNT) * QUOTA_PER_USD);
-    const newQuota = currentQuota + addQuota;
-
-    console.log(`NOWPayments: quota update — current: ${currentQuota}, adding: ${addQuota}, new: ${newQuota}`);
-
-    // PUT back the full user object with only quota changed.
-    // New-API does a full replace on PUT, so we must send all existing fields
-    // to avoid resetting username, group, etc.
-    const updateRes = await fetch(`${NEWAPI_URL}/api/user/`, {
-        method: "PUT",
-        headers: { ...adminHeaders, "Content-Type": "application/json" },
-        body: JSON.stringify({ ...user, quota: newQuota }),
-    });
-
-    if (!updateRes.ok) {
-        const errText = await updateRes.text();
-        throw new Error(`Failed to update quota for user ${newApiUserId}: ${errText}`);
-    }
-
-    const updateData = await updateRes.json();
-    if (!updateData.success) {
-        throw new Error(`New-API rejected quota update: ${updateData.message}`);
-    }
-
-    return { added: addQuota, newQuota, email: user.email ?? "" };
-}
 
 export async function POST(req: Request) {
     try {
@@ -113,27 +54,12 @@ export async function POST(req: Request) {
 
             console.log(`NOWPayments: payment ${payment_status} — user ${newApiUserId}, $${usdAmount}`);
 
-            const result = await topUpUserQuota(newApiUserId, usdAmount);
-            console.log(`NOWPayments: topped up user ${newApiUserId} by ${result.added} quota (new total: ${result.newQuota})`);
+            // safeTopUp inserts the TopUpTransaction row FIRST, then credits quota.
+            // Returns false if orderId already processed (idempotent).
+            const credited = await safeTopUp(String(order_id), newApiUserId, usdAmount);
+            console.log(`NOWPayments: order ${order_id} — ${credited ? "quota credited" : "duplicate event, skipped"}`);
 
-            // Persist to DB for transaction history (best-effort, don't fail the webhook if this errors)
-            try {
-                await prisma.topUpTransaction.create({
-                    data: {
-                        newApiUserId,
-                        email: result.email,
-                        orderId: String(order_id),
-                        usdPaid: usdAmount,
-                        creditedUSD: parseFloat((usdAmount / APORTO_DISCOUNT).toFixed(6)),
-                        quotaAdded: result.added,
-                    },
-                });
-            } catch (dbErr) {
-                // Duplicate orderId = already processed (e.g. race between webhooks), ignore
-                console.warn("NOWPayments: failed to save TopUpTransaction (may be duplicate):", dbErr);
-            }
-
-            return NextResponse.json({ success: true, message: "Balance updated" });
+            return NextResponse.json({ success: true, message: credited ? "Balance updated" : "Already processed" });
         }
 
         // Other statuses (waiting, confirming, partially_paid, etc.) — just acknowledge
