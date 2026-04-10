@@ -95,6 +95,27 @@ model Rule {
   webhookUrl     String?
 }
 
+model PromoCode {
+  id          String            @id @default(cuid())
+  code        String            @unique
+  creditUSD   Float
+  maxUses     Int               @default(1)
+  usedCount   Int               @default(0)
+  createdAt   DateTime          @default(now())
+  expiresAt   DateTime?
+  redemptions PromoRedemption[]
+}
+
+model PromoRedemption {
+  id          String    @id @default(cuid())
+  promoCodeId String
+  userId      String
+  redeemedAt  DateTime  @default(now())
+  promoCode   PromoCode @relation(fields: [promoCodeId], references: [id])
+
+  @@unique([promoCodeId, userId])
+}
+
 model ServiceUsage {
   id           String   @id @default(cuid())
   newApiUserId Int

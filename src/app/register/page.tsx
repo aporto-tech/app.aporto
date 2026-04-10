@@ -18,6 +18,8 @@ export default function RegisterPage() {
     const [isLoading, setIsLoading] = useState(false);
     // Countdown in seconds before "Resend code" becomes available again
     const [resendCountdown, setResendCountdown] = useState(0);
+    const [promoCode, setPromoCode] = useState("");
+    const [promoSuccess, setPromoSuccess] = useState("");
     const router = useRouter();
 
     // Tick down the resend cooldown every second
@@ -88,6 +90,20 @@ export default function RegisterPage() {
 
             if (res?.error) {
                 throw new Error("Login failed after verification. Please go to login page.");
+            }
+
+            // Redeem promo code if provided
+            if (promoCode.trim()) {
+                const promoRes = await fetch("/api/promo/redeem", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ code: promoCode.trim() }),
+                });
+                const promoData = await promoRes.json();
+                if (promoData.success) {
+                    setPromoSuccess(promoData.message);
+                    await new Promise(r => setTimeout(r, 1500));
+                }
             }
 
             router.push("/dashboard");
@@ -196,6 +212,20 @@ export default function RegisterPage() {
                                     />
                                 </div>
 
+                                <div className={styles.formGroup}>
+                                    <label className={styles.label}>
+                                        Promo Code <span style={{ color: "#475569", fontWeight: 400 }}>(optional)</span>
+                                    </label>
+                                    <input
+                                        type="text"
+                                        className={styles.input}
+                                        placeholder="e.g. BETA-A7K3M2"
+                                        value={promoCode}
+                                        onChange={(e) => setPromoCode(e.target.value.toUpperCase())}
+                                        style={{ textTransform: "uppercase" }}
+                                    />
+                                </div>
+
                                 <button
                                     type="submit"
                                     className={styles.signInButton}
@@ -224,6 +254,11 @@ export default function RegisterPage() {
                                 {error && (
                                     <div style={{ color: "#ff4d4d", marginBottom: "16px", textAlign: "center", fontSize: "14px" }}>
                                         {error}
+                                    </div>
+                                )}
+                                {promoSuccess && (
+                                    <div style={{ color: "#00dc82", marginBottom: "16px", textAlign: "center", fontSize: "14px" }}>
+                                        {promoSuccess}
                                     </div>
                                 )}
 
