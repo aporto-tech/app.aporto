@@ -38,6 +38,9 @@ export async function POST(req: Request) {
             // Stripe metadata values are always strings — parseInt can return NaN if missing.
             const newApiUserId = parseInt(session.metadata?.newApiUserId ?? "", 10);
             const usdAmount = (session.amount_total ?? 0) / 100;
+            // Stripe charges 2.9% + $0.30 per transaction. Aporto only receives the net.
+            // Quota is credited on what we actually receive, not the gross amount the user paid.
+            const netUsd = Math.max(0, usdAmount * (1 - 0.029) - 0.30);
             const packageId = session.metadata?.packageId ?? undefined;
 
             if (!newApiUserId || isNaN(newApiUserId)) {
@@ -49,10 +52,27 @@ export async function POST(req: Request) {
 
             // safeTopUp inserts the TopUpTransaction row FIRST, then credits quota.
             // If the row already exists (Stripe retry or duplicate event), returns false — no double-credit.
-            const credited = await safeTopUp(session.id, newApiUserId, usdAmount, packageId);
+            const credited = await safeTopUp(session.id, newApiUserId, usdAmount, packageId, netUsd);
             console.log(`Stripe: session ${session.id} — ${credited ? "quota credited" : "duplicate event, skipped"}`);
 
             return NextResponse.json({ success: true, message: credited ? "Balance updated" : "Already processed" });
+        }
+
+        if (event.type === "payment_intent.succeeded") {
+            const pi = event.data.object as Stripe.PaymentIntent;
+            // Only handle saved-card payments (checkout sessions are handled via checkout.session.completed)
+            if (pi.metadata?.source === "saved_card") {
+                const newApiUserId = parseInt(pi.metadata?.newApiUserId ?? "", 10);
+                if (!newApiUserId || isNaN(newApiUserId)) {
+                    console.error("Stripe webhook: cannot parse newApiUserId from PI metadata", pi.id, pi.metadata);
+                    return NextResponse.json({ success: false, message: "Bad metadata" }, { status: 400 });
+                }
+                const usdAmount = pi.amount / 100;
+                const netUsd = Math.max(0, usdAmount * (1 - 0.029) - 0.30);
+                const credited = await safeTopUp(pi.id, newApiUserId, usdAmount, "saved_card", netUsd);
+                console.log(`Stripe PI ${pi.id} — ${credited ? "quota credited" : "duplicate event, skipped"}`);
+            }
+            return NextResponse.json({ success: true, message: "Webhook received" });
         }
 
         // Other event types — acknowledge and ignore

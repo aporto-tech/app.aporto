@@ -42,6 +42,7 @@ export default function DashboardPage() {
     };
     const [timeRange, setTimeRange] = useState("24h");
     const [activeRulesCount, setActiveRulesCount] = useState(0);
+    const [dashboardRulesLoaded, setDashboardRulesLoaded] = useState(false);
 
     // Modal state
     const [showCreateModal, setShowCreateModal] = useState(false);
@@ -159,17 +160,28 @@ export default function DashboardPage() {
                     if (data.tokens.length > 0) {
                         setIsApiKeyCreated(true);
                     }
-                    const activeRules = data.tokens.filter((t: any) => t.remain_quota > 0 || !t.unlimited_quota);
-                    setActiveRulesCount(activeRules.length);
-                    if (activeRules.length > 0) {
-                        setIsRuleCreated(true);
-                    }
                 }
             } catch {
                 // silently fail
             }
         };
         fetchKeys();
+    }, [status, session]);
+
+    // ─── Fetch rules for Governance widget + Getting Started checklist ────────
+    useEffect(() => {
+        if (status !== "authenticated") return;
+        fetch("/api/rules", { cache: "no-store" })
+            .then(r => r.json())
+            .then(d => {
+                if (d.success) {
+                    const count = (d.rules ?? []).length;
+                    setActiveRulesCount(count);
+                    if (count > 0) setIsRuleCreated(true);
+                }
+            })
+            .catch(() => {})
+            .finally(() => setDashboardRulesLoaded(true));
     }, [status, session]);
 
     // ─── Close modal on Escape ───────────────────────────────────────────────
@@ -467,7 +479,7 @@ export default function DashboardPage() {
                                             className={styles.itemButton}
                                             onClick={() => {
                                                 if (item.num === 1) openCreateModal();
-                                                else if (item.num === 2) openRuleModal();
+                                                else if (item.num === 2) router.push("/rules");
                                                 else alert(`${item.title} – coming soon!`);
                                             }}
                                         >
@@ -642,7 +654,7 @@ export default function DashboardPage() {
                                 </span>
                                 <button
                                     style={{ background: "none", border: "none", color: "#00dc82", cursor: "pointer", fontSize: 13 }}
-                                    onClick={openRuleModal}
+                                    onClick={() => router.push("/rules")}
                                 >
                                     + Add
                                 </button>

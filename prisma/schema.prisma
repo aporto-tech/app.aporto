@@ -41,9 +41,14 @@ model User {
   emailVerified DateTime?
   image         String?
   password      String?
-  newApiUserId  Int?      // Links this NextAuth user to their New-API account ID
-  accounts      Account[]
-  sessions      Session[]
+  newApiUserId                  Int?
+  stripeCustomerId              String?
+  stripePaymentMethodId         String?
+  stripePaymentMethodBrand      String?
+  stripePaymentMethodLast4      String?
+  stripePaymentMethodExpiry     String?
+  accounts                      Account[]
+  sessions                      Session[]
 }
 
 model PasswordResetToken {

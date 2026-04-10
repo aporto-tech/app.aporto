@@ -69,8 +69,12 @@ export async function safeTopUp(
     newApiUserId: number,
     usdPaid: number,
     packageId?: string | null,
+    netUsd?: number,
 ): Promise<boolean> {
-    const creditedUSD = parseFloat((usdPaid / APORTO_DISCOUNT).toFixed(6));
+    // netUsd: what Aporto actually receives after payment provider fees.
+    // Defaults to usdPaid when not provided (e.g. crypto has no fee).
+    const quotaBasis = netUsd !== undefined ? netUsd : usdPaid;
+    const creditedUSD = parseFloat((quotaBasis / APORTO_DISCOUNT).toFixed(6));
 
     let quotaAdded = 0;
     let email = "";
@@ -91,7 +95,7 @@ export async function safeTopUp(
         });
 
         // Step 2: Credit quota — now that the row is reserved, double-credit is impossible.
-        const result = await topUpUserQuota(newApiUserId, usdPaid);
+        const result = await topUpUserQuota(newApiUserId, quotaBasis);
         quotaAdded = result.added;
         email = result.email;
 

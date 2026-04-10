@@ -3,10 +3,11 @@
 import React, { useEffect, useState, useCallback } from "react";import { useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import DashboardLayout from "../components/DashboardLayout";
+import AddFundsModal from "../components/AddFundsModal";
+import SavedCardSection from "../components/SavedCardSection";
 import styles from "./settings.module.css";
 import dashboardStyles from "../dashboard.module.css";
 import { Suspense } from "react";
-import { FaCreditCard } from "react-icons/fa";
 
 interface ApiToken {
     id: number;
@@ -49,8 +50,8 @@ function SettingsContent() {
     const [generatedKey, setGeneratedKey] = useState("");
     const [showKeyCreatedModal, setShowKeyCreatedModal] = useState(false);
 
-    // Payment Modal state
-    const [showPaymentModal, setShowPaymentModal] = useState(false);
+    // Add Funds Modal state
+    const [showAddFundsModal, setShowAddFundsModal] = useState(false);
 
     // History tab state
     interface TopUp { id: string; usdPaid: number; creditedUSD: number; createdAt: string; orderId: string; }
@@ -237,14 +238,28 @@ function SettingsContent() {
                 {activeTab === "billing" && (
                     <div className={styles.billingCard}>
                         <div className={styles.cardHeader}>
-                            <h2>Payment Methods</h2>
-                            <p>Manage your payment methods for billing and subscriptions</p>
+                            <h2>Billing</h2>
+                            <p>Aporto uses a prepaid credits model — add funds, then spend them on API calls.</p>
                         </div>
+
+                        {/* Add Funds */}
                         <div className={styles.billingEmpty}>
                             <div className={styles.cardIcon}>💳</div>
-                            <h3 className={styles.billingTitle}>No payment method</h3>
-                            <p className={styles.billingDesc}>Add a payment method to enable automatic billing</p>
-                            <button className={styles.createBtn} onClick={() => setShowPaymentModal(true)}>+ Add Payment Method</button>
+                            <h3 className={styles.billingTitle}>Prepaid Credits</h3>
+                            <p className={styles.billingDesc}>
+                                There are no subscriptions or automatic charges. You control your spend by
+                                topping up manually via crypto (no fees) or card (+2.9% Stripe fee).
+                            </p>
+                            <button className={styles.createBtn} onClick={() => setShowAddFundsModal(true)}>+ Add Funds</button>
+                        </div>
+
+                        {/* Saved Card */}
+                        <div style={{ marginTop: "32px" }}>
+                            <h3 style={{ fontSize: "16px", fontWeight: 600, marginBottom: "8px" }}>Saved Card</h3>
+                            <p style={{ color: "#64748b", fontSize: "14px", marginBottom: "16px" }}>
+                                Save a card for instant one-click top-ups — no redirect to Stripe Checkout.
+                            </p>
+                            <SavedCardSection />
                         </div>
                     </div>
                 )}
@@ -276,7 +291,7 @@ function SettingsContent() {
                                                         <td>{new Date(tx.createdAt).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" })}</td>
                                                         <td>${tx.usdPaid.toFixed(2)}</td>
                                                         <td className={styles.txTopup}>+${tx.creditedUSD.toFixed(2)}</td>
-                                                        <td style={{ color: "#64748b", fontSize: "13px" }}>Crypto (NOWPayments)</td>
+                                                        <td style={{ color: "#64748b", fontSize: "13px" }}>{tx.orderId?.startsWith("cs_") ? "Card (Stripe)" : "Crypto (NOWPayments)"}</td>
                                                     </tr>
                                                 ))}
                                             </tbody>
@@ -384,70 +399,9 @@ function SettingsContent() {
                 </div>
             )}
 
-            {/* Payment Method Modal */}
-            {showPaymentModal && (
-                <div className={dashboardStyles.modalOverlay} onClick={(e) => e.target === e.currentTarget && setShowPaymentModal(false)}>
-                    <div className={styles.paymentModal}>
-                        <div className={styles.paymentModalHeader}>
-                            <div>
-                                <h2>Add Payment Method</h2>
-                                <p>Enter your card details to add a new payment method.</p>
-                            </div>
-                            <button className={styles.paymentCloseBtn} onClick={() => setShowPaymentModal(false)}>✕</button>
-                        </div>
-
-                        <div className={styles.paymentDivider}></div>
-
-                        <div className={styles.paymentFormGroup}>
-                            <label className={styles.paymentLabel}>Card number</label>
-                            <div className={styles.paymentInputWrapper}>
-                                <input type="text" className={styles.paymentInput} placeholder="1234 1234 1234 1234" />
-                                <div className={styles.cardIcons}>
-                                    <FaCreditCard size={24} color="#64748b" style={{ marginRight: 4 }} />
-                                </div>
-                            </div>
-                        </div>
-
-                        <div className={styles.paymentRow}>
-                            <div className={styles.paymentCol}>
-                                <label className={styles.paymentLabel}>Expiry date</label>
-                                <input type="text" className={styles.paymentInput} placeholder="MM / YY" />
-                            </div>
-                            <div className={styles.paymentCol}>
-                                <label className={styles.paymentLabel}>Security code</label>
-                                <div className={styles.paymentInputWrapper}>
-                                    <input type="text" className={styles.paymentInput} placeholder="CVC" />
-                                    <span style={{ position: 'absolute', right: 16, color: '#94a3b8', display: 'flex', alignItems: 'center' }}>
-                                        <FaCreditCard size={18} />
-                                    </span>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div className={styles.paymentFormGroup}>
-                            <label className={styles.paymentLabel}>Country</label>
-                            <select className={styles.paymentSelect} defaultValue="Netherlands">
-                                <option value="Netherlands">Netherlands</option>
-                                <option value="United States">United States</option>
-                                <option value="United Kingdom">United Kingdom</option>
-                                <option value="Germany">Germany</option>
-                                <option value="France">France</option>
-                            </select>
-                        </div>
-
-                        <div className={styles.paymentDisclaimer}>
-                            By providing your card information, you allow Aporto to charge your card for future payments in accordance with their terms.
-                        </div>
-
-                        <div className={styles.paymentFooter}>
-                            <button className={styles.paymentCancelBtn} onClick={() => setShowPaymentModal(false)}>Cancel</button>
-                            <button className={styles.paymentAddBtn} onClick={() => {
-                                alert("Card added successfully!");
-                                setShowPaymentModal(false);
-                            }}>Add Card</button>
-                        </div>
-                    </div>
-                </div>
+            {/* Add Funds Modal */}
+            {showAddFundsModal && (
+                <AddFundsModal onClose={() => setShowAddFundsModal(false)} />
             )}
         </DashboardLayout>
     );

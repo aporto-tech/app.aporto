@@ -59,10 +59,18 @@ export const authOptions: NextAuthOptions = {
     },
     debug: process.env.NODE_ENV === "development",
     callbacks: {
-        async jwt({ token, user }) {
+        async jwt({ token, user, trigger }) {
             if (user) {
                 token.id = user.id;
                 token.newApiUserId = (user as any).newApiUserId;
+            }
+            // On session update or sign-in, refresh stripeCustomerId from DB
+            if (trigger === "update" || user) {
+                const dbUser = await prisma.user.findUnique({
+                    where: { id: (token.id ?? user?.id) as string },
+                    select: { stripeCustomerId: true },
+                });
+                token.stripeCustomerId = dbUser?.stripeCustomerId ?? null;
             }
             return token;
         },
@@ -70,6 +78,7 @@ export const authOptions: NextAuthOptions = {
             if (session.user) {
                 (session.user as any).id = token.id;
                 (session.user as any).newApiUserId = token.newApiUserId;
+                (session.user as any).stripeCustomerId = token.stripeCustomerId;
             }
             return session;
         },

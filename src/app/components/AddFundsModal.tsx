@@ -1,8 +1,11 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import { loadStripe } from "@stripe/stripe-js";
 import styles from "./addFundsModal.module.css";
 import { FaBitcoin, FaCreditCard } from "react-icons/fa";
+
+const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY ?? "");
 
 interface AddFundsModalProps {
     onClose: () => void;
@@ -14,19 +17,22 @@ const PACKAGES = [
     { id: "pkg_1250", price: 1250 },
 ];
 
-const STRIPE_MIN = 5; // $5 minimum for card (Stripe fee: 2.9% + $0.30 makes sub-$5 economically negative)
+const STRIPE_MIN = 5;
 
-// Aporto is 30% cheaper than official API prices.
-// So $1 deposited = $1 / 0.70 ≈ $1.43 of official API usage.
 const officialValue = (deposit: number) => deposit / 0.7;
 const savings = (deposit: number) => officialValue(deposit) - deposit;
-// Net value after Stripe's 2.9% + $0.30 fee
 const officialValueAfterCardFee = (deposit: number) => {
     const net = deposit * (1 - 0.029) - 0.30;
     return net > 0 ? officialValue(net) : 0;
 };
 
-type PaymentMethod = "crypto" | "card";
+type PaymentMethod = "crypto" | "card" | "saved_card";
+
+interface SavedCardInfo {
+    brand: string;
+    last4: string;
+    expiry: string;
+}
 
 export default function AddFundsModal({ onClose }: AddFundsModalProps) {
     const [selectedPackage, setSelectedPackage] = useState<string | null>(PACKAGES[0].id);
@@ -34,19 +40,39 @@ export default function AddFundsModal({ onClose }: AddFundsModalProps) {
     const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("crypto");
     const [isLoadingCrypto, setIsLoadingCrypto] = useState(false);
     const [isLoadingCard, setIsLoadingCard] = useState(false);
+    const [isLoadingSavedCard, setIsLoadingSavedCard] = useState(false);
     const [errorCrypto, setErrorCrypto] = useState("");
     const [errorCard, setErrorCard] = useState("");
+    const [errorSavedCard, setErrorSavedCard] = useState("");
+    const [savedCard, setSavedCard] = useState<SavedCardInfo | null>(null);
+    const [savedCardLoading, setSavedCardLoading] = useState(true);
+    const [successMessage, setSuccessMessage] = useState("");
 
-    // Active amount: custom input wins if non-empty and valid
+    useEffect(() => {
+        fetch("/api/payments/stripe/saved-method")
+            .then(r => r.json())
+            .then(d => {
+                if (d.success && d.hasSavedCard) {
+                    setSavedCard({ brand: d.brand, last4: d.last4, expiry: d.expiry });
+                }
+            })
+            .catch(() => {})
+            .finally(() => setSavedCardLoading(false));
+    }, []);
+
     const customNum = parseFloat(customAmount);
     const isCustomActive = customAmount !== "" && !isNaN(customNum) && customNum > 0;
     const activeAmount = isCustomActive
         ? customNum
         : PACKAGES.find(p => p.id === selectedPackage)?.price ?? 0;
 
-    const isLoading = paymentMethod === "crypto" ? isLoadingCrypto : isLoadingCard;
-    const error = paymentMethod === "crypto" ? errorCrypto : errorCard;
-    const cardMinError = paymentMethod === "card" && activeAmount > 0 && activeAmount < STRIPE_MIN
+    const isLoading = paymentMethod === "crypto" ? isLoadingCrypto
+        : paymentMethod === "card" ? isLoadingCard
+        : isLoadingSavedCard;
+    const error = paymentMethod === "crypto" ? errorCrypto
+        : paymentMethod === "card" ? errorCard
+        : errorSavedCard;
+    const cardMinError = (paymentMethod === "card" || paymentMethod === "saved_card") && activeAmount > 0 && activeAmount < STRIPE_MIN
         ? `Minimum $${STRIPE_MIN} for card payments`
         : "";
 
@@ -55,6 +81,7 @@ export default function AddFundsModal({ onClose }: AddFundsModalProps) {
         setCustomAmount("");
         setErrorCrypto("");
         setErrorCard("");
+        setErrorSavedCard("");
     };
 
     const handleCustomChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -62,22 +89,28 @@ export default function AddFundsModal({ onClose }: AddFundsModalProps) {
         setSelectedPackage(null);
         setErrorCrypto("");
         setErrorCard("");
+        setErrorSavedCard("");
     };
 
     const handleSelectMethod = (method: PaymentMethod) => {
         setPaymentMethod(method);
         setErrorCrypto("");
         setErrorCard("");
+        setErrorSavedCard("");
     };
 
     const handleBuy = async () => {
         if (activeAmount <= 0) {
-            if (paymentMethod === "crypto") setErrorCrypto("Please select a package or enter an amount.");
-            else setErrorCard("Please select a package or enter an amount.");
+            const msg = "Please select a package or enter an amount.";
+            if (paymentMethod === "crypto") setErrorCrypto(msg);
+            else if (paymentMethod === "card") setErrorCard(msg);
+            else setErrorSavedCard(msg);
             return;
         }
-        if (paymentMethod === "card" && activeAmount < STRIPE_MIN) {
-            setErrorCard(`Minimum $${STRIPE_MIN} for card payments.`);
+        if ((paymentMethod === "card" || paymentMethod === "saved_card") && activeAmount < STRIPE_MIN) {
+            const msg = `Minimum $${STRIPE_MIN} for card payments.`;
+            if (paymentMethod === "card") setErrorCard(msg);
+            else setErrorSavedCard(msg);
             return;
         }
 
@@ -103,7 +136,7 @@ export default function AddFundsModal({ onClose }: AddFundsModalProps) {
             } finally {
                 setIsLoadingCrypto(false);
             }
-        } else {
+        } else if (paymentMethod === "card") {
             setIsLoadingCard(true);
             setErrorCard("");
             try {
@@ -123,16 +156,80 @@ export default function AddFundsModal({ onClose }: AddFundsModalProps) {
             } finally {
                 setIsLoadingCard(false);
             }
+        } else {
+            // Saved card: one-click charge via PaymentIntent
+            setIsLoadingSavedCard(true);
+            setErrorSavedCard("");
+            try {
+                const stripe = await stripePromise;
+                if (!stripe) {
+                    setErrorSavedCard("Stripe not loaded. Please refresh and try again.");
+                    return;
+                }
+
+                // Step 1: create PaymentIntent on server
+                const ciRes = await fetch("/api/payments/stripe/charge-saved", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ amount: activeAmount }),
+                });
+                const ciData = await ciRes.json();
+                if (!ciData.success || !ciData.clientSecret) {
+                    setErrorSavedCard(ciData.message || "Failed to initiate payment.");
+                    return;
+                }
+
+                // Step 2: confirm on client (handles 3DS if needed)
+                const { paymentIntent, error: stripeError } = await stripe.confirmCardPayment(ciData.clientSecret);
+                if (stripeError) {
+                    setErrorSavedCard(stripeError.message ?? "Payment failed.");
+                    return;
+                }
+
+                if (paymentIntent?.status !== "succeeded") {
+                    setErrorSavedCard(`Payment not completed. Status: ${paymentIntent?.status}`);
+                    return;
+                }
+
+                // Step 3: confirm on server → credit quota
+                const confirmRes = await fetch("/api/payments/stripe/charge-saved/confirm", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ paymentIntentId: paymentIntent.id }),
+                });
+                const confirmData = await confirmRes.json();
+                if (!confirmData.success) {
+                    setErrorSavedCard(confirmData.message || "Payment succeeded but quota not credited. Contact support.");
+                    return;
+                }
+
+                setSuccessMessage(`$${activeAmount.toFixed(2)} added to your balance!`);
+            } catch {
+                setErrorSavedCard("Something went wrong. Please try again.");
+            } finally {
+                setIsLoadingSavedCard(false);
+            }
         }
     };
 
     const buttonLabel = () => {
+        if (successMessage) return successMessage;
         if (activeAmount <= 0) return "Select an amount";
         if (paymentMethod === "crypto") {
             return isLoadingCrypto ? "Processing..." : `Pay $${activeAmount.toFixed(2)} with Crypto`;
         }
-        return isLoadingCard ? "Processing..." : `Pay $${activeAmount.toFixed(2)} with Card`;
+        if (paymentMethod === "card") {
+            return isLoadingCard ? "Processing..." : `Pay $${activeAmount.toFixed(2)} with Card`;
+        }
+        // saved_card
+        if (isLoadingSavedCard) return "Processing...";
+        const brand = savedCard?.brand ? savedCard.brand.charAt(0).toUpperCase() + savedCard.brand.slice(1) : "Card";
+        return `Pay $${activeAmount.toFixed(2)} · ${brand} ••••${savedCard?.last4}`;
     };
+
+    const savedCardLabel = savedCard
+        ? `${savedCard.brand.charAt(0).toUpperCase() + savedCard.brand.slice(1)} ••••${savedCard.last4}`
+        : "Saved Card";
 
     return (
         <div className={styles.modalOverlay} onClick={(e) => {
@@ -162,7 +259,7 @@ export default function AddFundsModal({ onClose }: AddFundsModalProps) {
                     <span className={styles.currencyPrefix}>$</span>
                     <input
                         type="number"
-                        min={paymentMethod === "card" ? STRIPE_MIN : 1}
+                        min={(paymentMethod === "card" || paymentMethod === "saved_card") ? STRIPE_MIN : 1}
                         step="1"
                         placeholder="e.g. 200"
                         value={customAmount}
@@ -171,14 +268,12 @@ export default function AddFundsModal({ onClose }: AddFundsModalProps) {
                     />
                 </div>
 
-                {/* Card minimum inline warning — near amount field, not near button */}
                 {cardMinError && (
                     <div style={{ color: "#ef4444", marginBottom: "12px", fontSize: "13px" }}>
                         {cardMinError}
                     </div>
                 )}
 
-                {/* Payment method selector — above savings callout so method affects the value shown */}
                 <div className={styles.sectionTitle}>Payment Method</div>
                 <div className={styles.paymentGrid}>
                     <div
@@ -200,19 +295,32 @@ export default function AddFundsModal({ onClose }: AddFundsModalProps) {
                         <div className={styles.paymentIcon}>
                             <FaCreditCard size={26} />
                         </div>
-                        <span>Card</span>
+                        <span>New Card</span>
                         <span style={{ fontSize: "11px", color: paymentMethod === "card" ? "#00dc82" : "#52525b" }}>
                             +2.9% card fee
                         </span>
                     </div>
+                    {!savedCardLoading && savedCard && (
+                        <div
+                            className={`${styles.paymentMethod} ${paymentMethod === "saved_card" ? styles.selected : ""}`}
+                            onClick={() => handleSelectMethod("saved_card")}
+                        >
+                            <div className={styles.paymentIcon}>
+                                <FaCreditCard size={26} />
+                            </div>
+                            <span>{savedCardLabel}</span>
+                            <span style={{ fontSize: "11px", color: paymentMethod === "saved_card" ? "#00dc82" : "#52525b" }}>
+                                One-click
+                            </span>
+                        </div>
+                    )}
                 </div>
 
-                {/* Savings callout — adjusts for card fee when card method is selected */}
-                {activeAmount > 0 && !cardMinError && (
+                {activeAmount > 0 && !cardMinError && !successMessage && (
                     <div className={styles.savingsCallout}>
                         <span className={styles.savingsLabel}>You get</span>
                         <span className={styles.savingsValue}>
-                            {paymentMethod === "card"
+                            {(paymentMethod === "card" || paymentMethod === "saved_card")
                                 ? `$${officialValueAfterCardFee(activeAmount).toFixed(2)}`
                                 : `$${officialValue(activeAmount).toFixed(2)}`}
                         </span>
@@ -221,10 +329,25 @@ export default function AddFundsModal({ onClose }: AddFundsModalProps) {
                             <span className={styles.savingsPill}>Save ${savings(activeAmount).toFixed(2)}</span>
                         )}
                         <span className={styles.savingsSubtext}>
-                            {paymentMethod === "card"
+                            {(paymentMethod === "card" || paymentMethod === "saved_card")
                                 ? "30% off official LLM prices (after 2.9% card processing fee)"
                                 : "30% off official LLM prices"}
                         </span>
+                    </div>
+                )}
+
+                {successMessage && (
+                    <div style={{
+                        background: "rgba(0,220,130,0.1)",
+                        border: "1px solid rgba(0,220,130,0.3)",
+                        borderRadius: "10px",
+                        padding: "16px",
+                        marginBottom: "16px",
+                        color: "#00dc82",
+                        textAlign: "center",
+                        fontWeight: 600,
+                    }}>
+                        {successMessage}
                     </div>
                 )}
 
@@ -234,14 +357,19 @@ export default function AddFundsModal({ onClose }: AddFundsModalProps) {
                     </div>
                 )}
 
-                <button
-                    className={styles.buyButton}
-                    onClick={handleBuy}
-                    disabled={isLoading || activeAmount <= 0 || !!cardMinError}
-                >
-                    {buttonLabel()}
-                </button>
+                {successMessage ? (
+                    <button className={styles.buyButton} onClick={onClose}>Close</button>
+                ) : (
+                    <button
+                        className={styles.buyButton}
+                        onClick={handleBuy}
+                        disabled={isLoading || activeAmount <= 0 || !!cardMinError}
+                    >
+                        {buttonLabel()}
+                    </button>
+                )}
             </div>
         </div>
     );
 }
+
