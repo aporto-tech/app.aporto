@@ -203,7 +203,7 @@ export default function AddFundsModal({ onClose }: AddFundsModalProps) {
                     return;
                 }
 
-                setSuccessMessage(`$${activeAmount.toFixed(2)} added to your balance!`);
+                setSuccessMessage(`+$${officialValueAfterCardFee(activeAmount).toFixed(2)} in API credits added to your balance!`);
             } catch {
                 setErrorSavedCard("Something went wrong. Please try again.");
             } finally {

@@ -60,6 +60,7 @@ export default function DashboardPage() {
     const [isCreatingKey, setIsCreatingKey] = useState(false);
     const [createKeyError, setCreateKeyError] = useState("");
     const [isFirstTransactionCompleted, setIsFirstTransactionCompleted] = useState(false);
+    const [isPaymentMethodAdded, setIsPaymentMethodAdded] = useState(false);
 
     // Rule Modal state
     const [userKeys, setUserKeys] = useState<any[]>([]);
@@ -182,6 +183,15 @@ export default function DashboardPage() {
             })
             .catch(() => {})
             .finally(() => setDashboardRulesLoaded(true));
+    }, [status, session]);
+
+    // ─── Check if payment method is saved (saved card or past top-up) ─────────
+    useEffect(() => {
+        if (status !== "authenticated") return;
+        fetch("/api/payments/stripe/saved-method")
+            .then(r => r.json())
+            .then(d => { if (d.success && d.hasSavedCard) setIsPaymentMethodAdded(true); })
+            .catch(() => {});
     }, [status, session]);
 
     // ─── Close modal on Escape ───────────────────────────────────────────────
@@ -356,7 +366,7 @@ export default function DashboardPage() {
             title: "Add Payment Method",
             desc: "Continue after your $5 free credits",
             action: "Add",
-            completed: false,
+            completed: isPaymentMethodAdded,
         },
     ];
 
