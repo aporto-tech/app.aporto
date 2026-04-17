@@ -1,0 +1,377 @@
+/* ============================================================
+   THE AI CONQUEST MAP — Dark Fantasy Stylesheet
+   Inspired by: variant B (Dark Fantasy War Room)
+   Palette: obsidian black, molten gold borders, electric blue
+   for claimed, blood-red for Dark Lords, purple mist for fog.
+   ============================================================ */
+
+/* ── Base ─────────────────────────────────────────────────── */
+
+.page {
+    min-height: 100vh;
+    background-color: #08080f;
+    background-image:
+        radial-gradient(ellipse at 20% 20%, rgba(200, 140, 30, 0.04) 0%, transparent 60%),
+        radial-gradient(ellipse at 80% 80%, rgba(80, 0, 120, 0.06) 0%, transparent 60%);
+    color: #c8b89a;
+    position: relative;
+    overflow-x: hidden;
+}
+
+/* Subtle particle layer — thin lines like a hex grid */
+.particles {
+    position: fixed;
+    inset: 0;
+    background-image:
+        linear-gradient(rgba(200, 140, 30, 0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(200, 140, 30, 0.03) 1px, transparent 1px);
+    background-size: 60px 60px;
+    pointer-events: none;
+    z-index: 0;
+}
+
+/* ── Header ───────────────────────────────────────────────── */
+
+.header {
+    position: relative;
+    z-index: 1;
+    text-align: center;
+    padding: 3rem 1.5rem 1.5rem;
+    border-bottom: 1px solid rgba(200, 140, 30, 0.2);
+    background: linear-gradient(to bottom, rgba(200, 140, 30, 0.06), transparent);
+}
+
+.headerInner {
+    max-width: 900px;
+    margin: 0 auto;
+}
+
+.weekLabel {
+    font-size: 0.8rem;
+    letter-spacing: 0.35em;
+    color: rgba(200, 140, 30, 0.6);
+    margin: 0 0 0.75rem;
+    text-transform: uppercase;
+}
+
+.title {
+    font-size: clamp(1.8rem, 5vw, 3.5rem);
+    font-weight: 900;
+    letter-spacing: 0.08em;
+    margin: 0 0 0.75rem;
+    background: linear-gradient(135deg, #f5d060 0%, #c8962a 40%, #e8b840 80%, #f5d060 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    text-shadow: none;
+    filter: drop-shadow(0 0 24px rgba(200, 140, 30, 0.4));
+}
+
+.weekSub {
+    font-size: 0.95rem;
+    font-style: italic;
+    color: rgba(200, 184, 154, 0.65);
+    margin: 0;
+}
+
+.statHighlight {
+    color: #e8b840;
+    font-style: normal;
+    font-weight: 600;
+}
+
+/* ── Legend ───────────────────────────────────────────────── */
+
+.legend {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 1.25rem;
+    padding: 0.9rem 1.5rem;
+    border-bottom: 1px solid rgba(200, 140, 30, 0.12);
+    font-size: 0.85rem;
+    position: relative;
+    z-index: 1;
+}
+
+.legendClaimed    { color: #4db8ff; }
+.legendDarkLord   { color: #ff4f4f; }
+.legendFounding   { color: #c8962a; }
+.legendFog        { color: #4a4a5e; }
+
+/* ── Main / Kingdoms Grid ─────────────────────────────────── */
+
+.main {
+    position: relative;
+    z-index: 1;
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 2rem 1.25rem 3rem;
+}
+
+.kingdoms {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 1.25rem;
+}
+
+/* ── Kingdom Card ─────────────────────────────────────────── */
+
+.kingdom {
+    border-radius: 6px;
+    border: 1px solid rgba(200, 140, 30, 0.28);
+    background: rgba(12, 12, 22, 0.92);
+    overflow: hidden;
+    transition: border-color 0.25s, box-shadow 0.25s;
+    box-shadow: 0 0 18px rgba(200, 140, 30, 0.06);
+}
+
+.kingdomActive {
+    border-color: rgba(200, 140, 30, 0.45);
+    box-shadow: 0 0 24px rgba(200, 140, 30, 0.12),
+                inset 0 0 40px rgba(200, 140, 30, 0.02);
+}
+
+.kingdomDark {
+    border-color: rgba(200, 50, 50, 0.25);
+    box-shadow: 0 0 18px rgba(180, 30, 30, 0.08);
+}
+
+.kingdom:hover {
+    border-color: rgba(200, 140, 30, 0.65);
+    box-shadow: 0 0 32px rgba(200, 140, 30, 0.18);
+}
+
+.kingdomHeader {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 1rem 1rem 0.6rem;
+    border-bottom: 1px solid rgba(200, 140, 30, 0.12);
+}
+
+.kingdomName {
+    font-size: 0.95rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    color: #e8c060;
+    margin: 0;
+    line-height: 1.3;
+}
+
+.kingdomStats {
+    flex-shrink: 0;
+    font-size: 0.75rem;
+    font-family: var(--font-geist-mono), monospace;
+    text-align: right;
+}
+
+.kingdomClaimed {
+    color: #4db8ff;
+    font-weight: 600;
+}
+
+.kingdomUnclaimed {
+    color: rgba(255, 79, 79, 0.75);
+    font-style: italic;
+    font-size: 0.7rem;
+}
+
+/* ── Progress bar ─────────────────────────────────────────── */
+
+.progressBar {
+    height: 2px;
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.progressFill {
+    height: 100%;
+    background: linear-gradient(90deg, #4db8ff, #7ee8fa);
+    transition: width 0.6s ease;
+    box-shadow: 0 0 6px rgba(77, 184, 255, 0.5);
+    min-width: 2px;
+}
+
+/* ── Province List ────────────────────────────────────────── */
+
+.provinces {
+    list-style: none;
+    margin: 0;
+    padding: 0.4rem 0;
+}
+
+.province {
+    display: grid;
+    grid-template-columns: 1.2rem 1fr auto auto;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.35rem 1rem;
+    font-size: 0.82rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+    transition: background 0.15s;
+}
+
+.province:last-child {
+    border-bottom: none;
+}
+
+.province:hover {
+    background: rgba(255, 255, 255, 0.03);
+}
+
+.provinceIcon {
+    font-size: 0.75rem;
+    line-height: 1;
+}
+
+.provinceName {
+    color: #a0a0b8;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-family: var(--font-geist-mono), monospace;
+    font-size: 0.78rem;
+}
+
+.provinceOwner {
+    font-size: 0.75rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 110px;
+    text-align: right;
+}
+
+.provinceTokens {
+    font-size: 0.65rem;
+    font-family: var(--font-geist-mono), monospace;
+    color: rgba(200, 184, 154, 0.3);
+    text-align: right;
+    white-space: nowrap;
+}
+
+/* Province owner type styles */
+.claimedProvince .provinceOwner {
+    color: #4db8ff;
+    text-shadow: 0 0 8px rgba(77, 184, 255, 0.4);
+    font-weight: 600;
+}
+
+.claimedProvince .provinceName {
+    color: #c8d4e8;
+}
+
+.darkLordProvince .provinceOwner {
+    color: #ff4f4f;
+    text-shadow: 0 0 8px rgba(255, 79, 79, 0.35);
+    font-style: italic;
+}
+
+.darkLordProvince .provinceName {
+    color: #8a6a6a;
+}
+
+.foundingProvince .provinceOwner {
+    color: #c8962a;
+    font-size: 0.7rem;
+}
+
+.foundingProvince .provinceName {
+    color: #8a7a54;
+}
+
+.fogProvince .provinceOwner,
+.fogProvince .provinceName {
+    color: #2e2e40;
+    font-style: italic;
+}
+
+/* ── Loading & Error ──────────────────────────────────────── */
+
+.loadingState {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 40vh;
+    gap: 1.5rem;
+}
+
+.loadingGlow {
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    border: 2px solid rgba(200, 140, 30, 0.2);
+    border-top-color: rgba(200, 140, 30, 0.8);
+    animation: spin 1.2s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+.loadingText {
+    color: rgba(200, 184, 154, 0.5);
+    font-size: 1rem;
+    font-style: italic;
+}
+
+.errorState {
+    text-align: center;
+    padding: 4rem 2rem;
+    color: rgba(255, 79, 79, 0.6);
+}
+
+/* ── Footer ───────────────────────────────────────────────── */
+
+.footer {
+    position: relative;
+    z-index: 1;
+    text-align: center;
+    padding: 1.5rem;
+    border-top: 1px solid rgba(200, 140, 30, 0.12);
+    font-size: 0.8rem;
+    color: rgba(200, 184, 154, 0.35);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.footerLink {
+    color: rgba(200, 140, 30, 0.6);
+    text-decoration: none;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    transition: color 0.2s;
+}
+
+.footerLink:hover {
+    color: #e8b840;
+}
+
+.footerSep {
+    opacity: 0.3;
+}
+
+/* ── Responsive ───────────────────────────────────────────── */
+
+@media (max-width: 640px) {
+    .header {
+        padding: 2rem 1rem 1.25rem;
+    }
+
+    .kingdoms {
+        grid-template-columns: 1fr;
+    }
+
+    .province {
+        grid-template-columns: 1.2rem 1fr auto;
+    }
+
+    .provinceTokens {
+        display: none;
+    }
+}

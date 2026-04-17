@@ -575,6 +575,60 @@ export async function newApiGetTopModelThisWeek(userId: number): Promise<string>
     }
 }
 
+/**
+ * Grant a one-time welcome bonus to a newly registered user.
+ * $3 = 1,500,000 quota units (quota / 500,000 = USD shown in balance).
+ */
+export async function newApiGrantWelcomeBonus(newApiUserId: number): Promise<boolean> {
+    const cfg = getConfig();
+    if (!cfg) {
+        console.warn("[newapi] NEWAPI_URL or NEWAPI_ADMIN_TOKEN not configured — skipping welcome bonus");
+        return false;
+    }
+
+    const WELCOME_BONUS_QUOTA = 3 * 500_000; // $3 displayed balance
+
+    try {
+        const userRes = await fetch(`${cfg.url}/api/user/${newApiUserId}`, {
+            headers: {
+                Authorization: `Bearer ${cfg.token}`,
+                "New-Api-User": "1",
+            },
+            cache: "no-store",
+        });
+
+        if (!userRes.ok) {
+            console.error(`[newapi] Failed to fetch user ${newApiUserId} for welcome bonus: ${userRes.status}`);
+            return false;
+        }
+
+        const userData = await userRes.json() as { success: boolean; data?: Record<string, unknown> };
+        const user = userData.data;
+        if (!user) return false;
+
+        const newQuota = ((user.quota as number) ?? 0) + WELCOME_BONUS_QUOTA;
+
+        const updateRes = await fetch(`${cfg.url}/api/user/`, {
+            method: "PUT",
+            headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${cfg.token}`,
+                "New-Api-User": "1",
+            },
+            body: JSON.stringify({ ...user, quota: newQuota }),
+        });
+
+        const updateData = await updateRes.json() as { success: boolean; message?: string };
+        if (!updateData.success) {
+            console.error(`[newapi] Welcome bonus update rejected: ${updateData.message}`);
+        }
+        return updateData.success ?? false;
+    } catch (err) {
+        console.error("[newapi] Error granting welcome bonus:", err);
+        return false;
+    }
+}
+
 export async function newApiUpdateTokenQuota(opts: {
     tokenId: number;
     userId: number;

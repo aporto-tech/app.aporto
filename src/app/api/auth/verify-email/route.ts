@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { newApiCreateUser } from "@/lib/newapi";
+import { newApiCreateUser, newApiGrantWelcomeBonus } from "@/lib/newapi";
 import crypto from "crypto";
 
 export async function POST(req: NextRequest) {
@@ -72,6 +72,10 @@ export async function POST(req: NextRequest) {
                 data: { newApiUserId: newApiUser.id },
             });
             console.log(`[verify-email] New-API user created: id=${newApiUser.id} for ${email}`);
+
+            // Grant $3 welcome bonus (1,500,000 quota units).
+            const bonusGranted = await newApiGrantWelcomeBonus(newApiUser.id);
+            console.log(`[verify-email] Welcome bonus ${bonusGranted ? "granted" : "FAILED"} for New-API user ${newApiUser.id}`);
         } else {
             console.error(`[verify-email] WARNING: New-API user creation FAILED for ${email}`);
         }
