@@ -38,7 +38,11 @@ export default function DashboardPage() {
 
     const switchTab = (tab: "gettingStarted" | "analytics") => {
         setActiveTab(tab);
-        localStorage.setItem("dashboard_tab", tab);
+        if (tab === "analytics") {
+            localStorage.setItem("dashboard_tab", "analytics");
+        } else {
+            localStorage.removeItem("dashboard_tab");
+        }
     };
     const [timeRange, setTimeRange] = useState("24h");
     const [activeRulesCount, setActiveRulesCount] = useState(0);
