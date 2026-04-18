@@ -47,6 +47,7 @@ model User {
   stripePaymentMethodBrand      String?
   stripePaymentMethodLast4      String?
   stripePaymentMethodExpiry     String?
+  lastInsufficientBalanceEmailAt DateTime?
   accounts                      Account[]
   sessions                      Session[]
 }
