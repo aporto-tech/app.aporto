@@ -1,9 +1,6 @@
 import { prisma } from "@/lib/prisma";
-import { getResend } from "@/lib/resend";
+import { sendGovernanceAlertEmail } from "@/lib/emails";
 import { newApiGetTodayTokenSpend, newApiGetTotalTokenSpend } from "@/lib/newapi";
-
-const FROM = "Aporto <noreply@aporto.tech>";
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://app.aporto.tech";
 
 async function sendAlertEmail(opts: {
     to: string;
@@ -12,30 +9,8 @@ async function sendAlertEmail(opts: {
     spendUSD: number;
     limitUSD: number;
 }) {
-    const pctStr = opts.percent === 100 ? "100%" : "80%";
-    const subject = `⚠️ ${opts.agentName} has reached ${pctStr} of its spending limit`;
-    const html = `
-        <div style="font-family:sans-serif;max-width:520px;margin:0 auto;background:#0a0a0a;color:#e2e8f0;padding:32px;border-radius:12px;">
-            <h2 style="margin:0 0 16px;font-size:20px;color:#fff;">Spending Alert</h2>
-            <p style="margin:0 0 12px;color:#94a3b8;font-size:14px;">
-                Your agent <strong style="color:#fff;">${opts.agentName}</strong> has used
-                <strong style="color:${opts.percent >= 100 ? "#ef4444" : "#f59e0b"};">$${opts.spendUSD.toFixed(2)}</strong>
-                of your $${opts.limitUSD.toFixed(2)} limit
-                (<strong>${pctStr}</strong>).
-            </p>
-            ${opts.percent >= 100
-                ? `<p style="margin:0 0 20px;color:#ef4444;font-size:14px;">Your agent has hit the limit and may be paused. Add funds or increase the limit.</p>`
-                : `<p style="margin:0 0 20px;color:#94a3b8;font-size:14px;">You still have $${(opts.limitUSD - opts.spendUSD).toFixed(2)} remaining.</p>`
-            }
-            <a href="${APP_URL}/rules" style="display:inline-block;padding:10px 20px;background:#00dc82;color:#000;border-radius:8px;text-decoration:none;font-weight:600;font-size:14px;">
-                View Rules →
-            </a>
-        </div>
-    `;
-
     try {
-        const resend = getResend();
-        await resend.emails.send({ from: FROM, to: opts.to, subject, html });
+        await sendGovernanceAlertEmail(opts);
     } catch (err) {
         console.error("[spending-alerts] Failed to send email:", err);
     }

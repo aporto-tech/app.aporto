@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { newApiCreateUser, newApiGrantWelcomeBonus } from "@/lib/newapi";
+import { sendWelcomeEmail } from "@/lib/emails";
 import crypto from "crypto";
 
 export async function POST(req: NextRequest) {
@@ -79,6 +80,11 @@ export async function POST(req: NextRequest) {
         } else {
             console.error(`[verify-email] WARNING: New-API user creation FAILED for ${email}`);
         }
+
+        // Fire welcome email — fire-and-forget, never blocks response.
+        void sendWelcomeEmail(email, user?.name ?? null).catch(
+            (e) => console.error("[verify-email] welcome email failed:", e)
+        );
 
         // Fire Bitrix24 lead — fire-and-forget (no session dependency).
         const bitrixWebhook = process.env.BITRIX24_LEAD_WEBHOOK;

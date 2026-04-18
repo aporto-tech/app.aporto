@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { sendTopUpConfirmationEmail } from "@/lib/emails";
 
 const NEWAPI_ADMIN_TOKEN = process.env.NEWAPI_ADMIN_TOKEN || "";
 const NEWAPI_URL = process.env.NEWAPI_URL || "https://api.aporto.tech";
@@ -104,6 +105,13 @@ export async function safeTopUp(
             where: { id: placeholder.id },
             data: { quotaAdded, email },
         });
+
+        // Fire confirmation email — fire-and-forget, never blocks the webhook response.
+        if (email) {
+            void sendTopUpConfirmationEmail({ email, usdPaid, creditedUSD, quotaAdded }).catch(
+                (e) => console.error("[topup] confirmation email failed:", e)
+            );
+        }
 
         return true;
     } catch (err: unknown) {
