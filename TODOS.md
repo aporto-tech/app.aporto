@@ -60,3 +60,27 @@ Items deferred from the Email Verification + Bitrix24 + SDK plan review.
 **Where to start:** `packages/sdk/src/modules/` — remove the stub throw, add real `fetch` call to the confirmed route. Keep error types consistent with `AportoError`.
 
 **Depends on:** api.aporto.tech routing confirmed for each service. @aporto npm org created. SDK v0.1 published.
+
+---
+
+## T4 — Email preferences / opt-out
+
+**What:** Add `emailPreferences` JSON field or individual boolean flags to the User model to allow per-event-type opt-out (welcome, top-up, balance alerts, governance alerts).
+
+**Why:** Transactional emails without an opt-out path create CAN-SPAM/GDPR exposure. Any enterprise prospect running compliance review will flag this. The current plan sends emails with no opt-out mechanism.
+
+**Where to start:** Add `emailOptOut Boolean @default(false)` or `emailPreferences Json?` to `prisma/schema.prisma`. Add a settings toggle in `src/app/settings/page.tsx`.
+
+**Depends on:** Transactional emails PR shipped.
+
+---
+
+## T5 — Balance auto-recharge
+
+**What:** Automatically top up the user's balance when it drops below a configurable threshold.
+
+**Why:** The insufficient-balance email notifies users but doesn't prevent the failure. Auto-recharge eliminates the 402 problem entirely for users with saved payment methods (Stripe saved card already implemented in `AddFundsModal.tsx`).
+
+**Where to start:** Add a `Rule` type `auto_recharge` with `minBalanceUSD` and `rechargeAmountUSD`. Trigger from `deductUserQuota()` when balance drops below threshold.
+
+**Depends on:** Transactional emails PR shipped (to notify on recharge); T4 (email preferences for recharge notification).
