@@ -92,6 +92,11 @@ export default function DashboardPage() {
     const [analyticsAgent, setAnalyticsAgent] = useState("All Agents");
     const [analyticsAgents, setAnalyticsAgents] = useState<string[]>([]);
 
+    // Chart state — always 30-day window, independent of timeRange filter
+    const [chartLogs, setChartLogs] = useState<any[]>([]);
+    const [chartLoading, setChartLoading] = useState(false);
+    const [tooltip, setTooltip] = useState<{ model: string; count: number; cost: number; x: number; y: number } | null>(null);
+
     // ─── Auth redirect ───────────────────────────────────────────────────────
     useEffect(() => {
         if (status === "unauthenticated") {
@@ -165,6 +170,20 @@ export default function DashboardPage() {
             .then(d => { if (d.success) setAnalyticsAgents(d.tokens ?? []); })
             .catch(() => {});
     }, [status, activeTab]);
+
+    // ─── Fetch 30-day chart data (always fixed 30d, ignores timeRange) ────────
+    useEffect(() => {
+        if (status !== "authenticated" || activeTab !== "analytics") return;
+        setChartLoading(true);
+        const since = Math.floor(Date.now() / 1000) - 30 * 24 * 3600;
+        const params = new URLSearchParams({ page: "0", size: "2000", start_date: String(since) });
+        if (analyticsAgent !== "All Agents") params.append("token_name", analyticsAgent);
+        fetch(`/api/newapi/logs?${params.toString()}`, { cache: "no-store" })
+            .then(r => r.json())
+            .then(d => { if (d.success) setChartLogs(d.logs ?? []); })
+            .catch(() => {})
+            .finally(() => setChartLoading(false));
+    }, [status, activeTab, analyticsAgent]);
 
     // ─── Fetch keys to persist "Getting Started" checklist ───────────────────
     useEffect(() => {
@@ -528,14 +547,24 @@ export default function DashboardPage() {
                             analyticsLogs.forEach(l => { if (l.model_name) modelCounts[l.model_name] = (modelCounts[l.model_name] ?? 0) + 1; });
                             const topModel = Object.entries(modelCounts).sort((a, b) => b[1] - a[1])[0]?.[0] ?? "—";
 
-                            // Group by day for bar chart
-                            const dayMap: Record<string, number> = {};
-                            analyticsLogs.forEach(l => {
-                                const d = new Date((l.created_at ?? 0) * 1000).toLocaleDateString("en-US", { month: "short", day: "numeric" });
-                                dayMap[d] = (dayMap[d] ?? 0) + 1;
+                            // Group by day (ISO key = YYYY-MM-DD) for per-model stacked bar chart
+                            const MODEL_COLORS = ["#00dc82", "#3b82f6", "#f59e0b", "#ef4444", "#8b5cf6", "#ec4899", "#06b6d4", "#84cc16"];
+                            const chartDayMap: Record<string, Record<string, { count: number; cost: number }>> = {};
+                            chartLogs.forEach(l => {
+                                const dayKey = new Date((l.created_at ?? 0) * 1000).toISOString().slice(0, 10);
+                                if (!chartDayMap[dayKey]) chartDayMap[dayKey] = {};
+                                const model = l.model_name ?? "unknown";
+                                if (!chartDayMap[dayKey][model]) chartDayMap[dayKey][model] = { count: 0, cost: 0 };
+                                chartDayMap[dayKey][model].count += 1;
+                                chartDayMap[dayKey][model].cost += l.costUSD ?? 0;
                             });
-                            const days = Object.entries(dayMap).slice(-14);
-                            const maxDay = Math.max(1, ...days.map(d => d[1]));
+                            const chartDaysArr = Object.keys(chartDayMap).sort(); // ISO sort = chronological
+                            const maxDayTotal = Math.max(1, ...chartDaysArr.map(d =>
+                                Object.values(chartDayMap[d]).reduce((s, v) => s + v.count, 0)
+                            ));
+                            const chartAllModels = [...new Set(chartLogs.map(l => l.model_name).filter(Boolean))].sort() as string[];
+                            const modelColorMap: Record<string, string> = {};
+                            chartAllModels.forEach((m, i) => { modelColorMap[m] = MODEL_COLORS[i % MODEL_COLORS.length]; });
 
                             const statCard = (label: string, value: string, sub?: string) => (
                                 <div style={{ background: "#0d1117", border: "1px solid #1a1a1a", borderRadius: 10, padding: "16px 20px" }}>
@@ -598,19 +627,66 @@ export default function DashboardPage() {
                                                 {statCard("Top Model", topModel.split("/").pop() ?? topModel)}
                                             </div>
 
-                                            {/* Bar chart */}
-                                            {days.length > 0 && (
-                                                <div style={{ background: "#0d1117", border: "1px solid #1a1a1a", borderRadius: 10, padding: "16px 20px", marginBottom: 14 }}>
-                                                    <div style={{ fontSize: 12, color: "#555", marginBottom: 14, textTransform: "uppercase", letterSpacing: "0.05em" }}>Requests over time</div>
-                                                    <div style={{ display: "flex", alignItems: "flex-end", gap: 6, height: 100, overflowX: "auto" }}>
-                                                        {days.map(([day, count]) => (
-                                                            <div key={day} style={{ width: 32, minWidth: 32, display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
-                                                                <div style={{ fontSize: 10, color: "#555" }}>{count}</div>
-                                                                <div style={{ width: "100%", background: "#00dc82", borderRadius: "3px 3px 0 0", height: `${Math.max(4, (count / maxDay) * 80)}px`, transition: "height 0.3s" }} />
-                                                                <div style={{ fontSize: 9, color: "#444", whiteSpace: "nowrap", overflow: "hidden", maxWidth: "100%", textAlign: "center" }}>{day}</div>
-                                                            </div>
-                                                        ))}
+                                            {/* Stacked bar chart — always 30-day window */}
+                                            {chartDaysArr.length > 0 && (
+                                                <div style={{ background: "#0d1117", border: "1px solid #1a1a1a", borderRadius: 10, padding: "16px 20px", marginBottom: 14, position: "relative" }}>
+                                                    <div style={{ fontSize: 12, color: "#555", marginBottom: 14, textTransform: "uppercase", letterSpacing: "0.05em" }}>Requests over time · last 30 days</div>
+                                                    {/* Tooltip */}
+                                                    {tooltip && (
+                                                        <div style={{
+                                                            position: "fixed", left: tooltip.x + 10, top: tooltip.y - 10,
+                                                            background: "#0d1117", border: "1px solid #333", borderRadius: 8,
+                                                            padding: "8px 12px", fontSize: 12, color: "#e2e8f0", zIndex: 9999,
+                                                            pointerEvents: "none", whiteSpace: "nowrap",
+                                                            boxShadow: "0 4px 16px rgba(0,0,0,0.6)",
+                                                        }}>
+                                                            <div style={{ fontWeight: 600, marginBottom: 3, color: modelColorMap[tooltip.model] ?? "#00dc82" }}>{tooltip.model.split("/").pop() ?? tooltip.model}</div>
+                                                            <div style={{ color: "#888" }}>{tooltip.count} req · ${tooltip.cost.toFixed(4)}</div>
+                                                        </div>
+                                                    )}
+                                                    <div style={{ display: "flex", alignItems: "flex-end", gap: 4, height: 130, overflowX: "auto", paddingBottom: 2 }}>
+                                                        {chartDaysArr.map(dayKey => {
+                                                            const models = chartDayMap[dayKey];
+                                                            const dayTotal = Object.values(models).reduce((s, v) => s + v.count, 0);
+                                                            const barHeight = Math.max(4, (dayTotal / maxDayTotal) * 90);
+                                                            const label = new Date(dayKey + "T12:00:00Z").toLocaleDateString("en-US", { month: "short", day: "numeric" });
+                                                            const sortedModels = Object.entries(models).sort((a, b) => b[1].count - a[1].count);
+                                                            return (
+                                                                <div key={dayKey} style={{ minWidth: 26, display: "flex", flexDirection: "column", alignItems: "center", gap: 3 }}>
+                                                                    <div style={{ fontSize: 9, color: "#555", height: 11, lineHeight: "11px" }}>{dayTotal}</div>
+                                                                    <div style={{ width: "100%", height: barHeight, display: "flex", flexDirection: "column-reverse", borderRadius: "3px 3px 0 0", overflow: "hidden", flexShrink: 0 }}>
+                                                                        {sortedModels.map(([model, { count, cost }]) => (
+                                                                            <div
+                                                                                key={model}
+                                                                                style={{
+                                                                                    width: "100%",
+                                                                                    height: `${(count / dayTotal) * barHeight}px`,
+                                                                                    background: modelColorMap[model] ?? "#00dc82",
+                                                                                    cursor: "crosshair",
+                                                                                    flexShrink: 0,
+                                                                                }}
+                                                                                onMouseEnter={e => setTooltip({ model, count, cost, x: e.clientX, y: e.clientY })}
+                                                                                onMouseMove={e => setTooltip(t => t ? { ...t, x: e.clientX, y: e.clientY } : null)}
+                                                                                onMouseLeave={() => setTooltip(null)}
+                                                                            />
+                                                                        ))}
+                                                                    </div>
+                                                                    <div style={{ fontSize: 9, color: "#444", whiteSpace: "nowrap" }}>{label}</div>
+                                                                </div>
+                                                            );
+                                                        })}
                                                     </div>
+                                                    {/* Legend */}
+                                                    {chartAllModels.length > 1 && (
+                                                        <div style={{ display: "flex", flexWrap: "wrap", gap: "4px 12px", marginTop: 12 }}>
+                                                            {chartAllModels.map(m => (
+                                                                <div key={m} style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 10, color: "#666" }}>
+                                                                    <div style={{ width: 8, height: 8, borderRadius: 2, background: modelColorMap[m] ?? "#00dc82", flexShrink: 0 }} />
+                                                                    {m.split("/").pop() ?? m}
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    )}
                                                 </div>
                                             )}
 
