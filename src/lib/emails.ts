@@ -3,12 +3,16 @@ import { getResend } from "@/lib/resend";
 const FROM = "Aporto <noreply@aporto.tech>";
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://app.aporto.tech";
 
+function esc(str: string): string {
+    return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
 export async function sendWelcomeEmail(email: string, name: string | null): Promise<void> {
     const greeting = name ?? "there";
     const subject = "Welcome to Aporto — your $3 credit is ready";
     const html = `
         <div style="font-family:sans-serif;max-width:520px;margin:0 auto;background:#0a0a0a;color:#e2e8f0;padding:32px;border-radius:12px;">
-            <h2 style="margin:0 0 16px;font-size:20px;color:#fff;">Welcome to Aporto, ${greeting}!</h2>
+            <h2 style="margin:0 0 16px;font-size:20px;color:#fff;">Welcome to Aporto, ${esc(greeting)}!</h2>
             <p style="margin:0 0 12px;color:#94a3b8;font-size:14px;">
                 Your email is verified and your account is ready. We've added <strong style="color:#00dc82;">$3 free credit</strong> to get you started.
             </p>
@@ -75,7 +79,7 @@ export async function sendGovernanceAlertEmail(opts: {
         <div style="font-family:sans-serif;max-width:520px;margin:0 auto;background:#0a0a0a;color:#e2e8f0;padding:32px;border-radius:12px;">
             <h2 style="margin:0 0 16px;font-size:20px;color:#fff;">Spending Alert</h2>
             <p style="margin:0 0 12px;color:#94a3b8;font-size:14px;">
-                Your agent <strong style="color:#fff;">${opts.agentName}</strong> has used
+                Your agent <strong style="color:#fff;">${esc(opts.agentName)}</strong> has used
                 <strong style="color:${opts.percent >= 100 ? "#ef4444" : "#f59e0b"};">$${opts.spendUSD.toFixed(2)}</strong>
                 of your $${opts.limitUSD.toFixed(2)} limit
                 (<strong>${pctStr}</strong>).
@@ -101,7 +105,7 @@ export async function sendInsufficientBalanceEmail(opts: {
 }): Promise<void> {
     const subject = "Your Aporto balance is empty — add funds to continue";
     const serviceNote = opts.serviceName
-        ? `<p style="margin:0 0 12px;color:#94a3b8;font-size:14px;">A recent call to <strong style="color:#fff;">${opts.serviceName}</strong> could not complete due to insufficient balance.</p>`
+        ? `<p style="margin:0 0 12px;color:#94a3b8;font-size:14px;">A recent call to <strong style="color:#fff;">${esc(opts.serviceName)}</strong> could not complete due to insufficient balance.</p>`
         : "";
     const html = `
         <div style="font-family:sans-serif;max-width:520px;margin:0 auto;background:#0a0a0a;color:#e2e8f0;padding:32px;border-radius:12px;">
