@@ -777,7 +777,7 @@ export default function DashboardPage() {
                                     ${balance?.remainingUSD.toFixed(4) ?? "0.0000"}
                                 </div>
                             )}
-                            <button className={styles.addFundsBtn} onClick={() => { setShowAddFundsModal(true); }}
+                            <button className={styles.addFundsBtn} onClick={() => setShowAddFundsModal(true)}>
                                 + Add Funds
                             </button>
                         </div>
