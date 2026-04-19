@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import Stripe from "stripe";
 import { safeTopUp } from "@/lib/topup";
+import { prisma } from "@/lib/prisma";
+import { trackServerEvent } from "@/lib/mixpanel-server";
 
 const STRIPE_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET || "";
 
@@ -55,6 +57,18 @@ export async function POST(req: Request) {
             const credited = await safeTopUp(session.id, newApiUserId, usdAmount, packageId, netUsd);
             console.log(`Stripe: session ${session.id} — ${credited ? "quota credited" : "duplicate event, skipped"}`);
 
+            if (credited) {
+                const dbUser = await prisma.user.findFirst({ where: { newApiUserId }, select: { id: true } });
+                if (dbUser) {
+                    await trackServerEvent(dbUser.id, "payment_completed", {
+                        method: "stripe_checkout",
+                        amount_usd: usdAmount,
+                        net_usd: netUsd,
+                        package_id: packageId ?? null,
+                    });
+                }
+            }
+
             return NextResponse.json({ success: true, message: credited ? "Balance updated" : "Already processed" });
         }
 
@@ -71,6 +85,17 @@ export async function POST(req: Request) {
                 const netUsd = Math.max(0, usdAmount * (1 - 0.029) - 0.30);
                 const credited = await safeTopUp(pi.id, newApiUserId, usdAmount, "saved_card", netUsd);
                 console.log(`Stripe PI ${pi.id} — ${credited ? "quota credited" : "duplicate event, skipped"}`);
+
+                if (credited) {
+                    const dbUser = await prisma.user.findFirst({ where: { newApiUserId }, select: { id: true } });
+                    if (dbUser) {
+                        await trackServerEvent(dbUser.id, "payment_completed", {
+                            method: "stripe_saved_card",
+                            amount_usd: usdAmount,
+                            net_usd: netUsd,
+                        });
+                    }
+                }
             }
             return NextResponse.json({ success: true, message: "Webhook received" });
         }

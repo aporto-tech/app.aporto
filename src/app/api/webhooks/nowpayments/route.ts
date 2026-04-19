@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import crypto from "crypto";
 import { safeTopUp } from "@/lib/topup";
+import { prisma } from "@/lib/prisma";
+import { trackServerEvent } from "@/lib/mixpanel-server";
 
 const NOWPAYMENTS_IPN_SECRET = process.env.NOWPAYMENTS_IPN_SECRET || "";
 
@@ -58,6 +60,16 @@ export async function POST(req: Request) {
             // Returns false if orderId already processed (idempotent).
             const credited = await safeTopUp(String(order_id), newApiUserId, usdAmount);
             console.log(`NOWPayments: order ${order_id} — ${credited ? "quota credited" : "duplicate event, skipped"}`);
+
+            if (credited) {
+                const dbUser = await prisma.user.findFirst({ where: { newApiUserId }, select: { id: true } });
+                if (dbUser) {
+                    await trackServerEvent(dbUser.id, "payment_completed", {
+                        method: "crypto",
+                        amount_usd: usdAmount,
+                    });
+                }
+            }
 
             return NextResponse.json({ success: true, message: credited ? "Balance updated" : "Already processed" });
         }

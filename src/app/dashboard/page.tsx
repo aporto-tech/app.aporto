@@ -249,6 +249,8 @@ export default function DashboardPage() {
         setNewKeyName("My API Key");
         setNewKeyDescription("");
         setShowCreateModal(true);
+        const mp = (window as any).mixpanel;
+        if (mp) mp.track("api_key_create_modal_opened", { source: "dashboard" });
     }, []);
 
     const handleCreateKey = useCallback(async () => {
@@ -270,6 +272,11 @@ export default function DashboardPage() {
             setIsApiKeyCreated(true);
             setShowCreateModal(false);
             setShowKeyCreatedModal(true);
+            const mp = (window as any).mixpanel;
+            if (mp) {
+                mp.track("api_key_created", { key_name: newKeyName.trim() });
+                mp.track("onboarding_step_completed", { step: 1, step_name: "create_api_key" });
+            }
         } catch (err) {
             setCreateKeyError(`Network error: ${String(err)}`);
         } finally {
@@ -289,6 +296,8 @@ export default function DashboardPage() {
         setRuleName("Global Spending Limit");
         setCreateRuleError("");
         setShowRuleModal(true);
+        const mp = (window as any).mixpanel;
+        if (mp) mp.track("rule_create_modal_opened", { source: "dashboard" });
     }, [userKeys]);
 
     const handleCreateRule = useCallback(async () => {
@@ -333,6 +342,15 @@ export default function DashboardPage() {
 
             setIsRuleCreated(true);
             setShowRuleModal(false);
+            const mp = (window as any).mixpanel;
+            if (mp) {
+                mp.track("rule_created", {
+                    rule_type: ruleLimitType,
+                    limit_amount: Number(ruleLimitAmount),
+                    key_name: userKeys.find(k => String(k.id) === ruleSelectedKeyId)?.name ?? null,
+                });
+                mp.track("onboarding_step_completed", { step: 2, step_name: "create_spending_rule" });
+            }
 
             // refresh keys
             const keysRes = await fetch("/api/newapi/keys", { cache: "no-store" });
@@ -759,7 +777,7 @@ export default function DashboardPage() {
                                     ${balance?.remainingUSD.toFixed(4) ?? "0.0000"}
                                 </div>
                             )}
-                            <button className={styles.addFundsBtn} onClick={() => setShowAddFundsModal(true)}>
+                            <button className={styles.addFundsBtn} onClick={() => { setShowAddFundsModal(true); }}
                                 + Add Funds
                             </button>
                         </div>

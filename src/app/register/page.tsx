@@ -95,6 +95,9 @@ export default function RegisterPage() {
                 throw new Error("Login failed after verification. Please go to login page.");
             }
 
+            const mp = (window as any).mixpanel;
+            if (mp) mp.track("user_signed_up", { has_promo_code: !!promoCode.trim() });
+
             // Redeem promo code if provided
             if (promoCode.trim()) {
                 const promoRes = await fetch("/api/promo/redeem", {

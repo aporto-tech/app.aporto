@@ -48,6 +48,12 @@ export default function AddFundsModal({ onClose }: AddFundsModalProps) {
     const [savedCardLoading, setSavedCardLoading] = useState(true);
     const [successMessage, setSuccessMessage] = useState("");
 
+    // Track modal open
+    useEffect(() => {
+        const mp = (window as any).mixpanel;
+        if (mp) mp.track("add_funds_modal_opened");
+    }, []);
+
     useEffect(() => {
         fetch("/api/payments/stripe/saved-method")
             .then(r => r.json())
@@ -127,6 +133,8 @@ export default function AddFundsModal({ onClose }: AddFundsModalProps) {
                 });
                 const data = await res.json();
                 if (data.success && data.invoiceUrl) {
+                    const mp = (window as any).mixpanel;
+                    if (mp) mp.track("payment_initiated", { method: "crypto", amount_usd: activeAmount, package_id: packageId });
                     window.location.href = data.invoiceUrl;
                 } else {
                     setErrorCrypto(data.message || "Failed to create payment invoice.");
@@ -147,6 +155,8 @@ export default function AddFundsModal({ onClose }: AddFundsModalProps) {
                 });
                 const data = await res.json();
                 if (data.success && data.checkoutUrl) {
+                    const mp = (window as any).mixpanel;
+                    if (mp) mp.track("payment_initiated", { method: "card", amount_usd: activeAmount, package_id: packageId });
                     window.location.href = data.checkoutUrl;
                 } else {
                     setErrorCard(data.message || "Failed to create card payment session.");
@@ -204,6 +214,8 @@ export default function AddFundsModal({ onClose }: AddFundsModalProps) {
                 }
 
                 setSuccessMessage(`+$${officialValueAfterCardFee(activeAmount).toFixed(2)} in API credits added to your balance!`);
+                const mp = (window as any).mixpanel;
+                if (mp) mp.track("payment_initiated", { method: "saved_card", amount_usd: activeAmount });
             } catch {
                 setErrorSavedCard("Something went wrong. Please try again.");
             } finally {
