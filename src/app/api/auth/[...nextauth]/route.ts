@@ -4,6 +4,8 @@ import CredentialsProvider from "next-auth/providers/credentials";
 import { PrismaAdapter } from "@next-auth/prisma-adapter";
 import { prisma } from "@/lib/prisma";
 import bcrypt from "bcrypt";
+import crypto from "crypto";
+import { newApiCreateUser, newApiGrantWelcomeBonus } from "@/lib/newapi";
 
 export const authOptions: NextAuthOptions = {
     adapter: PrismaAdapter(prisma),
@@ -62,7 +64,35 @@ export const authOptions: NextAuthOptions = {
         async jwt({ token, user, trigger }) {
             if (user) {
                 token.id = user.id;
-                token.newApiUserId = (user as any).newApiUserId;
+                token.newApiUserId = (user as any).newApiUserId ?? null;
+
+                // Google OAuth users don't go through verify-email, so they never get a
+                // NewAPI account provisioned. Fix that here on first sign-in.
+                if (!token.newApiUserId && user.email) {
+                    const dbUser = await prisma.user.findUnique({
+                        where: { id: user.id as string },
+                        select: { newApiUserId: true },
+                    });
+                    if (dbUser?.newApiUserId) {
+                        token.newApiUserId = dbUser.newApiUserId;
+                    } else {
+                        const base = user.email.split("@")[0].replace(/[^a-zA-Z0-9_]/g, "_").substring(0, 9);
+                        const suffix = crypto.randomBytes(3).toString("hex");
+                        const newApiUser = await newApiCreateUser({
+                            username: `${base}_${suffix}`,
+                            email: user.email,
+                            password: crypto.randomBytes(8).toString("hex") + "Aa1!",
+                        });
+                        if (newApiUser) {
+                            await prisma.user.update({
+                                where: { id: user.id as string },
+                                data: { newApiUserId: newApiUser.id },
+                            });
+                            token.newApiUserId = newApiUser.id;
+                            void newApiGrantWelcomeBonus(newApiUser.id).catch(() => {});
+                        }
+                    }
+                }
             }
             // On session update or sign-in, refresh stripeCustomerId from DB
             if (trigger === "update" || user) {

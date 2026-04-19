@@ -73,13 +73,15 @@ export async function deductUserQuota(
 
     const quotaCost = Math.ceil(costUSD * QUOTA_PER_DOLLAR);
 
-    // Balance check
-    const rows = await prisma.$queryRawUnsafe<{ quota: number }[]>(
-        `SELECT quota FROM users WHERE id = $1 LIMIT 1`,
+    const rowsAffected = await prisma.$executeRawUnsafe(
+        `UPDATE users SET quota = quota - $1, used_quota = used_quota + $1
+         WHERE id = $2 AND quota >= $1`,
+        quotaCost,
         newApiUserId
     );
 
-    if (!rows.length || rows[0].quota < quotaCost) {
+    if (rowsAffected === 0) {
+        // Balance dropped between check and update (concurrent request drained it).
         void maybySendLowBalanceEmail(newApiUserId).catch(
             (e) => console.error("[deductUserQuota] balance email failed:", e)
         );
@@ -91,12 +93,6 @@ export async function deductUserQuota(
             }
         );
     }
-
-    await prisma.$executeRawUnsafe(
-        `UPDATE users SET quota = quota - $1, used_quota = used_quota + $1 WHERE id = $2`,
-        quotaCost,
-        newApiUserId
-    );
 
     return null;
 }

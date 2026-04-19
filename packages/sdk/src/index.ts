@@ -67,3 +67,5 @@ export type { LinkupSearchOptions, YouSearchOptions, SearchResult } from "./modu
 export type { GenerateImageOptions, GenerateImageResult } from "./modules/images";
 export type { TextToSpeechOptions } from "./modules/audio";
 export type { SendSmsOptions, CheckSmsOptions, SmsResult } from "./modules/sms";
+export { createX402Fetch, AportoPaymentError } from "./modules/x402";
+export type { CreateX402FetchOptions } from "./modules/x402";
