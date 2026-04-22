@@ -12,6 +12,9 @@ export default function EarningsPage() {
     const [calls, setCalls] = useState<CallRow[]>([]);
     const [cursor, setCursor] = useState<number | null>(null);
     const [loading, setLoading] = useState(true);
+    const [payoutState, setPayoutState] = useState<"idle" | "requested" | "below_min">("idle");
+
+    const PAYOUT_MIN = 10;
 
     const getKey = () => localStorage.getItem("publisher_api_key") ?? "";
 
@@ -39,6 +42,14 @@ export default function EarningsPage() {
 
     const selectSkill = (id: number) => { setSelectedSkill(id); setCalls([]); setCursor(null); loadCalls(id); };
 
+    const requestPayout = () => {
+        if ((account?.totalUnpaidUSD ?? 0) < PAYOUT_MIN) {
+            setPayoutState("below_min");
+        } else {
+            setPayoutState("requested");
+        }
+    };
+
     if (loading) return <div style={{ color: "#64748b" }}>Loading...</div>;
 
     return (
@@ -51,8 +62,35 @@ export default function EarningsPage() {
                     <div style={{ color: "#64748b", fontSize: 12 }}>Unpaid Balance</div>
                     <div style={{ fontWeight: 700, fontSize: 28 }}>${(account?.totalUnpaidUSD ?? 0).toFixed(4)}</div>
                 </div>
-                <div style={{ fontSize: 13, color: "#475569", maxWidth: 280 }}>
-                    To request a payout, contact <a href="mailto:support@aporto.tech" style={{ color: "#6366f1" }}>support@aporto.tech</a> with your publisher ID.
+                <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 8 }}>
+                    {payoutState === "idle" && (
+                        <button
+                            onClick={requestPayout}
+                            style={{ padding: "8px 18px", borderRadius: 6, border: "none", background: "#6366f1", color: "#fff", fontWeight: 600, fontSize: 13, cursor: "pointer" }}
+                        >
+                            Request Payout
+                        </button>
+                    )}
+                    {payoutState === "below_min" && (
+                        <div style={{ textAlign: "right" }}>
+                            <div style={{ color: "#f59e0b", fontSize: 13, fontWeight: 500 }}>Minimum payout is ${PAYOUT_MIN}</div>
+                            <div style={{ color: "#475569", fontSize: 12, marginTop: 2 }}>
+                                Need ${(PAYOUT_MIN - (account?.totalUnpaidUSD ?? 0)).toFixed(2)} more to withdraw
+                            </div>
+                            <button
+                                onClick={() => setPayoutState("idle")}
+                                style={{ marginTop: 6, background: "none", border: "none", color: "#64748b", fontSize: 12, cursor: "pointer", textDecoration: "underline" }}
+                            >
+                                Dismiss
+                            </button>
+                        </div>
+                    )}
+                    {payoutState === "requested" && (
+                        <div style={{ textAlign: "right" }}>
+                            <div style={{ color: "#10b981", fontSize: 13, fontWeight: 500 }}>✓ Payout request submitted</div>
+                            <div style={{ color: "#475569", fontSize: 12, marginTop: 2 }}>We&apos;ll process it within 3–5 business days</div>
+                        </div>
+                    )}
                 </div>
             </div>
 

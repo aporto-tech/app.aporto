@@ -116,13 +116,12 @@ const Sidebar = () => {
         { name: "Activity", icon: "📈", path: "/activity" },
     ];
 
-    // Overview → Skills → API Keys → Earnings (user-selected order)
+    // Overview → Skills → Earnings (API Keys removed from main nav — programmatic access only)
     const publisherNavItems = publisherStatus === "pending"
         ? [{ name: "Overview", icon: "📊", path: "/publisher" }]
         : [
             { name: "Overview", icon: "📊", path: "/publisher" },
             { name: "Skills", icon: "⚡", path: "/publisher/skills" },
-            { name: "API Keys", icon: "🔑", path: "/publisher/keys" },
             { name: "Earnings", icon: "💰", path: "/publisher/earnings" },
         ];
 
@@ -234,6 +233,15 @@ const Sidebar = () => {
                                 </Link>
                             );
                         })}
+                        <div style={{ borderTop: "1px solid #222", margin: "12px 4px 8px" }} />
+                        <button
+                            className={styles.navItem}
+                            onClick={() => handleContextSwitch("user")}
+                            style={{ width: "100%", background: "none", border: "none", cursor: "pointer", textAlign: "left", color: "#555" }}
+                        >
+                            <span style={{ fontSize: 12 }}>←</span>
+                            <span>User Dashboard</span>
+                        </button>
                     </div>
                 )}
             </nav>
