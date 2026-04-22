@@ -13,7 +13,9 @@
 
 import { PrismaClient } from "@prisma/client";
 
-const prisma = new PrismaClient();
+const prisma = new PrismaClient({
+    datasources: { db: { url: process.env.DIRECT_URL ?? process.env.DATABASE_URL } },
+});
 
 const BASE_URL = process.env.NEXTAUTH_URL ?? "https://app.aporto.tech";
 
