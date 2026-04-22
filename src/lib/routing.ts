@@ -2,10 +2,13 @@
  * Skill routing layer.
  *
  * discoverSkills    — semantic similarity search via pgvector, 5 per page
- * selectProvider    — score providers by price/latency/retryRate; exclude
- *                     providers already used by this (sessionId, userId) pair
- * executeSkillViaProvider — HTTP POST to provider.endpoint with 10s timeout
- * updateProviderStats     — fire-and-forget EMA update (alpha=0.2)
+ * selectProvider    — score providers by price/latency/retryRate/timeoutRate;
+ *                     exclude providers used by this session (24h) or same
+ *                     paramsHash (2 min)
+ * executeSkillViaProvider — HTTP POST to provider.endpoint with 10s timeout;
+ *                     classifies errors as timeout | network_error | error_5xx | error_4xx
+ * updateProviderStats     — fire-and-forget EMA update (alpha=0.2) for
+ *                     avgLatencyMs, retryRate, and timeoutRate
  */
 
 import { prisma } from "@/lib/prisma";
@@ -35,7 +38,10 @@ export interface ScoredProvider {
     pricePerCall: number;
     avgLatencyMs: number;
     retryRate: number;
+    timeoutRate: number;
 }
+
+type ErrorType = "success" | "timeout" | "network_error" | "error_5xx" | "error_4xx";
 
 // ── discoverSkills ────────────────────────────────────────────────────────────
 
@@ -100,18 +106,28 @@ export async function selectProvider(
     skillId: number,
     sessionId: string,
     newApiUserId: number,
+    paramsHash?: string,
 ): Promise<ScoredProvider | null> {
-    // Single CTE query: fetch active providers + exclude ones used in this session
+    // Unified CTE: exclude providers used in this session (24h) OR same paramsHash (2 min)
+    // Always run the full query — no early single-row return that would skip paramsHash exclusion
     const rows = await prisma.$queryRawUnsafe<
-        { id: number; name: string; endpoint: string; price_per_call: number; avg_latency_ms: number; retry_rate: number }[]
+        { id: number; name: string; endpoint: string; price_per_call: number; avg_latency_ms: number; retry_rate: number; timeout_rate: number }[]
     >(
         `WITH used AS (
             SELECT DISTINCT "providerId"
             FROM "SkillCall"
-            WHERE "sessionId" = $1
-              AND "newApiUserId" = $2
-              AND "skillId" = $3
-              AND "createdAt" > NOW() - INTERVAL '24 hours'
+            WHERE (
+                "sessionId" = $1
+                AND "newApiUserId" = $2
+                AND "skillId" = $3
+                AND "createdAt" > NOW() - INTERVAL '24 hours'
+            )
+            OR (
+                $4::text IS NOT NULL
+                AND "paramsHash" = $4
+                AND "newApiUserId" = $2
+                AND "createdAt" > NOW() - INTERVAL '2 minutes'
+            )
         )
         SELECT
             p.id,
@@ -119,7 +135,8 @@ export async function selectProvider(
             p.endpoint,
             p."pricePerCall"  AS price_per_call,
             p."avgLatencyMs"  AS avg_latency_ms,
-            p."retryRate"     AS retry_rate
+            p."retryRate"     AS retry_rate,
+            p."timeoutRate"   AS timeout_rate
         FROM "Provider" p
         WHERE p."skillId" = $3
           AND p."isActive" = true
@@ -128,22 +145,13 @@ export async function selectProvider(
         sessionId,
         newApiUserId,
         skillId,
+        paramsHash ?? null,
     );
 
     if (rows.length === 0) return null;
-    if (rows.length === 1) {
-        const p = rows[0];
-        return {
-            id: p.id,
-            name: p.name,
-            endpoint: p.endpoint,
-            pricePerCall: Number(p.price_per_call),
-            avgLatencyMs: Number(p.avg_latency_ms),
-            retryRate: Number(p.retry_rate),
-        };
-    }
 
-    // Min-max normalize then score: 0.4*(1-normPrice) + 0.4*(1-normLatency) + 0.2*(1-retryRate)
+    // Min-max normalize then score:
+    // 0.40*(1-normPrice) + 0.30*(1-normLatency) + 0.15*(1-retryRate) + 0.15*(1-timeoutRate)
     const prices = rows.map((r) => Number(r.price_per_call));
     const latencies = rows.map((r) => Number(r.avg_latency_ms));
 
@@ -158,13 +166,15 @@ export async function selectProvider(
         const normLat =
             maxLat === minLat ? 0.5 : (Number(r.avg_latency_ms) - minLat) / (maxLat - minLat);
         const score =
-            0.4 * (1 - normPrice) +
-            0.4 * (1 - normLat) +
-            0.2 * (1 - Number(r.retry_rate));
+            0.40 * (1 - normPrice) +
+            0.30 * (1 - normLat) +
+            0.15 * (1 - Number(r.retry_rate)) +
+            0.15 * (1 - Number(r.timeout_rate));
         return { ...r, score };
     });
 
-    scored.sort((a, b) => b.score - a.score);
+    // Primary sort: score desc; tiebreaker: id asc (stable, deterministic)
+    scored.sort((a, b) => b.score - a.score || a.id - b.id);
     const best = scored[0];
     return {
         id: best.id,
@@ -173,6 +183,7 @@ export async function selectProvider(
         pricePerCall: Number(best.price_per_call),
         avgLatencyMs: Number(best.avg_latency_ms),
         retryRate: Number(best.retry_rate),
+        timeoutRate: Number(best.timeout_rate),
     };
 }
 
@@ -182,7 +193,7 @@ export async function executeSkillViaProvider(
     provider: ScoredProvider,
     params: Record<string, unknown>,
     authHeader: string,
-): Promise<{ success: boolean; data: unknown; latencyMs: number }> {
+): Promise<{ success: boolean; data: unknown; latencyMs: number; errorType: ErrorType }> {
     // HTTPS-only enforcement (SSRF guard — admin controls endpoint URL)
     const url = new URL(provider.endpoint);
     if (url.protocol !== "https:") {
@@ -191,16 +202,26 @@ export async function executeSkillViaProvider(
 
     const start = Date.now();
 
-    const res = await fetch(provider.endpoint, {
-        method: "POST",
-        headers: {
-            "Content-Type": "application/json",
-            "Authorization": authHeader,
-        },
-        body: JSON.stringify(params),
-        // 10s timeout — Vercel function limit is 10s on hobby, 30s on pro
-        signal: AbortSignal.timeout(10_000),
-    });
+    let res: Response;
+    try {
+        res = await fetch(provider.endpoint, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "Authorization": authHeader,
+            },
+            body: JSON.stringify(params),
+            // 10s timeout — Vercel function limit is 10s on hobby, 30s on pro
+            signal: AbortSignal.timeout(10_000),
+        });
+    } catch (err) {
+        const latencyMs = Date.now() - start;
+        const isTimeout =
+            err instanceof Error &&
+            (err.name === "TimeoutError" || err.name === "AbortError");
+        const errorType: ErrorType = isTimeout ? "timeout" : "network_error";
+        return { success: false, data: { error: String(err) }, latencyMs, errorType };
+    }
 
     const latencyMs = Date.now() - start;
 
@@ -222,13 +243,19 @@ export async function executeSkillViaProvider(
         data = text;
     }
 
-    return { success: res.ok, data, latencyMs };
+    const errorType: ErrorType = res.ok
+        ? "success"
+        : res.status >= 500
+        ? "error_5xx"
+        : "error_4xx";
+
+    return { success: res.ok, data, latencyMs, errorType };
 }
 
 // ── updateProviderStats ───────────────────────────────────────────────────────
 
 /**
- * EMA update for avgLatencyMs and retryRate.
+ * EMA update for avgLatencyMs, retryRate, and timeoutRate.
  * alpha=0.2: new value = 0.2 * observed + 0.8 * existing
  * Fire-and-forget — do NOT await before sending response.
  */
@@ -236,6 +263,7 @@ export async function updateProviderStats(
     providerId: number,
     latencyMs: number,
     success: boolean,
+    isTimeout = false,
 ): Promise<void> {
     const ALPHA = 0.2;
     try {
@@ -243,11 +271,13 @@ export async function updateProviderStats(
             `UPDATE "Provider"
              SET
                "avgLatencyMs" = ROUND($1 * $2 + (1 - $1) * "avgLatencyMs"),
-               "retryRate"    = $1 * $3 + (1 - $1) * "retryRate"
-             WHERE id = $4`,
+               "retryRate"    = $1 * $3 + (1 - $1) * "retryRate",
+               "timeoutRate"  = $1 * $4 + (1 - $1) * "timeoutRate"
+             WHERE id = $5`,
             ALPHA,
             latencyMs,
             success ? 0 : 1,
+            isTimeout ? 1 : 0,
             providerId,
         );
     } catch (err) {
@@ -266,10 +296,12 @@ export async function recordSkillCall(data: {
     latencyMs?: number;
     success?: boolean;
     costUSD?: number;
+    paramsHash?: string;
+    errorType?: string;
 }): Promise<number> {
     const row = await prisma.$queryRawUnsafe<{ id: number }[]>(
-        `INSERT INTO "SkillCall" ("sessionId", "newApiUserId", "skillId", "providerId", "isRetry", "latencyMs", "success", "costUSD", "createdAt")
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
+        `INSERT INTO "SkillCall" ("sessionId", "newApiUserId", "skillId", "providerId", "isRetry", "latencyMs", "success", "costUSD", "paramsHash", "errorType", "createdAt")
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW())
          RETURNING id`,
         data.sessionId,
         data.newApiUserId,
@@ -279,6 +311,8 @@ export async function recordSkillCall(data: {
         data.latencyMs ?? null,
         data.success ?? null,
         data.costUSD ?? null,
+        data.paramsHash ?? null,
+        data.errorType ?? null,
     );
     return row[0].id;
 }

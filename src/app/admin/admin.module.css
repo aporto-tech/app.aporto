@@ -387,3 +387,90 @@
     color: #475569;
     font-size: 11px;
 }
+
+/* Stats tab */
+.statsGrid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+    margin-bottom: 32px;
+}
+
+@media (max-width: 768px) {
+    .statsGrid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+.statsCard {
+    background: rgba(13, 18, 25, 0.5);
+    border: 1px solid #1e293b;
+    border-radius: 8px;
+    padding: 20px;
+}
+
+.statsCardLabel {
+    font-size: 11px;
+    font-weight: 600;
+    color: #64748b;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 8px;
+}
+
+.statsCardValue {
+    font-size: 28px;
+    font-weight: 700;
+    color: #f8fafc;
+}
+
+/* Bar chart */
+.barChart {
+    display: flex;
+    align-items: flex-end;
+    gap: 6px;
+    height: 120px;
+    padding-bottom: 24px;
+    position: relative;
+}
+
+.barCol {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    flex: 1;
+    height: 100%;
+}
+
+.barWrap {
+    flex: 1;
+    width: 100%;
+    display: flex;
+    flex-direction: column-reverse;
+    align-items: center;
+    gap: 1px;
+}
+
+.barSuccess {
+    width: 100%;
+    background: #00dc82;
+    border-radius: 2px 2px 0 0;
+    min-height: 2px;
+    transition: height 0.3s;
+}
+
+.barFail {
+    width: 100%;
+    background: #ef4444;
+    border-radius: 2px 2px 0 0;
+    min-height: 0;
+    transition: height 0.3s;
+}
+
+.barLabel {
+    font-size: 10px;
+    color: #475569;
+    margin-top: 4px;
+    white-space: nowrap;
+}
+

@@ -1,6 +1,6 @@
 # @aporto-tech/sdk
 
-Official SDK for the [Aporto](https://aporto.tech) platform. LLM (400+ models), web search, image generation, text-to-speech, SMS, and x402 agent payments — via a single API key.
+The skill marketplace for AI agents. Discover thousands of capabilities by description, execute via smart provider routing, publish your own skills and earn — all through one API key.
 
 ## Install
 
@@ -55,6 +55,45 @@ const audio = await aporto.audio.speech({ text: "Hello from Aporto!" });
 ```typescript
 await aporto.sms.send({ to: "+1234567890", message: "Your code: 1234" });
 ```
+
+---
+
+## Skill Routing
+
+Discover and execute any skill in the Aporto marketplace. The routing layer does semantic search to find matching skills, then automatically selects the best provider by price, latency, and reliability.
+
+```typescript
+// Find skills matching a natural language query
+const { skills } = await aporto.routing.discoverSkills({
+  query: "convert text to speech",
+});
+
+// skills[0] = { id, name, description, category, capabilities, paramsSchema, similarity, ... }
+console.log(skills[0].name);        // "Text to Speech"
+console.log(skills[0].paramsSchema); // { text: "string", voice_id: "string", ... }
+
+// Execute the best match
+const result = await aporto.routing.executeSkill({
+  skillId: skills[0].id,
+  params: { text: "Hello from Aporto!", voice_id: "Rachel" },
+  sessionId: "my-agent-session-123", // optional — enables retry deduplication
+});
+
+console.log(result.data); // MP3 audio / URL / JSON depending on skill
+```
+
+Filter by category or capability:
+
+```typescript
+const { skills } = await aporto.routing.discoverSkills({
+  query: "generate image",
+  category: "media/image",   // e.g. search/web, llm/chat, communication/sms
+  capability: "generate",    // e.g. search, transcribe, convert, send
+  page: 0,                   // paginate, 5 results per page
+});
+```
+
+The `sessionId` parameter enables smart retry routing — if a provider fails, the next `executeSkill` call with the same `sessionId` will automatically route to a different provider.
 
 ---
 

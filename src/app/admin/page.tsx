@@ -56,7 +56,49 @@ interface WaitlistEntry {
     approved: boolean;
 }
 
-type Tab = "promo" | "skills" | "waitlist";
+interface StatsOverview {
+    totalCalls: number;
+    successRate: number;
+    avgLatencyMs: number;
+    retryRate: number;
+    errorBreakdown: {
+        success: number;
+        timeout: number;
+        error_5xx: number;
+        error_4xx: number;
+        network_error: number;
+    };
+}
+interface StatsSkill {
+    id: number;
+    name: string;
+    calls: number;
+    successRate: number;
+    avgLatencyMs: number;
+}
+interface StatsProvider {
+    id: number;
+    name: string;
+    skillName: string;
+    calls: number;
+    successRate: number;
+    avgLatencyMs: number;
+    retryRate: number;
+    timeoutRate: number;
+}
+interface StatsDayVolume {
+    day: string;
+    calls: number;
+    successCalls: number;
+}
+interface StatsData {
+    overview: StatsOverview;
+    topSkills: StatsSkill[];
+    providers: StatsProvider[];
+    dailyVolume: StatsDayVolume[];
+}
+
+type Tab = "promo" | "skills" | "waitlist" | "stats";
 
 // ── Main Component ────────────────────────────────────────────────────────────
 
@@ -87,13 +129,13 @@ export default function AdminPage() {
 
             {/* Tab bar */}
             <div className={styles.tabBar}>
-                {(["promo", "skills", "waitlist"] as Tab[]).map((t) => (
+                {(["promo", "skills", "waitlist", "stats"] as Tab[]).map((t) => (
                     <button
                         key={t}
                         className={`${styles.tabBtn} ${activeTab === t ? styles.tabBtnActive : ""}`}
                         onClick={() => setActiveTab(t)}
                     >
-                        {t === "promo" ? "Promo Codes" : t === "skills" ? "Skills & Providers" : "Publisher Waitlist"}
+                        {t === "promo" ? "Promo Codes" : t === "skills" ? "Skills & Providers" : t === "waitlist" ? "Publisher Waitlist" : "Stats"}
                     </button>
                 ))}
             </div>
@@ -101,6 +143,7 @@ export default function AdminPage() {
             {activeTab === "promo" && <PromoTab />}
             {activeTab === "skills" && <SkillsTab />}
             {activeTab === "waitlist" && <WaitlistTab />}
+            {activeTab === "stats" && <StatsTab />}
         </div>
     );
 }
@@ -623,8 +666,6 @@ function ProviderModal({ skillId, onClose, onSaved }: { skillId: number; onClose
 }
 
 // ── Publisher Waitlist Tab ────────────────────────────────────────────────────
-
-function WaitlistTab() {
     const [entries, setEntries] = useState<WaitlistEntry[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -713,6 +754,172 @@ function WaitlistTab() {
                                         <td>{e.name ?? "—"}</td>
                                         <td style={{ color: "#94a3b8" }}>{e.useCase ?? "—"}</td>
                                         <td>{new Date(e.createdAt).toLocaleDateString()}</td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            )}
+        </>
+    );
+}
+
+// ── Stats Tab ─────────────────────────────────────────────────────────────────
+
+function successColor(rate: number): string {
+    if (rate >= 0.9) return "#00dc82";
+    if (rate >= 0.7) return "#f59e0b";
+    return "#ef4444";
+}
+
+function StatsTab() {
+    const [data, setData] = useState<StatsData | null>(null);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
+
+    useEffect(() => {
+        setLoading(true);
+        setError(null);
+        fetch("/api/admin/stats?period=7")
+            .then((r) => {
+                if (!r.ok) throw new Error(`HTTP ${r.status}`);
+                return r.json();
+            })
+            .then((d) => { setData(d); setLoading(false); })
+            .catch((e) => { setError(String(e)); setLoading(false); });
+    }, []);
+
+    if (loading) return <div className={styles.tabLoading}>Loading stats...</div>;
+    if (error || !data) return <div className={styles.tabError}>Error loading stats: {error} <button className={styles.retryBtn} onClick={() => window.location.reload()}>Retry</button></div>;
+
+    const { overview, topSkills, providers, dailyVolume } = data;
+    const maxCalls = Math.max(...dailyVolume.map((d) => d.calls), 1);
+
+    return (
+        <>
+            <div className={styles.tabHeader}>
+                <span className={styles.tabCount}>Last 7 days</span>
+            </div>
+
+            {/* Overview cards */}
+            <div className={styles.statsGrid}>
+                <div className={styles.statsCard}>
+                    <div className={styles.statsCardLabel}>Total Calls</div>
+                    <div className={styles.statsCardValue}>{overview.totalCalls.toLocaleString()}</div>
+                </div>
+                <div className={styles.statsCard}>
+                    <div className={styles.statsCardLabel}>Success Rate</div>
+                    <div className={styles.statsCardValue} style={{ color: successColor(overview.successRate) }}>
+                        {(overview.successRate * 100).toFixed(1)}%
+                    </div>
+                </div>
+                <div className={styles.statsCard}>
+                    <div className={styles.statsCardLabel}>Avg Latency</div>
+                    <div className={styles.statsCardValue}>{overview.avgLatencyMs}ms</div>
+                </div>
+                <div className={styles.statsCard}>
+                    <div className={styles.statsCardLabel}>Retry Rate</div>
+                    <div className={styles.statsCardValue} style={{ color: overview.retryRate > 0.1 ? "#f59e0b" : "#cbd5e1" }}>
+                        {(overview.retryRate * 100).toFixed(1)}%
+                    </div>
+                </div>
+            </div>
+
+            {/* Error breakdown */}
+            <div className={styles.section}>
+                <p className={styles.sectionTitle}>Error Breakdown</p>
+                <div className={styles.tableWrapper}>
+                    <table className={styles.table}>
+                        <thead><tr><th>Type</th><th>Count</th></tr></thead>
+                        <tbody>
+                            <tr><td style={{ color: "#00dc82" }}>Success</td><td>{overview.errorBreakdown.success}</td></tr>
+                            <tr><td style={{ color: "#f59e0b" }}>Timeout</td><td>{overview.errorBreakdown.timeout}</td></tr>
+                            <tr><td style={{ color: "#ef4444" }}>5xx Error</td><td>{overview.errorBreakdown.error_5xx}</td></tr>
+                            <tr><td style={{ color: "#ef4444" }}>4xx Error</td><td>{overview.errorBreakdown.error_4xx}</td></tr>
+                            <tr><td style={{ color: "#94a3b8" }}>Network Error</td><td>{overview.errorBreakdown.network_error}</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            {/* Daily volume bar chart */}
+            {dailyVolume.length > 0 && (
+                <div className={styles.section}>
+                    <p className={styles.sectionTitle}>Daily Volume</p>
+                    <div className={styles.barChart}>
+                        {dailyVolume.map((d) => (
+                            <div key={d.day} className={styles.barCol}>
+                                <div className={styles.barWrap}>
+                                    <div
+                                        className={styles.barSuccess}
+                                        style={{ height: `${(d.successCalls / maxCalls) * 100}%` }}
+                                        title={`${d.successCalls} success`}
+                                    />
+                                    <div
+                                        className={styles.barFail}
+                                        style={{ height: `${((d.calls - d.successCalls) / maxCalls) * 100}%` }}
+                                        title={`${d.calls - d.successCalls} failed`}
+                                    />
+                                </div>
+                                <div className={styles.barLabel}>{d.day.slice(5)}</div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
+
+            {/* Top skills */}
+            {topSkills.length > 0 && (
+                <div className={styles.section}>
+                    <p className={styles.sectionTitle}>Top Skills</p>
+                    <div className={styles.tableWrapper}>
+                        <table className={styles.table}>
+                            <thead>
+                                <tr><th>Skill</th><th>Calls</th><th>Success Rate</th><th>Avg Latency</th></tr>
+                            </thead>
+                            <tbody>
+                                {topSkills.map((s) => (
+                                    <tr key={s.id}>
+                                        <td style={{ fontWeight: 500 }}>{s.name}</td>
+                                        <td>{s.calls}</td>
+                                        <td style={{ color: successColor(s.successRate) }}>{(s.successRate * 100).toFixed(1)}%</td>
+                                        <td>{s.avgLatencyMs}ms</td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            )}
+
+            {/* Provider stats */}
+            {providers.length > 0 && (
+                <div className={styles.section}>
+                    <p className={styles.sectionTitle}>Providers</p>
+                    <div className={styles.tableWrapper}>
+                        <table className={styles.table}>
+                            <thead>
+                                <tr>
+                                    <th>Provider</th>
+                                    <th>Skill</th>
+                                    <th>Calls</th>
+                                    <th>Success Rate</th>
+                                    <th>Avg Latency</th>
+                                    <th>Retry Rate</th>
+                                    <th>Timeout Rate</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {providers.map((p) => (
+                                    <tr key={p.id}>
+                                        <td style={{ fontWeight: 500 }}>{p.name}</td>
+                                        <td style={{ color: "#64748b" }}>{p.skillName}</td>
+                                        <td>{p.calls}</td>
+                                        <td style={{ color: successColor(p.successRate) }}>{(p.successRate * 100).toFixed(1)}%</td>
+                                        <td>{p.avgLatencyMs}ms</td>
+                                        <td style={{ color: p.retryRate > 0.1 ? "#f59e0b" : "#cbd5e1" }}>{(p.retryRate * 100).toFixed(1)}%</td>
+                                        <td style={{ color: p.timeoutRate > 0.05 ? "#ef4444" : "#cbd5e1" }}>{(p.timeoutRate * 100).toFixed(1)}%</td>
                                     </tr>
                                 ))}
                             </tbody>

@@ -158,6 +158,7 @@ model Provider {
   pricePerCall Float
   avgLatencyMs Int        @default(500)
   retryRate    Float      @default(0)
+  timeoutRate  Float      @default(0)
   isActive     Boolean    @default(true)
   createdAt    DateTime   @default(now())
   calls        SkillCall[]
@@ -173,13 +174,17 @@ model SkillCall {
   latencyMs      Int?
   success        Boolean?
   costUSD        Float?
+  paramsHash     String?
+  errorType      String?
   createdAt      DateTime @default(now())
 
   skill          Skill    @relation(fields: [skillId], references: [id])
   provider       Provider @relation(fields: [providerId], references: [id])
 
-  @@index([sessionId, newApiUserId, createdAt])
+  @@index([sessionId, newApiUserId, skillId, createdAt])
   @@index([newApiUserId])
+  @@index([newApiUserId, paramsHash, createdAt])
+  @@index([createdAt(sort: Desc)])
 }
 
 model PublisherWaitlist {

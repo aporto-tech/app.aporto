@@ -1,7 +1,7 @@
 {
   "name": "@aporto-tech/sdk",
-  "version": "0.3.0",
-  "description": "Official SDK for the Aporto platform — LLM, search, audio, images, SMS, and skill routing via a single API key",
+  "version": "0.3.2",
+  "description": "The skill marketplace for AI agents. Discover thousands of capabilities by description, execute via smart provider routing, publish your own skills and earn — all through one API key.",
   "keywords": ["aporto", "ai", "sdk", "llm", "search", "agent"],
   "homepage": "https://aporto.tech",
   "repository": {
