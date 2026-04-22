@@ -88,6 +88,7 @@ export default function DashboardPage() {
 
     // Analytics state
     const [analyticsLogs, setAnalyticsLogs] = useState<any[]>([]);
+    const [analyticsTotal, setAnalyticsTotal] = useState(0);
     const [analyticsLoading, setAnalyticsLoading] = useState(false);
     const [analyticsAgent, setAnalyticsAgent] = useState("All Agents");
     const [analyticsAgents, setAnalyticsAgents] = useState<string[]>([]);
@@ -157,7 +158,7 @@ export default function DashboardPage() {
         if (analyticsAgent !== "All Agents") params.append("token_name", analyticsAgent);
         fetch(`/api/newapi/logs?${params.toString()}`, { cache: "no-store" })
             .then(r => r.json())
-            .then(d => { if (d.success) setAnalyticsLogs(d.logs ?? []); })
+            .then(d => { if (d.success) { setAnalyticsLogs(d.logs ?? []); setAnalyticsTotal(d.total ?? 0); } })
             .catch(() => {})
             .finally(() => setAnalyticsLoading(false));
     }, [status, activeTab, timeRange, analyticsAgent]);
@@ -558,7 +559,7 @@ export default function DashboardPage() {
                         {/* Analytics Tab Content */}
                         {activeTab === "analytics" && (() => {
                             // Compute stats from logs
-                            const totalRequests = analyticsLogs.length;
+                            const totalRequests = analyticsTotal;
                             const totalCost = analyticsLogs.reduce((s, l) => s + (l.costUSD ?? 0), 0);
                             const totalTokens = analyticsLogs.reduce((s, l) => s + (l.prompt_tokens ?? 0) + (l.completion_tokens ?? 0), 0);
                             const modelCounts: Record<string, number> = {};
