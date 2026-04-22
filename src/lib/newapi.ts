@@ -338,7 +338,7 @@ export async function newApiGetLogs(opts: {
         return { logs: formattedLogs, total, totalQuota, totalTokens };
     } catch (err) {
         console.error("[newapi] Error fetching logs via Prisma:", err);
-        return { logs: [], total: 0 };
+        return { logs: [], total: 0, totalQuota: 0, totalTokens: 0 };
     }
 }
 
