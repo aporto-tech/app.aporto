@@ -63,6 +63,7 @@ export async function POST(req: NextRequest) {
             pricePerCall: Number(pricePerCall),
             avgLatencyMs: body.avgLatencyMs ? Number(body.avgLatencyMs) : 500,
             retryRate: body.retryRate ? Number(body.retryRate) : 0,
+            providerSecret: body.providerSecret ? String(body.providerSecret) : null,
             isActive: body.isActive !== false,
         },
     });
@@ -98,6 +99,8 @@ export async function PATCH(req: NextRequest) {
     if ("avgLatencyMs" in body) data.avgLatencyMs = Number(body.avgLatencyMs);
     if ("retryRate" in body) data.retryRate = Number(body.retryRate);
     if ("isActive" in body) data.isActive = Boolean(body.isActive);
+    // Allow clearing providerSecret by passing null or "" explicitly
+    if ("providerSecret" in body) data.providerSecret = body.providerSecret ? String(body.providerSecret) : null;
 
     if (Object.keys(data).length === 0) {
         return NextResponse.json({ error: "No fields to update" }, { status: 400 });

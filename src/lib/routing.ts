@@ -39,6 +39,8 @@ export interface ScoredProvider {
     avgLatencyMs: number;
     retryRate: number;
     timeoutRate: number;
+    /** Per-provider secret for outbound auth. When set, forwarded as Bearer token instead of caller's key. */
+    secret: string | null;
 }
 
 type ErrorType = "success" | "timeout" | "network_error" | "error_5xx" | "error_4xx";
@@ -111,7 +113,7 @@ export async function selectProvider(
     // Unified CTE: exclude providers used in this session (24h) OR same paramsHash (2 min)
     // Always run the full query — no early single-row return that would skip paramsHash exclusion
     const rows = await prisma.$queryRawUnsafe<
-        { id: number; name: string; endpoint: string; price_per_call: number; avg_latency_ms: number; retry_rate: number; timeout_rate: number }[]
+        { id: number; name: string; endpoint: string; price_per_call: number; avg_latency_ms: number; retry_rate: number; timeout_rate: number; secret: string | null }[]
     >(
         `WITH used AS (
             SELECT DISTINCT "providerId"
@@ -133,10 +135,11 @@ export async function selectProvider(
             p.id,
             p.name,
             p.endpoint,
-            p."pricePerCall"  AS price_per_call,
-            p."avgLatencyMs"  AS avg_latency_ms,
-            p."retryRate"     AS retry_rate,
-            p."timeoutRate"   AS timeout_rate
+            p."pricePerCall"    AS price_per_call,
+            p."avgLatencyMs"    AS avg_latency_ms,
+            p."retryRate"       AS retry_rate,
+            p."timeoutRate"     AS timeout_rate,
+            p."providerSecret"  AS secret
         FROM "Provider" p
         WHERE p."skillId" = $3
           AND p."isActive" = true
@@ -184,6 +187,7 @@ export async function selectProvider(
         avgLatencyMs: Number(best.avg_latency_ms),
         retryRate: Number(best.retry_rate),
         timeoutRate: Number(best.timeout_rate),
+        secret: best.secret ?? null,
     };
 }
 
@@ -208,7 +212,10 @@ export async function executeSkillViaProvider(
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
-                "Authorization": authHeader,
+                // Use per-provider secret if set; otherwise fall back to caller's auth header.
+                // Never forward caller's API key to untrusted providers — add providerSecret
+                // when onboarding each external provider.
+                "Authorization": provider.secret ? `Bearer ${provider.secret}` : authHeader,
             },
             body: JSON.stringify(params),
             // 10s timeout — Vercel function limit is 10s on hobby, 30s on pro
@@ -270,9 +277,9 @@ export async function updateProviderStats(
         await prisma.$executeRawUnsafe(
             `UPDATE "Provider"
              SET
-               "avgLatencyMs" = ROUND($1 * $2 + (1 - $1) * "avgLatencyMs"),
-               "retryRate"    = $1 * $3 + (1 - $1) * "retryRate",
-               "timeoutRate"  = $1 * $4 + (1 - $1) * "timeoutRate"
+               "avgLatencyMs" = ROUND($1 * $2 + (1 - $1) * COALESCE("avgLatencyMs", 500)),
+               "retryRate"    = $1 * $3 + (1 - $1) * COALESCE("retryRate", 0),
+               "timeoutRate"  = $1 * $4 + (1 - $1) * COALESCE("timeoutRate", 0)
              WHERE id = $5`,
             ALPHA,
             latencyMs,

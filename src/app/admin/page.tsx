@@ -612,6 +612,7 @@ function ProviderModal({ skillId, onClose, onSaved }: { skillId: number; onClose
     const [name, setName] = useState("");
     const [endpoint, setEndpoint] = useState("");
     const [pricePerCall, setPricePerCall] = useState("");
+    const [providerSecret, setProviderSecret] = useState("");
     const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState("");
 
@@ -625,7 +626,7 @@ function ProviderModal({ skillId, onClose, onSaved }: { skillId: number; onClose
         const res = await fetch("/api/admin/providers", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ skillId, name, endpoint, pricePerCall: price }),
+            body: JSON.stringify({ skillId, name, endpoint, pricePerCall: price, providerSecret: providerSecret.trim() || null }),
         });
         setSubmitting(false);
 
@@ -653,6 +654,10 @@ function ProviderModal({ skillId, onClose, onSaved }: { skillId: number; onClose
                     <div className={styles.formGroup}>
                         <label>Price per call (USD)</label>
                         <input className={styles.formInput} type="number" min="0" step="0.0001" placeholder="0.006" value={pricePerCall} onChange={e => setPricePerCall(e.target.value)} required />
+                    </div>
+                    <div className={styles.formGroup}>
+                        <label>Provider Secret (optional)</label>
+                        <input className={styles.formInput} type="password" placeholder="Bearer token forwarded to provider endpoint" value={providerSecret} onChange={e => setProviderSecret(e.target.value)} />
                     </div>
                     {error && <p className={styles.error}>{error}</p>}
                     <div className={styles.modalFooter}>

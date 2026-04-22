@@ -158,10 +158,11 @@ model Provider {
   pricePerCall Float
   avgLatencyMs Int        @default(500)
   retryRate    Float      @default(0)
-  timeoutRate  Float      @default(0)
-  isActive     Boolean    @default(true)
-  createdAt    DateTime   @default(now())
-  calls        SkillCall[]
+  timeoutRate     Float      @default(0)
+  providerSecret  String?
+  isActive        Boolean    @default(true)
+  createdAt       DateTime   @default(now())
+  calls           SkillCall[]
 }
 
 model SkillCall {

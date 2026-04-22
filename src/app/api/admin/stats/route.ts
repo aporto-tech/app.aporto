@@ -35,7 +35,7 @@ export async function GET(req: NextRequest) {
             COUNT(*) FILTER (WHERE "errorType" = 'error_4xx')::int                        AS error_4xx_count,
             COUNT(*) FILTER (WHERE "errorType" = 'network_error')::int                    AS network_error_count
          FROM "SkillCall"
-         WHERE "createdAt" > NOW() - ($1 || ' days')::interval`,
+         WHERE "createdAt" > NOW() - INTERVAL '1 day' * $1`,
         period,
     );
 
