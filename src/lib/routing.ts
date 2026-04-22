@@ -36,6 +36,8 @@ export interface ScoredProvider {
     name: string;
     endpoint: string;
     pricePerCall: number;
+    /** If set, actual cost = costPerChar * params.text.length (overrides pricePerCall for variable-cost skills like TTS). */
+    costPerChar: number | null;
     avgLatencyMs: number;
     retryRate: number;
     timeoutRate: number;
@@ -113,7 +115,7 @@ export async function selectProvider(
     // Unified CTE: exclude providers used in this session (24h) OR same paramsHash (2 min)
     // Always run the full query — no early single-row return that would skip paramsHash exclusion
     const rows = await prisma.$queryRawUnsafe<
-        { id: number; name: string; endpoint: string; price_per_call: number; avg_latency_ms: number; retry_rate: number; timeout_rate: number; secret: string | null }[]
+        { id: number; name: string; endpoint: string; price_per_call: number; cost_per_char: number | null; avg_latency_ms: number; retry_rate: number; timeout_rate: number; secret: string | null }[]
     >(
         `WITH used AS (
             SELECT DISTINCT "providerId"
@@ -136,6 +138,7 @@ export async function selectProvider(
             p.name,
             p.endpoint,
             p."pricePerCall"    AS price_per_call,
+            p."costPerChar"     AS cost_per_char,
             p."avgLatencyMs"    AS avg_latency_ms,
             p."retryRate"       AS retry_rate,
             p."timeoutRate"     AS timeout_rate,
@@ -184,6 +187,7 @@ export async function selectProvider(
         name: best.name,
         endpoint: best.endpoint,
         pricePerCall: Number(best.price_per_call),
+        costPerChar: best.cost_per_char != null ? Number(best.cost_per_char) : null,
         avgLatencyMs: Number(best.avg_latency_ms),
         retryRate: Number(best.retry_rate),
         timeoutRate: Number(best.timeout_rate),

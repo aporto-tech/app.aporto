@@ -67,8 +67,18 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ success: false, message: "No active providers for this skill" }, { status: 503 });
         }
 
+        // For variable-cost providers (e.g. TTS), calculate actual cost from params.text.
+        // Falls back to pricePerCall for fixed-cost providers.
+        const textLen = typeof (params as Record<string, unknown>).text === "string"
+            ? ((params as Record<string, unknown>).text as string).length
+            : 0;
+        const actualCost =
+            provider.costPerChar != null && textLen > 0
+                ? Math.max(0.0001, textLen * provider.costPerChar)
+                : provider.pricePerCall;
+
         // Deduct balance before calling provider — returns 402 if insufficient
-        const balanceError = await deductUserQuota(auth.newApiUserId, provider.pricePerCall);
+        const balanceError = await deductUserQuota(auth.newApiUserId, actualCost);
         if (balanceError) return balanceError;
 
         const { success, data, latencyMs, errorType } = await executeSkillViaProvider(provider, params, authHeader);
@@ -77,7 +87,7 @@ export async function POST(req: NextRequest) {
         if (!success) {
             void prisma.$executeRawUnsafe(
                 `UPDATE users SET quota = quota + $1, used_quota = used_quota - $1 WHERE id = $2`,
-                Math.ceil(provider.pricePerCall * QUOTA_PER_DOLLAR),
+                Math.ceil(actualCost * QUOTA_PER_DOLLAR),
                 auth.newApiUserId,
             ).catch((e) => console.error("[routing/execute] refund failed:", e));
         }
@@ -90,7 +100,7 @@ export async function POST(req: NextRequest) {
             isRetry,
             latencyMs,
             success,
-            costUSD: success ? provider.pricePerCall : 0,
+            costUSD: success ? actualCost : 0,
             paramsHash,
             errorType,
         }).catch((e) => console.error("[routing/execute] recordSkillCall:", e));
@@ -98,14 +108,14 @@ export async function POST(req: NextRequest) {
         void updateProviderStats(provider.id, latencyMs, success, errorType === "timeout")
             .catch((e) => console.error("[routing/execute] updateProviderStats:", e));
 
-        void logServiceUsage(auth.newApiUserId, "skill", provider.name, success ? provider.pricePerCall : 0, { skillId, latencyMs, errorType })
+        void logServiceUsage(auth.newApiUserId, "skill", provider.name, success ? actualCost : 0, { skillId, latencyMs, errorType })
             .catch((e) => console.error("[routing/execute] logServiceUsage:", e));
 
         return NextResponse.json({
             success,
             provider: provider.name,
             latencyMs,
-            costUSD: success ? provider.pricePerCall : 0,
+            costUSD: success ? actualCost : 0,
             errorType,
             result: data,
         }, { status: success ? 200 : 502 });

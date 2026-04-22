@@ -156,6 +156,7 @@ model Provider {
   name         String
   endpoint     String
   pricePerCall Float
+  costPerChar  Float?     // if set, cost = costPerChar * params.text.length (overrides pricePerCall)
   avgLatencyMs Int        @default(500)
   retryRate    Float      @default(0)
   timeoutRate     Float      @default(0)

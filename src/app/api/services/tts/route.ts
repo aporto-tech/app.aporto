@@ -5,8 +5,17 @@ export const dynamic = "force-dynamic";
 
 const ELEVENLABS_BASE = "https://api.elevenlabs.io/v1";
 const DEFAULT_VOICE_ID = "21m00Tcm4TlvDq8ikWAM"; // Rachel
-const COST_PER_1K_CHARS = 0.24;
 
+// Cost per 1,000 characters by model
+const MODEL_COST: Record<string, number> = {
+    eleven_flash_v2_5:    0.08,
+    eleven_turbo_v2_5:    0.15,
+    eleven_multilingual_v2: 0.24,
+    eleven_v3:            0.30,
+};
+const DEFAULT_MODEL = "eleven_multilingual_v2";
+
+/** Direct service endpoint — returns audio/mpeg binary. */
 export async function POST(req: NextRequest) {
     try {
         const auth = await validateApiKeyOrSession(req);
@@ -18,7 +27,7 @@ export async function POST(req: NextRequest) {
         const {
             text,
             voice_id = DEFAULT_VOICE_ID,
-            model_id = "eleven_v3",
+            model_id = DEFAULT_MODEL,
             output_format = "mp3_44100_128",
         } = body;
 
@@ -26,10 +35,10 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ success: false, message: "Missing required field: text" }, { status: 400 });
         }
 
+        const costPer1k = MODEL_COST[model_id] ?? MODEL_COST[DEFAULT_MODEL];
         const charCount = text.length;
-        const costUSD = Math.max(0.0001, (charCount / 1000) * COST_PER_1K_CHARS);
+        const costUSD = Math.max(0.0001, (charCount / 1000) * costPer1k);
 
-        // Check balance and deduct
         const balanceError = await deductUserQuota(auth.newApiUserId, costUSD);
         if (balanceError) return balanceError;
 
@@ -54,12 +63,12 @@ export async function POST(req: NextRequest) {
                 prisma.$executeRawUnsafe(
                     `UPDATE users SET quota = quota + $1, used_quota = used_quota - $1 WHERE id = $2`,
                     Math.ceil(costUSD * 500_000),
-                    auth.newApiUserId
+                    auth.newApiUserId,
                 )
             );
             return NextResponse.json(
                 { success: false, message: `ElevenLabs error: ${res.status}`, detail: errText },
-                { status: res.status }
+                { status: res.status },
             );
         }
 
@@ -69,7 +78,6 @@ export async function POST(req: NextRequest) {
             model_id,
         });
 
-        // Stream audio back to the caller
         const audioBuffer = await res.arrayBuffer();
         return new NextResponse(audioBuffer, {
             status: 200,
