@@ -138,6 +138,10 @@ model Skill {
   embedding    Unsupported("vector(1536)")?
   paramsSchema String?    // JSON: {field: type} for execute_skill params
   tags         String?    // JSON array for display/filtering
+  category     String?    // e.g. "media/image", "search/web", "llm/chat"
+  capabilities String?    // JSON array: ["generate", "search", ...]
+  inputTypes   String?    // JSON array: ["text", "image", "audio", "url", "json"]
+  outputTypes  String?    // JSON array: ["text", "image", "audio", "url", "json", "binary"]
   isActive     Boolean    @default(true)
   publishedBy  String?    // null = Aporto internal; userId = publisher (future)
   createdAt    DateTime   @default(now())

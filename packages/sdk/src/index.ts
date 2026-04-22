@@ -1,7 +1,8 @@
 /**
  * @aporto-tech/sdk — Official SDK for the Aporto platform.
  *
- * Access 400+ LLM models, search, audio, images, and SMS through a single API key.
+ * Access 400+ LLM models, search, audio, images, SMS, and the Aporto skill
+ * routing layer through a single API key.
  *
  * Usage:
  *   import { AportoClient } from "@aporto-tech/sdk";
@@ -25,6 +26,10 @@
  *
  *   // SMS verification
  *   await aporto.sms.send({ to: "+1234567890" });
+ *
+ *   // Skill routing — discover and execute any skill in the marketplace
+ *   const { skills } = await aporto.routing.discoverSkills({ query: "generate image" });
+ *   const result = await aporto.routing.executeSkill({ skillId: skills[0].id, params: { prompt: "a cat" } });
  */
 
 import { createLlmModule } from "./modules/llm";
@@ -32,6 +37,7 @@ import { createSearchModule } from "./modules/search";
 import { createAudioModule } from "./modules/audio";
 import { createImagesModule } from "./modules/images";
 import { createSmsModule } from "./modules/sms";
+import { createRoutingModule } from "./modules/routing";
 import { AportoConfigError } from "./errors";
 
 export interface AportoClientOptions {
@@ -46,6 +52,7 @@ export class AportoClient {
     readonly audio: ReturnType<typeof createAudioModule>;
     readonly images: ReturnType<typeof createImagesModule>;
     readonly sms: ReturnType<typeof createSmsModule>;
+    readonly routing: ReturnType<typeof createRoutingModule>;
 
     constructor(options: AportoClientOptions) {
         if (!options.apiKey) {
@@ -59,6 +66,7 @@ export class AportoClient {
         this.audio = createAudioModule(apiKey, agentName);
         this.images = createImagesModule(apiKey, agentName);
         this.sms = createSmsModule(apiKey, agentName);
+        this.routing = createRoutingModule(apiKey, agentName);
     }
 }
 
@@ -69,3 +77,4 @@ export type { TextToSpeechOptions } from "./modules/audio";
 export type { SendSmsOptions, CheckSmsOptions, SmsResult } from "./modules/sms";
 export { createX402Fetch, AportoPaymentError } from "./modules/x402";
 export type { CreateX402FetchOptions } from "./modules/x402";
+export type { DiscoverSkillsOptions, SkillResult, ExecuteSkillOptions, ExecuteSkillResult } from "./modules/routing";

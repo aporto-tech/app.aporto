@@ -322,13 +322,15 @@ function buildMcpServer(userId: number, authHeader: string) {
         "aporto_discover_skills",
         "Discover Aporto skills by describing what you need in plain language. Returns up to 5 matching skills with their IDs, descriptions, and parameter schemas. Use page to paginate. Call before aporto_execute_skill.",
         {
-            query:     z.string().describe("Natural language description of what you need, e.g. 'search the web', 'generate an image', 'send an SMS'"),
-            sessionId: z.string().optional().describe("Caller-controlled session identifier for retry routing, e.g. 'agent-abc123-20260421'. Recommended format: '{agent}-{uuid}-{date}'."),
-            page:      z.number().int().min(0).optional().default(0).describe("Page index for pagination (0 = first 5 results, 1 = next 5, etc.)"),
+            query:      z.string().describe("Natural language description of what you need, e.g. 'search the web', 'generate an image', 'send an SMS'"),
+            sessionId:  z.string().optional().describe("Caller-controlled session identifier for retry routing, e.g. 'agent-abc123-20260421'. Recommended format: '{agent}-{uuid}-{date}'."),
+            page:       z.number().int().min(0).optional().default(0).describe("Page index for pagination (0 = first 5 results, 1 = next 5, etc.)"),
+            category:   z.string().optional().describe("Filter by category, e.g. 'media/image', 'search/web', 'llm/chat', 'communication/sms'"),
+            capability: z.string().optional().describe("Filter by capability verb, e.g. 'generate', 'search', 'transcribe', 'translate', 'send'"),
         },
-        async ({ query, page = 0 }) => {
+        async ({ query, page = 0, category, capability }) => {
             try {
-                const skills = await discoverSkills(query, page);
+                const skills = await discoverSkills(query, page, { category, capability });
                 if (skills.length === 0) {
                     return {
                         content: [{ type: "text" as const, text: page > 0
@@ -338,13 +340,17 @@ function buildMcpServer(userId: number, authHeader: string) {
                 }
 
                 const result = skills.map((s) => ({
-                    skillId: s.id,
-                    name: s.name,
-                    description: s.description,
-                    paramsSchema: s.paramsSchema ? JSON.parse(s.paramsSchema) : null,
-                    tags: s.tags ? JSON.parse(s.tags) : [],
-                    similarity: Math.round(s.similarity * 100) / 100,
-                }));
+                        skillId: s.id,
+                        name: s.name,
+                        description: s.description,
+                        category: s.category,
+                        capabilities: s.capabilities,
+                        inputTypes: s.inputTypes,
+                        outputTypes: s.outputTypes,
+                        paramsSchema: s.paramsSchema ? JSON.parse(s.paramsSchema) : null,
+                        tags: s.tags ? JSON.parse(s.tags) : [],
+                        similarity: Math.round(s.similarity * 100) / 100,
+                    }));
 
                 return {
                     content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],

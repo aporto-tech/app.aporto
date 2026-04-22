@@ -39,93 +39,66 @@ const SKILLS = [
         description: "Search the web and retrieve sourced answers with references. Standard search for quick results, deep search for comprehensive research.",
         paramsSchema: { query: "string", depth: "string (standard|deep, default: standard)", outputType: "string (sourcedAnswer|searchResults, default: sourcedAnswer)" },
         tags: ["search", "web", "research"],
-        providers: [
-            {
-                name: "Linkup Standard",
-                endpoint: `${BASE_URL}/api/providers/search`,
-                pricePerCall: 0.006,
-            },
-        ],
+        category: "search/web",
+        capabilities: ["search"],
+        inputTypes: ["text"],
+        outputTypes: ["text", "json"],
+        providers: [{ name: "Linkup Standard", endpoint: `${BASE_URL}/api/providers/search`, pricePerCall: 0.006 }],
     },
     {
         name: "AI Search",
         description: "AI-powered search and research synthesis. Search mode returns web hits; research mode returns a long-form synthesized answer from multiple sources.",
         paramsSchema: { query: "string", type: "string (search|research, default: search)" },
         tags: ["search", "ai", "research", "synthesis"],
-        providers: [
-            {
-                name: "You.com",
-                endpoint: `${BASE_URL}/api/providers/ai-search`,
-                pricePerCall: 0.005,
-            },
-        ],
+        category: "search/web",
+        capabilities: ["search", "summarize"],
+        inputTypes: ["text"],
+        outputTypes: ["text", "json"],
+        providers: [{ name: "You.com", endpoint: `${BASE_URL}/api/providers/ai-search`, pricePerCall: 0.005 }],
     },
     {
         name: "SMS Send",
         description: "Send an SMS or WhatsApp verification code to a phone number. Uses E.164 format for the phone number.",
         paramsSchema: { to: "string (E.164 phone number, e.g. +15551234567)", type: "string (sms|whatsapp, default: sms)" },
         tags: ["sms", "messaging", "verification", "whatsapp"],
-        providers: [
-            {
-                name: "Prelude",
-                endpoint: `${BASE_URL}/api/providers/sms`,
-                pricePerCall: 0.015,
-            },
-        ],
+        category: "communication/sms",
+        capabilities: ["send", "verify"],
+        inputTypes: ["text"],
+        outputTypes: ["json"],
+        providers: [{ name: "Prelude", endpoint: `${BASE_URL}/api/providers/sms`, pricePerCall: 0.015 }],
     },
     {
         name: "Image Generation",
         description: "Generate images from text prompts using fal.ai. Multiple model tiers: flux-schnell (fast, cheap), flux-dev (balanced), flux-pro (highest quality).",
-        paramsSchema: {
-            prompt: "string",
-            model: "string (flux-schnell|flux-dev|flux-pro, default: flux-schnell)",
-            image_size: "string (square_hd|square|portrait_4_3|portrait_16_9|landscape_4_3|landscape_16_9, default: square_hd)",
-            num_images: "number (1-4, default: 1)",
-        },
+        paramsSchema: { prompt: "string", model: "string (flux-schnell|flux-dev|flux-pro, default: flux-schnell)", image_size: "string (square_hd|square|portrait_4_3|portrait_16_9|landscape_4_3|landscape_16_9, default: square_hd)", num_images: "number (1-4, default: 1)" },
         tags: ["image", "generation", "ai", "creative"],
-        providers: [
-            {
-                name: "fal.ai flux-schnell",
-                endpoint: `${BASE_URL}/api/providers/image`,
-                pricePerCall: 0.004,
-            },
-        ],
+        category: "media/image",
+        capabilities: ["generate"],
+        inputTypes: ["text"],
+        outputTypes: ["image", "url"],
+        providers: [{ name: "fal.ai flux-schnell", endpoint: `${BASE_URL}/api/providers/image`, pricePerCall: 0.004 }],
     },
     {
         name: "Text to Speech",
         description: "Convert text to natural-sounding speech using ElevenLabs. Returns audio in MP3 format. Multiple voice options available.",
-        paramsSchema: {
-            text: "string",
-            voice_id: "string (ElevenLabs voice ID, default: Rachel)",
-            model_id: "string (default: eleven_v3)",
-            output_format: "string (default: mp3_44100_128)",
-        },
+        paramsSchema: { text: "string", voice_id: "string (ElevenLabs voice ID, default: Rachel)", model_id: "string (default: eleven_v3)", output_format: "string (default: mp3_44100_128)" },
         tags: ["tts", "audio", "voice", "speech"],
-        providers: [
-            {
-                name: "ElevenLabs",
-                endpoint: `${BASE_URL}/api/providers/tts`,
-                pricePerCall: 0.0024, // ~10 chars average
-            },
-        ],
+        category: "media/audio",
+        capabilities: ["generate", "convert"],
+        inputTypes: ["text"],
+        outputTypes: ["audio", "binary"],
+        providers: [{ name: "ElevenLabs", endpoint: `${BASE_URL}/api/providers/tts`, pricePerCall: 0.0024 }],
     },
     {
         name: "LLM Chat",
         description: "Chat completions via the Aporto LLM gateway. Access all major models: OpenAI GPT-4o, Anthropic Claude, Google Gemini, and more. Pay per token.",
-        paramsSchema: {
-            model: "string (e.g. openai/gpt-4o-mini, anthropic/claude-haiku-4-5-20251001)",
-            messages: "array of {role: system|user|assistant, content: string}",
-            max_tokens: "number (optional)",
-            temperature: "number 0-2 (optional)",
-        },
+        paramsSchema: { model: "string (e.g. openai/gpt-4o-mini, anthropic/claude-haiku-4-5-20251001)", messages: "array of {role: system|user|assistant, content: string}", max_tokens: "number (optional)", temperature: "number 0-2 (optional)" },
         tags: ["llm", "chat", "ai", "completions"],
-        providers: [
-            {
-                name: "Aporto Gateway",
-                endpoint: `${BASE_URL}/api/providers/chat`,
-                pricePerCall: 0.001, // varies by model; minimum estimate
-            },
-        ],
+        category: "llm/chat",
+        capabilities: ["generate", "summarize", "classify"],
+        inputTypes: ["text"],
+        outputTypes: ["text"],
+        providers: [{ name: "Aporto Gateway", endpoint: `${BASE_URL}/api/providers/chat`, pricePerCall: 0.001 }],
     },
 ];
 

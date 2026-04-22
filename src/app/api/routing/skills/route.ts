@@ -11,14 +11,14 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { query, page = 0 } = body;
+    const { query, page = 0, category, capability } = body;
 
     if (!query || typeof query !== "string") {
         return NextResponse.json({ success: false, message: "Missing required field: query" }, { status: 400 });
     }
 
     try {
-        const skills = await discoverSkills(query, page);
+        const skills = await discoverSkills(query, page, { category, capability });
         return NextResponse.json({ success: true, skills, page });
     } catch (err) {
         console.error("[routing/skills] error:", err);

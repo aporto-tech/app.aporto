@@ -19,6 +19,10 @@ export interface DiscoveredSkill {
     id: number;
     name: string;
     description: string;
+    category: string | null;
+    capabilities: string[];
+    inputTypes: string[];
+    outputTypes: string[];
     paramsSchema: string | null;
     tags: string | null;
     similarity: number;
@@ -38,35 +42,52 @@ export interface ScoredProvider {
 export async function discoverSkills(
     query: string,
     page = 0,
+    filters?: { category?: string; capability?: string },
 ): Promise<DiscoveredSkill[]> {
     const embedding = await embedQuery(query);
     const vectorLiteral = `[${embedding.join(",")}]`;
     const offset = page * PAGE_SIZE;
 
-    // pgvector cosine similarity: 1 - (embedding <=> query_vec)
-    const rows = await prisma.$queryRawUnsafe<
-        { id: number; name: string; description: string; params_schema: string | null; tags: string | null; similarity: number }[]
-    >(
-        `SELECT
-            id,
-            name,
-            description,
-            "paramsSchema" AS params_schema,
-            tags,
-            1 - (embedding <=> $1::vector) AS similarity
+    const conditions: string[] = [`"isActive" = true`, `embedding IS NOT NULL`];
+    const args: unknown[] = [vectorLiteral, PAGE_SIZE, offset];
+    let argIdx = 4;
+
+    if (filters?.category) {
+        conditions.push(`category = $${argIdx++}`);
+        args.push(filters.category);
+    }
+    if (filters?.capability) {
+        conditions.push(`capabilities::text ILIKE $${argIdx++}`);
+        args.push(`%"${filters.capability}"%`);
+    }
+
+    const where = conditions.join(" AND ");
+
+    const rows = await prisma.$queryRawUnsafe<{
+        id: number; name: string; description: string;
+        category: string | null; capabilities: string | null;
+        input_types: string | null; output_types: string | null;
+        params_schema: string | null; tags: string | null; similarity: number;
+    }[]>(
+        `SELECT id, name, description, category, capabilities,
+                "inputTypes" AS input_types, "outputTypes" AS output_types,
+                "paramsSchema" AS params_schema, tags,
+                1 - (embedding <=> $1::vector) AS similarity
          FROM "Skill"
-         WHERE "isActive" = true AND embedding IS NOT NULL
+         WHERE ${where}
          ORDER BY embedding <=> $1::vector
          LIMIT $2 OFFSET $3`,
-        vectorLiteral,
-        PAGE_SIZE,
-        offset,
+        ...args,
     );
 
     return rows.map((r) => ({
         id: r.id,
         name: r.name,
         description: r.description,
+        category: r.category,
+        capabilities: r.capabilities ? JSON.parse(r.capabilities) : [],
+        inputTypes: r.input_types ? JSON.parse(r.input_types) : [],
+        outputTypes: r.output_types ? JSON.parse(r.output_types) : [],
         paramsSchema: r.params_schema,
         tags: r.tags,
         similarity: Number(r.similarity),
