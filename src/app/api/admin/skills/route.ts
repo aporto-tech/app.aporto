@@ -42,8 +42,8 @@ export async function GET() {
             s."outputTypes" AS output_types,
             s."isActive"    AS is_active,
             s."createdAt"   AS created_at,
-            (SELECT COUNT(*) FROM "Provider" p WHERE p."skillId" = s.id AND p."isActive" = true) AS provider_count,
-            (SELECT COUNT(*) FROM "SkillCall" c WHERE c."skillId" = s.id) AS call_count
+            (SELECT COUNT(*)::int FROM "Provider" p WHERE p."skillId" = s.id AND p."isActive" = true) AS provider_count,
+            (SELECT COUNT(*)::int FROM "SkillCall" c WHERE c."skillId" = s.id) AS call_count
          FROM "Skill" s
          ORDER BY s."createdAt" DESC`
     );
