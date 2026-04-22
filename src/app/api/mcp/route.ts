@@ -21,6 +21,7 @@ import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/
 import { z } from "zod";
 import { validateApiKeyOrSession, deductUserQuota, logServiceUsage } from "@/lib/serviceProxy";
 import { prisma } from "@/lib/prisma";
+import { discoverSkills, selectProvider, executeSkillViaProvider, updateProviderStats, recordSkillCall } from "@/lib/routing";
 
 export const dynamic = "force-dynamic";
 
@@ -313,6 +314,102 @@ function buildMcpServer(userId: number, authHeader: string) {
 
             const reply = data.choices?.[0]?.message?.content ?? JSON.stringify(data);
             return { content: [{ type: "text" as const, text: reply }] };
+        }
+    );
+
+    // ── aporto_discover_skills ────────────────────────────────────────────────
+    server.tool(
+        "aporto_discover_skills",
+        "Discover Aporto skills by describing what you need in plain language. Returns up to 5 matching skills with their IDs, descriptions, and parameter schemas. Use page to paginate. Call before aporto_execute_skill.",
+        {
+            query:     z.string().describe("Natural language description of what you need, e.g. 'search the web', 'generate an image', 'send an SMS'"),
+            sessionId: z.string().optional().describe("Caller-controlled session identifier for retry routing, e.g. 'agent-abc123-20260421'. Recommended format: '{agent}-{uuid}-{date}'."),
+            page:      z.number().int().min(0).optional().default(0).describe("Page index for pagination (0 = first 5 results, 1 = next 5, etc.)"),
+        },
+        async ({ query, page = 0 }) => {
+            try {
+                const skills = await discoverSkills(query, page);
+                if (skills.length === 0) {
+                    return {
+                        content: [{ type: "text" as const, text: page > 0
+                            ? "No more skills found. You have reached the end of the results."
+                            : "No skills found matching your query. Try different keywords." }],
+                    };
+                }
+
+                const result = skills.map((s) => ({
+                    skillId: s.id,
+                    name: s.name,
+                    description: s.description,
+                    paramsSchema: s.paramsSchema ? JSON.parse(s.paramsSchema) : null,
+                    tags: s.tags ? JSON.parse(s.tags) : [],
+                    similarity: Math.round(s.similarity * 100) / 100,
+                }));
+
+                return {
+                    content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
+                };
+            } catch (err) {
+                return {
+                    content: [{ type: "text" as const, text: `Discovery error: ${String(err)}` }],
+                    isError: true,
+                };
+            }
+        }
+    );
+
+    // ── aporto_execute_skill ──────────────────────────────────────────────────
+    server.tool(
+        "aporto_execute_skill",
+        "Execute an Aporto skill by its ID. The routing layer picks the best provider by price and latency. Passing the same sessionId on retry will automatically use a different provider. Get skillId from aporto_discover_skills.",
+        {
+            skillId:   z.number().int().describe("Skill ID from aporto_discover_skills"),
+            params:    z.record(z.unknown()).describe("Parameters for the skill — see paramsSchema returned by aporto_discover_skills"),
+            sessionId: z.string().optional().describe("Same sessionId used in aporto_discover_skills. Used to route retries to a different provider."),
+        },
+        async ({ skillId, params, sessionId = `mcp-${userId}-${Date.now()}` }) => {
+            try {
+                const provider = await selectProvider(skillId, sessionId, userId);
+                if (!provider) {
+                    return {
+                        content: [{ type: "text" as const, text: "No active providers available for this skill." }],
+                        isError: true,
+                    };
+                }
+
+                const { success, data, latencyMs } = await executeSkillViaProvider(provider, params, authHeader);
+
+                // Record call (non-blocking)
+                void recordSkillCall({
+                    sessionId,
+                    newApiUserId: userId,
+                    skillId,
+                    providerId: provider.id,
+                    latencyMs,
+                    success,
+                    costUSD: provider.pricePerCall,
+                }).catch((e) => console.error("[execute_skill] recordSkillCall:", e));
+
+                // Update provider stats fire-and-forget
+                void updateProviderStats(provider.id, latencyMs, success)
+                    .catch((e) => console.error("[execute_skill] updateProviderStats:", e));
+
+                if (!success) {
+                    return {
+                        content: [{ type: "text" as const, text: `Provider error: ${JSON.stringify(data)}` }],
+                        isError: true,
+                    };
+                }
+
+                return {
+                    content: [{ type: "text" as const, text: JSON.stringify({ provider: provider.name, latencyMs, costUSD: provider.pricePerCall, result: data }, null, 2) }],
+                };
+            } catch (err) {
+                return {
+                    content: [{ type: "text" as const, text: `Execution error: ${String(err)}` }],
+                    isError: true,
+                };
+            }
         }
     );
 

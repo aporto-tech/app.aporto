@@ -1,13 +1,6 @@
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth/next";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import { isAdmin } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-
-const ADMIN_EMAIL = "pevzner@aporto.tech";
-
-function isAdmin(email?: string | null) {
-    return email === ADMIN_EMAIL;
-}
 
 function generateCode() {
     const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -19,8 +12,7 @@ function generateCode() {
 }
 
 export async function GET(req: Request) {
-    const session = await getServerSession(authOptions);
-    if (!isAdmin((session?.user as any)?.email)) {
+    if (!(await isAdmin())) {
         return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
@@ -66,8 +58,7 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
-    const session = await getServerSession(authOptions);
-    if (!isAdmin((session?.user as any)?.email)) {
+    if (!(await isAdmin())) {
         return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 

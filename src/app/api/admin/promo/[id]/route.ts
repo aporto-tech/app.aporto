@@ -1,13 +1,9 @@
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth/next";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import { isAdmin } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
-const ADMIN_EMAIL = "pevzner@aporto.tech";
-
 export async function DELETE(req: Request, { params }: { params: Promise<{ id: string }> }) {
-    const session = await getServerSession(authOptions);
-    if ((session?.user as any)?.email !== ADMIN_EMAIL) {
+    if (!(await isAdmin())) {
         return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 

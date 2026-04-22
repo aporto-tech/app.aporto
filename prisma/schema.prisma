@@ -129,3 +129,59 @@ model ServiceUsage {
   @@index([newApiUserId])
   @@index([service])
 }
+
+model Skill {
+  id           Int        @id @default(autoincrement())
+  name         String
+  description  String
+  embedding    Unsupported("vector(1536)")?
+  paramsSchema String?    // JSON: {field: type} for execute_skill params
+  tags         String?    // JSON array for display/filtering
+  isActive     Boolean    @default(true)
+  publishedBy  String?    // null = Aporto internal; userId = publisher (future)
+  createdAt    DateTime   @default(now())
+  providers    Provider[]
+  calls        SkillCall[]
+}
+
+model Provider {
+  id           Int        @id @default(autoincrement())
+  skillId      Int
+  skill        Skill      @relation(fields: [skillId], references: [id])
+  name         String
+  endpoint     String
+  pricePerCall Float
+  avgLatencyMs Int        @default(500)
+  retryRate    Float      @default(0)
+  isActive     Boolean    @default(true)
+  createdAt    DateTime   @default(now())
+  calls        SkillCall[]
+}
+
+model SkillCall {
+  id             Int      @id @default(autoincrement())
+  sessionId      String
+  newApiUserId   Int
+  skillId        Int
+  providerId     Int
+  isRetry        Boolean  @default(false)
+  latencyMs      Int?
+  success        Boolean?
+  costUSD        Float?
+  createdAt      DateTime @default(now())
+
+  skill          Skill    @relation(fields: [skillId], references: [id])
+  provider       Provider @relation(fields: [providerId], references: [id])
+
+  @@index([sessionId, newApiUserId, createdAt])
+  @@index([newApiUserId])
+}
+
+model PublisherWaitlist {
+  id        Int      @id @default(autoincrement())
+  email     String   @unique
+  name      String?
+  useCase   String?
+  createdAt DateTime @default(now())
+  approved  Boolean  @default(false)
+}
