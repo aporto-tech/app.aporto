@@ -58,7 +58,7 @@ export async function discoverSkills(
     const vectorLiteral = `[${embedding.join(",")}]`;
     const offset = page * PAGE_SIZE;
 
-    const conditions: string[] = [`"isActive" = true`, `embedding IS NOT NULL`];
+    const conditions: string[] = [`"isActive" = true`, `embedding IS NOT NULL`, `status = 'live'`];
     const args: unknown[] = [vectorLiteral, PAGE_SIZE, offset];
     let argIdx = 4;
 
@@ -111,9 +111,10 @@ export async function selectProvider(
     sessionId: string,
     newApiUserId: number,
     paramsHash?: string,
+    isThirdParty = false,
 ): Promise<ScoredProvider | null> {
     // Unified CTE: exclude providers used in this session (24h) OR same paramsHash (2 min)
-    // Always run the full query — no early single-row return that would skip paramsHash exclusion
+    // For third-party skills: also exclude providers without a providerSecret (T1 guard)
     const rows = await prisma.$queryRawUnsafe<
         { id: number; name: string; endpoint: string; price_per_call: number; cost_per_char: number | null; avg_latency_ms: number; retry_rate: number; timeout_rate: number; secret: string | null }[]
     >(
@@ -147,11 +148,13 @@ export async function selectProvider(
         WHERE p."skillId" = $3
           AND p."isActive" = true
           AND p.id NOT IN (SELECT "providerId" FROM used)
+          AND ($5 = false OR p."providerSecret" IS NOT NULL)
         ORDER BY p.id`,
         sessionId,
         newApiUserId,
         skillId,
         paramsHash ?? null,
+        isThirdParty,
     );
 
     if (rows.length === 0) return null;
@@ -201,6 +204,7 @@ export async function executeSkillViaProvider(
     provider: ScoredProvider,
     params: Record<string, unknown>,
     authHeader: string,
+    isThirdParty = false,
 ): Promise<{ success: boolean; data: unknown; latencyMs: number; errorType: ErrorType }> {
     // HTTPS-only enforcement (SSRF guard — admin controls endpoint URL)
     const url = new URL(provider.endpoint);
@@ -236,15 +240,16 @@ export async function executeSkillViaProvider(
 
     const latencyMs = Date.now() - start;
 
-    // 1MB response body cap
+    // Response body cap: 512KB for third-party providers, 1MB for internal
+    const responseCap = isThirdParty ? 524_288 : 1_048_576;
     const contentLength = Number(res.headers.get("content-length") ?? 0);
-    if (contentLength > 1_048_576) {
-        throw new Error("Provider response exceeds 1MB limit");
+    if (contentLength > responseCap) {
+        throw new Error(`Provider response exceeds ${isThirdParty ? "512KB" : "1MB"} limit`);
     }
 
     const text = await res.text();
-    if (text.length > 1_048_576) {
-        throw new Error("Provider response exceeds 1MB limit");
+    if (text.length > responseCap) {
+        throw new Error(`Provider response exceeds ${isThirdParty ? "512KB" : "1MB"} limit`);
     }
 
     let data: unknown;
@@ -296,7 +301,45 @@ export async function updateProviderStats(
     }
 }
 
-// ── recordSkillCall ───────────────────────────────────────────────────────────
+// ── createSkillRevenue ────────────────────────────────────────────────────────
+
+/**
+ * Write a SkillRevenue record for a successful third-party skill call.
+ * On DB failure, emits a structured log for manual reconciliation — never silently drops.
+ * Fire-and-forget: do NOT await before sending response.
+ */
+export async function createSkillRevenue(data: {
+    skillId: number;
+    publisherId: string;
+    skillCallId: number;
+    grossUSD: number;
+    revenueShare: number;
+}): Promise<void> {
+    const publisherEarningUSD = data.grossUSD * data.revenueShare;
+    try {
+        await prisma.$executeRawUnsafe(
+            `INSERT INTO "SkillRevenue" (id, "skillId", "publisherId", "skillCallId", "grossUSD", "revenueShare", "publisherEarningUSD", "paidOut", "createdAt")
+             VALUES (gen_random_uuid()::text, $1, $2, $3, $4, $5, $6, false, NOW())
+             ON CONFLICT ("skillCallId") DO NOTHING`,
+            data.skillId,
+            data.publisherId,
+            data.skillCallId,
+            data.grossUSD,
+            data.revenueShare,
+            publisherEarningUSD,
+        );
+    } catch (err) {
+        // Structured log for reconciliation — never silently drop revenue records
+        console.error("[createSkillRevenue] DB write failed — reconciliation needed:", {
+            skillId: data.skillId,
+            publisherId: data.publisherId,
+            skillCallId: data.skillCallId,
+            grossUSD: data.grossUSD,
+            publisherEarningUSD,
+            error: String(err),
+        });
+    }
+}
 
 export async function recordSkillCall(data: {
     sessionId: string;

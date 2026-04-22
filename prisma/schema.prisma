@@ -51,6 +51,7 @@ model User {
   lastInsufficientBalanceEmailAt DateTime?
   accounts                      Account[]
   sessions                      Session[]
+  publisher                     Publisher?
 }
 
 model PasswordResetToken {
@@ -131,6 +132,41 @@ model ServiceUsage {
   @@index([service])
 }
 
+model Publisher {
+  id              String    @id @default(cuid())
+  userId          String    @unique
+  user            User      @relation(fields: [userId], references: [id])
+  displayName     String
+  website         String?
+  description     String?
+  status          String    @default("pending")  // "pending" | "approved" | "suspended"
+  approvedAt      DateTime?
+  approvedBy      String?   // admin email
+  revenueShare    Float     @default(0.85)
+  stripeAccountId String?
+  createdAt       DateTime  @default(now())
+  skills          Skill[]
+  apiKeys         PublisherApiKey[]
+  revenue         SkillRevenue[]
+
+  @@index([status])
+}
+
+model PublisherApiKey {
+  id          String    @id @default(cuid())
+  publisherId String
+  publisher   Publisher @relation(fields: [publisherId], references: [id])
+  name        String
+  lookupHash  String    @unique  // sha256(key) — fast indexed lookup
+  keyHmac     String             // hmac-sha256(key, PUBLISHER_KEY_HMAC_SECRET) — anti-rainbow
+  prefix      String             // first 8 chars shown in UI: "sk-pub-ab12..."
+  lastUsedAt  DateTime?
+  revokedAt   DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@index([publisherId])
+}
+
 model Skill {
   id           Int        @id @default(autoincrement())
   name         String
@@ -143,10 +179,20 @@ model Skill {
   inputTypes   String?    // JSON array: ["text", "image", "audio", "url", "json"]
   outputTypes  String?    // JSON array: ["text", "image", "audio", "url", "json", "binary"]
   isActive     Boolean    @default(true)
-  publishedBy  String?    // null = Aporto internal; userId = publisher (future)
+  publisherId  String?    // null = Aporto internal; FK to Publisher
+  publisher    Publisher? @relation(fields: [publisherId], references: [id])
+  status       String     @default("live")  // "draft" | "pending_review" | "live" | "rejected"
+  reviewNote   String?    // admin note on rejection
+  lastEditedAt DateTime?  // for resubmit guard: must be > rejectedAt
+  inputSchema  String?    // JSON Schema (MCP compatibility)
+  mcpVersion   String?    // MCP protocol version
   createdAt    DateTime   @default(now())
   providers    Provider[]
   calls        SkillCall[]
+  revenue      SkillRevenue[]
+
+  @@index([status])
+  @@index([publisherId])
 }
 
 model Provider {
@@ -182,11 +228,31 @@ model SkillCall {
 
   skill          Skill    @relation(fields: [skillId], references: [id])
   provider       Provider @relation(fields: [providerId], references: [id])
+  skillRevenue   SkillRevenue?
 
   @@index([sessionId, newApiUserId, skillId, createdAt])
   @@index([newApiUserId])
   @@index([newApiUserId, paramsHash, createdAt])
   @@index([createdAt(sort: Desc)])
+}
+
+model SkillRevenue {
+  id                  String    @id @default(cuid())
+  skillId             Int
+  skill               Skill     @relation(fields: [skillId], references: [id])
+  publisherId         String
+  publisher           Publisher @relation(fields: [publisherId], references: [id])
+  skillCallId         Int       @unique
+  skillCall           SkillCall @relation(fields: [skillCallId], references: [id])
+  grossUSD            Float
+  revenueShare        Float
+  publisherEarningUSD Float
+  paidOut             Boolean   @default(false)
+  paidOutAt           DateTime?
+  createdAt           DateTime  @default(now())
+
+  @@index([publisherId, paidOut])
+  @@index([publisherId, createdAt(sort: Desc)])
 }
 
 model PublisherWaitlist {

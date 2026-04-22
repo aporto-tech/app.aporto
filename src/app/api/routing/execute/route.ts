@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createHash } from "crypto";
 import { validateApiKeyOrSession, deductUserQuota, logServiceUsage } from "@/lib/serviceProxy";
-import { selectProvider, executeSkillViaProvider, updateProviderStats, recordSkillCall } from "@/lib/routing";
+import { selectProvider, executeSkillViaProvider, updateProviderStats, recordSkillCall, createSkillRevenue } from "@/lib/routing";
 import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
@@ -44,6 +44,21 @@ export async function POST(req: NextRequest) {
 
     const paramsHash = computeParamsHash(skillId, params as Record<string, unknown>);
 
+    // Look up skill publisherId for third-party guard
+    const skillRows = await prisma.$queryRawUnsafe<{ publisherId: string | null; revenueShare: number | null }[]>(
+        `SELECT s."publisherId", p."revenueShare"
+         FROM "Skill" s
+         LEFT JOIN "Publisher" p ON p.id = s."publisherId"
+         WHERE s.id = $1 LIMIT 1`,
+        skillId,
+    );
+    if (skillRows.length === 0) {
+        return NextResponse.json({ success: false, message: "Skill not found." }, { status: 404 });
+    }
+    const publisherId = skillRows[0].publisherId ?? null;
+    const revenueShare = skillRows[0].revenueShare != null ? Number(skillRows[0].revenueShare) : null;
+    const isThirdParty = publisherId !== null;
+
     // Detect retry (same user + same params within 2 minutes)
     let isRetry = false;
     try {
@@ -62,9 +77,12 @@ export async function POST(req: NextRequest) {
     }
 
     try {
-        const provider = await selectProvider(skillId, resolvedSessionId, auth.newApiUserId, paramsHash);
+        const provider = await selectProvider(skillId, resolvedSessionId, auth.newApiUserId, paramsHash, isThirdParty);
         if (!provider) {
-            return NextResponse.json({ success: false, message: "No active providers for this skill" }, { status: 503 });
+            const msg = isThirdParty
+                ? "No active providers available for this skill. The skill provider may be misconfigured."
+                : "No active providers for this skill";
+            return NextResponse.json({ success: false, message: msg }, { status: 503 });
         }
 
         // For variable-cost providers (e.g. TTS), calculate actual cost from params.text.
@@ -81,7 +99,7 @@ export async function POST(req: NextRequest) {
         const balanceError = await deductUserQuota(auth.newApiUserId, actualCost);
         if (balanceError) return balanceError;
 
-        const { success, data, latencyMs, errorType } = await executeSkillViaProvider(provider, params, authHeader);
+        const { success, data, latencyMs, errorType } = await executeSkillViaProvider(provider, params, authHeader, isThirdParty);
 
         // Refund if provider failed
         if (!success) {
@@ -103,6 +121,17 @@ export async function POST(req: NextRequest) {
             costUSD: success ? actualCost : 0,
             paramsHash,
             errorType,
+        }).then((skillCallId) => {
+            // Write revenue record for third-party skill calls
+            if (success && isThirdParty && publisherId && revenueShare != null && actualCost > 0) {
+                void createSkillRevenue({
+                    skillId,
+                    publisherId,
+                    skillCallId,
+                    grossUSD: actualCost,
+                    revenueShare,
+                }).catch(() => {/* error already logged inside createSkillRevenue */});
+            }
         }).catch((e) => console.error("[routing/execute] recordSkillCall:", e));
 
         void updateProviderStats(provider.id, latencyMs, success, errorType === "timeout")

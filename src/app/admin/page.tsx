@@ -98,7 +98,7 @@ interface StatsData {
     dailyVolume: StatsDayVolume[];
 }
 
-type Tab = "promo" | "skills" | "waitlist" | "stats";
+type Tab = "promo" | "skills" | "waitlist" | "stats" | "pending" | "publishers";
 
 // ── Main Component ────────────────────────────────────────────────────────────
 
@@ -129,13 +129,13 @@ export default function AdminPage() {
 
             {/* Tab bar */}
             <div className={styles.tabBar}>
-                {(["promo", "skills", "waitlist", "stats"] as Tab[]).map((t) => (
+                {(["promo", "skills", "waitlist", "stats", "pending", "publishers"] as Tab[]).map((t) => (
                     <button
                         key={t}
                         className={`${styles.tabBtn} ${activeTab === t ? styles.tabBtnActive : ""}`}
                         onClick={() => setActiveTab(t)}
                     >
-                        {t === "promo" ? "Promo Codes" : t === "skills" ? "Skills & Providers" : t === "waitlist" ? "Publisher Waitlist" : "Stats"}
+                        {t === "promo" ? "Promo Codes" : t === "skills" ? "Skills & Providers" : t === "waitlist" ? "Publisher Waitlist" : t === "stats" ? "Stats" : t === "pending" ? "Pending Review" : "Publishers"}
                     </button>
                 ))}
             </div>
@@ -144,6 +144,8 @@ export default function AdminPage() {
             {activeTab === "skills" && <SkillsTab />}
             {activeTab === "waitlist" && <WaitlistTab />}
             {activeTab === "stats" && <StatsTab />}
+            {activeTab === "pending" && <PendingReviewTab />}
+            {activeTab === "publishers" && <PublishersTab />}
         </div>
     );
 }
@@ -935,5 +937,210 @@ function StatsTab() {
                 </div>
             )}
         </>
+    );
+}
+
+// ── PendingReviewTab ──────────────────────────────────────────────────────────
+
+interface PendingSkill {
+    id: number; name: string; description: string; category: string | null;
+    review_note: string | null; created_at: string;
+    publisher_id: string; publisher_name: string; publisher_email: string;
+    publisher_revenue_share: number; provider_count: number;
+}
+
+function PendingReviewTab() {
+    const [skills, setSkills] = useState<PendingSkill[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [rejectId, setRejectId] = useState<number | null>(null);
+    const [rejectReason, setRejectReason] = useState("");
+    const [working, setWorking] = useState(false);
+
+    const load = () => {
+        setLoading(true);
+        fetch("/api/admin/pending")
+            .then(r => r.json())
+            .then(d => { if (d.success) setSkills(d.skills ?? []); })
+            .finally(() => setLoading(false));
+    };
+
+    useEffect(() => { load(); }, []);
+
+    const approve = async (id: number) => {
+        setWorking(true);
+        await fetch(`/api/admin/skills/approve?id=${id}`, { method: "POST" });
+        setWorking(false);
+        load();
+    };
+
+    const reject = async (id: number) => {
+        if (!rejectReason.trim() || rejectReason.trim().length < 10) {
+            alert("Please provide a rejection reason (min 10 chars).");
+            return;
+        }
+        setWorking(true);
+        await fetch(`/api/admin/skills/reject?id=${id}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ reason: rejectReason }),
+        });
+        setWorking(false);
+        setRejectId(null);
+        setRejectReason("");
+        load();
+    };
+
+    if (loading) return <div style={{ color: "#64748b", padding: "24px 0" }}>Loading...</div>;
+
+    return (
+        <div>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+                <h2 style={{ margin: 0, fontSize: 18 }}>Pending Review ({skills.length})</h2>
+                <button onClick={load} style={{ padding: "6px 12px", borderRadius: 6, border: "1px solid #334155", background: "transparent", color: "#cbd5e1", cursor: "pointer" }}>Refresh</button>
+            </div>
+            {skills.length === 0 && <div style={{ color: "#64748b" }}>No skills pending review.</div>}
+            {skills.map(s => (
+                <div key={s.id} style={{ border: "1px solid #1e293b", borderRadius: 8, padding: 16, marginBottom: 16, background: "#0f172a" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                        <div>
+                            <div style={{ fontWeight: 600, fontSize: 15 }}>{s.name} <span style={{ color: "#64748b", fontWeight: 400, fontSize: 13 }}>#{s.id}</span></div>
+                            <div style={{ color: "#94a3b8", fontSize: 12, marginTop: 2 }}>{s.category ?? "uncategorized"} · {s.provider_count} provider(s)</div>
+                            <div style={{ color: "#475569", fontSize: 11, marginTop: 2 }}>by {s.publisher_name} ({s.publisher_email}) · {Math.round(s.publisher_revenue_share * 100)}% rev share</div>
+                        </div>
+                        <div style={{ display: "flex", gap: 8 }}>
+                            <button
+                                disabled={working}
+                                onClick={() => approve(s.id)}
+                                style={{ padding: "6px 14px", borderRadius: 6, border: "none", background: "#10b981", color: "#fff", cursor: "pointer", fontWeight: 600 }}
+                            >Approve</button>
+                            <button
+                                disabled={working}
+                                onClick={() => setRejectId(s.id)}
+                                style={{ padding: "6px 14px", borderRadius: 6, border: "1px solid #ef4444", background: "transparent", color: "#ef4444", cursor: "pointer" }}
+                            >Reject</button>
+                        </div>
+                    </div>
+                    <p style={{ color: "#94a3b8", fontSize: 13, margin: "12px 0 0" }}>{s.description}</p>
+
+                    {rejectId === s.id && (
+                        <div style={{ marginTop: 12 }}>
+                            <textarea
+                                value={rejectReason}
+                                onChange={e => setRejectReason(e.target.value)}
+                                placeholder="Rejection reason (min 10 chars)..."
+                                style={{ width: "100%", padding: 8, borderRadius: 6, border: "1px solid #334155", background: "#1e293b", color: "#e2e8f0", fontSize: 13, resize: "vertical", minHeight: 80 }}
+                            />
+                            <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+                                <button onClick={() => reject(s.id)} disabled={working} style={{ padding: "6px 12px", borderRadius: 6, border: "none", background: "#ef4444", color: "#fff", cursor: "pointer" }}>Send Rejection</button>
+                                <button onClick={() => { setRejectId(null); setRejectReason(""); }} style={{ padding: "6px 12px", borderRadius: 6, border: "1px solid #334155", background: "transparent", color: "#94a3b8", cursor: "pointer" }}>Cancel</button>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            ))}
+        </div>
+    );
+}
+
+// ── PublishersTab ─────────────────────────────────────────────────────────────
+
+interface PublisherRow {
+    publisher_id: string; display_name: string; email: string; website: string | null;
+    status: string; revenue_share: number; approved_at: string | null;
+    skill_count: number; live_skill_count: number; total_calls: number; unpaid_usd: number;
+}
+
+function PublishersTab() {
+    const [publishers, setPublishers] = useState<PublisherRow[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [working, setWorking] = useState(false);
+
+    const load = () => {
+        setLoading(true);
+        fetch("/api/admin/publishers")
+            .then(r => r.json())
+            .then(d => { if (d.success) setPublishers(d.publishers ?? []); })
+            .finally(() => setLoading(false));
+    };
+
+    useEffect(() => { load(); }, []);
+
+    const action = async (id: string, act: "approve" | "suspend") => {
+        setWorking(true);
+        await fetch(`/api/admin/publishers/${id}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ action: act }),
+        });
+        setWorking(false);
+        load();
+    };
+
+    const markPaid = async (publisherId: string) => {
+        setWorking(true);
+        await fetch("/api/admin/publisher-payouts", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ publisherId }),
+        });
+        setWorking(false);
+        load();
+    };
+
+    if (loading) return <div style={{ color: "#64748b", padding: "24px 0" }}>Loading...</div>;
+
+    const statusColor = (s: string) => s === "approved" ? "#10b981" : s === "pending" ? "#f59e0b" : "#ef4444";
+
+    return (
+        <div>
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 16 }}>
+                <h2 style={{ margin: 0, fontSize: 18 }}>Publishers ({publishers.length})</h2>
+                <button onClick={load} style={{ padding: "6px 12px", borderRadius: 6, border: "1px solid #334155", background: "transparent", color: "#cbd5e1", cursor: "pointer" }}>Refresh</button>
+            </div>
+            {publishers.length === 0 && <div style={{ color: "#64748b" }}>No publishers yet.</div>}
+            {publishers.map(p => (
+                <div key={p.publisher_id} style={{ border: "1px solid #1e293b", borderRadius: 8, padding: 16, marginBottom: 12, background: "#0f172a" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                        <div>
+                            <div style={{ fontWeight: 600, fontSize: 15 }}>{p.display_name}</div>
+                            <div style={{ color: "#64748b", fontSize: 12, marginTop: 2 }}>{p.email} {p.website && <span>· <a href={p.website} target="_blank" rel="noreferrer" style={{ color: "#6366f1" }}>{p.website}</a></span>}</div>
+                            <div style={{ marginTop: 6, display: "flex", gap: 16 }}>
+                                <span style={{ color: statusColor(p.status), fontWeight: 600, fontSize: 12 }}>{p.status.toUpperCase()}</span>
+                                <span style={{ color: "#94a3b8", fontSize: 12 }}>{Math.round(p.revenue_share * 100)}% rev share</span>
+                                <span style={{ color: "#94a3b8", fontSize: 12 }}>{p.live_skill_count}/{p.skill_count} skills live</span>
+                                <span style={{ color: "#94a3b8", fontSize: 12 }}>{p.total_calls} calls</span>
+                                {p.unpaid_usd > 0 && <span style={{ color: "#f59e0b", fontSize: 12, fontWeight: 600 }}>${p.unpaid_usd.toFixed(4)} unpaid</span>}
+                            </div>
+                        </div>
+                        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
+                            {p.status === "pending" && (
+                                <button disabled={working} onClick={() => action(p.publisher_id, "approve")}
+                                    style={{ padding: "5px 12px", borderRadius: 6, border: "none", background: "#10b981", color: "#fff", cursor: "pointer", fontSize: 12 }}>
+                                    Approve
+                                </button>
+                            )}
+                            {p.status === "approved" && (
+                                <button disabled={working} onClick={() => action(p.publisher_id, "suspend")}
+                                    style={{ padding: "5px 12px", borderRadius: 6, border: "1px solid #ef4444", background: "transparent", color: "#ef4444", cursor: "pointer", fontSize: 12 }}>
+                                    Suspend
+                                </button>
+                            )}
+                            {p.status === "suspended" && (
+                                <button disabled={working} onClick={() => action(p.publisher_id, "approve")}
+                                    style={{ padding: "5px 12px", borderRadius: 6, border: "1px solid #10b981", background: "transparent", color: "#10b981", cursor: "pointer", fontSize: 12 }}>
+                                    Re-approve
+                                </button>
+                            )}
+                            {p.unpaid_usd > 0 && (
+                                <button disabled={working} onClick={() => markPaid(p.publisher_id)}
+                                    style={{ padding: "5px 12px", borderRadius: 6, border: "none", background: "#6366f1", color: "#fff", cursor: "pointer", fontSize: 12 }}>
+                                    Mark Paid (${p.unpaid_usd.toFixed(2)})
+                                </button>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            ))}
+        </div>
     );
 }
