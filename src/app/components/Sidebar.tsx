@@ -3,19 +3,51 @@
 import React, { useEffect, useState } from "react";
 import styles from "./layout.module.css";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
+
+type SidebarContext = "user" | "publisher";
+type PublisherStatus = "loading" | "none" | "pending" | "approved" | "suspended";
 
 const Sidebar = () => {
     const pathname = usePathname();
+    const router = useRouter();
     const { data: session, status } = useSession();
 
-    // Balance state (from New-API)
+    // ─── Balance state ────────────────────────────────────────────────────────
     const [balance, setBalance] = useState<{ remainingUSD: number; usedUSD: number } | null>(null);
     const [balanceLoading, setBalanceLoading] = useState(true);
 
-    // ─── Fetch balance from New-API ──────────────────────────────────────────
-    // Re-fetch whenever session changes so we use the correct newApiUserId
+    // ─── Publisher state ──────────────────────────────────────────────────────
+    const [publisherStatus, setPublisherStatus] = useState<PublisherStatus>("loading");
+    const [publisherEarnings, setPublisherEarnings] = useState(0);
+
+    // ─── Context switcher ─────────────────────────────────────────────────────
+    const [sidebarCtx, setSidebarCtx] = useState<SidebarContext>(() => {
+        if (typeof window === "undefined") return "user";
+        if (pathname.startsWith("/publisher")) return "publisher";
+        try {
+            const stored = localStorage.getItem("aporto_sidebar_context");
+            if (stored === "publisher" || stored === "user") return stored as SidebarContext;
+        } catch {}
+        return "user";
+    });
+
+    // Sync context when user navigates directly to /publisher/* routes
+    useEffect(() => {
+        if (pathname.startsWith("/publisher")) {
+            setSidebarCtx("publisher");
+        }
+    }, [pathname]);
+
+    // Persist context choice
+    useEffect(() => {
+        try {
+            localStorage.setItem("aporto_sidebar_context", sidebarCtx);
+        } catch {}
+    }, [sidebarCtx]);
+
+    // ─── Fetch balance ────────────────────────────────────────────────────────
     useEffect(() => {
         if (status === "loading") return;
         const fetchBalance = async () => {
@@ -37,18 +69,85 @@ const Sidebar = () => {
         return () => clearInterval(interval);
     }, [status, session]);
 
-    const navItems = [
+    // ─── Fetch publisher status (session auth, not publisher API key) ─────────
+    useEffect(() => {
+        if (status === "loading" || !session) return;
+        const fetchPublisherStatus = async () => {
+            try {
+                const res = await fetch("/api/publisher/status");
+                if (!res.ok) { setPublisherStatus("none"); return; }
+                const data = await res.json() as { status: string; totalUnpaidUSD: number };
+                const ps = data.status as PublisherStatus;
+                setPublisherStatus(ps);
+                setPublisherEarnings(data.totalUnpaidUSD);
+                // Force-switch suspended users out of publisher context
+                if (ps === "suspended") {
+                    setSidebarCtx("user");
+                    if (pathname.startsWith("/publisher")) router.push("/dashboard");
+                }
+            } catch {
+                setPublisherStatus("none");
+            }
+        };
+        fetchPublisherStatus();
+    }, [status, session]); // eslint-disable-line react-hooks/exhaustive-deps
+
+    const handleContextSwitch = (ctx: SidebarContext) => {
+        setSidebarCtx(ctx);
+        if (ctx === "publisher" && !pathname.startsWith("/publisher")) {
+            router.push("/publisher");
+        }
+        if (ctx === "user" && pathname.startsWith("/publisher")) {
+            router.push("/dashboard");
+        }
+    };
+
+    // ─── Nav items ────────────────────────────────────────────────────────────
+    const userNavItems = [
         { name: "Dashboard", icon: "📊", path: "/dashboard" },
         { name: "Service Hub", icon: "⚡", path: "/services" },
         { name: "Guide", icon: "📖", path: "/guide" },
     ];
 
-    const managementItems = [
+    const userManagementItems = [
         { name: "Agents", icon: "🤖", path: "/agents" },
         { name: "Services", icon: "📁", path: "/all-services" },
-        { name: "Rules", icon: "🛡️", path: "/rules", hasAdd: true },
+        { name: "Rules", icon: "🛡️", path: "/rules" },
         { name: "Activity", icon: "📈", path: "/activity" },
     ];
+
+    // Overview → Skills → API Keys → Earnings (user-selected order)
+    const publisherNavItems = publisherStatus === "pending"
+        ? [{ name: "Overview", icon: "📊", path: "/publisher" }]
+        : [
+            { name: "Overview", icon: "📊", path: "/publisher" },
+            { name: "Skills", icon: "⚡", path: "/publisher/skills" },
+            { name: "API Keys", icon: "🔑", path: "/publisher/keys" },
+            { name: "Earnings", icon: "💰", path: "/publisher/earnings" },
+        ];
+
+    // Context switcher visible only for publishers (pending or approved)
+    const showSwitcher = publisherStatus === "approved" || publisherStatus === "pending";
+
+    // ─── Publisher badge ──────────────────────────────────────────────────────
+    const PublisherBadge = () => {
+        if (publisherStatus === "loading") {
+            return <span className={styles.publisherBadgeLoading}>···</span>;
+        }
+        if (publisherStatus === "approved" && publisherEarnings > 0) {
+            return <span className={styles.publisherBadgeApproved}>${publisherEarnings.toFixed(2)}</span>;
+        }
+        if (publisherStatus === "approved") {
+            return <span className={styles.publisherBadgeApproved}>✓</span>;
+        }
+        if (publisherStatus === "pending") {
+            return <span className={styles.publisherBadgePending}>pending</span>;
+        }
+        if (publisherStatus === "suspended") {
+            return <span className={styles.publisherBadgeSuspended}>suspended</span>;
+        }
+        return <span className={styles.publisherBadgeApply}>→ Apply</span>;
+    };
 
     return (
         <aside className={styles.sidebar}>
@@ -57,35 +156,86 @@ const Sidebar = () => {
                 <span className={styles.logoText}>aporto</span>
             </div>
 
-            <nav className={styles.sidebarNav}>
-                <div className={styles.navSection}>
-                    {navItems.map((item) => (
-                        <Link
-                            key={item.path}
-                            href={item.path}
-                            className={`${styles.navItem} ${pathname === item.path ? styles.navItemActive : ""
-                                }`}
-                        >
-                            <span>{item.icon}</span>
-                            <span>{item.name}</span>
-                        </Link>
-                    ))}
+            {/* Context switcher — only for approved/pending publishers */}
+            {showSwitcher && (
+                <div className={styles.contextSwitcher}>
+                    <button
+                        className={`${styles.switcherTab} ${sidebarCtx === "user" ? styles.switcherTabActive : ""}`}
+                        onClick={() => handleContextSwitch("user")}
+                    >
+                        User
+                    </button>
+                    <button
+                        className={`${styles.switcherTab} ${sidebarCtx === "publisher" ? styles.switcherTabActive : ""}`}
+                        onClick={() => handleContextSwitch("publisher")}
+                    >
+                        Publisher
+                    </button>
                 </div>
+            )}
 
-                <div className={styles.navSection}>
-                    <h3 className={styles.sectionTitle}>Management</h3>
-                    {managementItems.map((item) => (
-                        <Link
-                            key={item.path}
-                            href={item.path}
-                            className={`${styles.navItem} ${pathname === item.path ? styles.navItemActive : ""
-                                }`}
-                        >
-                            <span>{item.icon}</span>
-                            <span>{item.name}</span>
-                        </Link>
-                    ))}
-                </div>
+            <nav className={styles.sidebarNav}>
+                {sidebarCtx === "user" ? (
+                    <>
+                        <div className={styles.navSection}>
+                            {userNavItems.map((item) => (
+                                <Link
+                                    key={item.path}
+                                    href={item.path}
+                                    className={`${styles.navItem} ${pathname === item.path ? styles.navItemActive : ""}`}
+                                >
+                                    <span>{item.icon}</span>
+                                    <span>{item.name}</span>
+                                </Link>
+                            ))}
+                            {/* Publisher entry point — shown when no switcher (none/loading/suspended) */}
+                            {!showSwitcher && (
+                                <Link
+                                    href="/publisher"
+                                    className={`${styles.navItem} ${pathname.startsWith("/publisher") ? styles.navItemActive : ""}`}
+                                >
+                                    <span>🏗️</span>
+                                    <span className={styles.navItemWithBadge}>
+                                        Publisher
+                                        <PublisherBadge />
+                                    </span>
+                                </Link>
+                            )}
+                        </div>
+
+                        <div className={styles.navSection}>
+                            <h3 className={styles.sectionTitle}>Management</h3>
+                            {userManagementItems.map((item) => (
+                                <Link
+                                    key={item.path}
+                                    href={item.path}
+                                    className={`${styles.navItem} ${pathname === item.path ? styles.navItemActive : ""}`}
+                                >
+                                    <span>{item.icon}</span>
+                                    <span>{item.name}</span>
+                                </Link>
+                            ))}
+                        </div>
+                    </>
+                ) : (
+                    <div className={styles.navSection}>
+                        {publisherNavItems.map((item) => {
+                            const active = item.path === "/publisher"
+                                ? pathname === "/publisher"
+                                : pathname.startsWith(item.path);
+                            return (
+                                <Link
+                                    key={item.path}
+                                    href={item.path}
+                                    className={`${styles.navItem} ${active ? styles.navItemActive : ""}`}
+                                >
+                                    <span>{item.icon}</span>
+                                    <span>{item.name}</span>
+                                </Link>
+                            );
+                        })}
+                    </div>
+                )}
             </nav>
 
             <div className={styles.sidebarFooter}>
@@ -93,13 +243,19 @@ const Sidebar = () => {
                     <span>⚙️</span>
                     <span>Settings</span>
                 </Link>
-                <div className={styles.balance}>
-                    {balanceLoading ? (
-                        <span>Balance: <strong>...</strong></span>
-                    ) : (
-                        <span>Balance: <strong>${balance?.remainingUSD.toFixed(4) ?? "0.0000"}</strong></span>
-                    )}
-                </div>
+                {sidebarCtx === "publisher" ? (
+                    <div className={styles.balance}>
+                        <span>Unpaid: <strong style={{ color: "#10b981" }}>${publisherEarnings.toFixed(2)}</strong></span>
+                    </div>
+                ) : (
+                    <div className={styles.balance}>
+                        {balanceLoading ? (
+                            <span>Balance: <strong>...</strong></span>
+                        ) : (
+                            <span>Balance: <strong>${balance?.remainingUSD.toFixed(4) ?? "0.0000"}</strong></span>
+                        )}
+                    </div>
+                )}
             </div>
         </aside>
     );

@@ -82,6 +82,9 @@ export default function DashboardPage() {
     const [balance, setBalance] = useState<{ remainingUSD: number; usedUSD: number } | null>(null);
     const [balanceLoading, setBalanceLoading] = useState(true);
 
+    // Publisher status — for the "Earn with Aporto" CTA
+    const [dashPubStatus, setDashPubStatus] = useState<string>("loading");
+
     // Logs state for Recent Activity
     const [recentLogs, setRecentLogs] = useState<any[]>([]);
     const [logsLoading, setLogsLoading] = useState(true);
@@ -126,6 +129,15 @@ export default function DashboardPage() {
         };
         fetchBalance();
     }, [status, session]);
+
+    // ─── Fetch publisher status for dashboard CTA ─────────────────────────────
+    useEffect(() => {
+        if (status !== "authenticated") return;
+        fetch("/api/publisher/status")
+            .then(r => r.ok ? r.json() : { status: "none" })
+            .then((d: { status: string }) => setDashPubStatus(d.status))
+            .catch(() => setDashPubStatus("none"));
+    }, [status]);
 
     // ─── Fetch recent logs ───────────────────────────────────────────────────
     useEffect(() => {
@@ -870,6 +882,25 @@ export default function DashboardPage() {
                                 </div>
                             )}
                         </div>
+
+                        {/* Earn with Aporto — CTA for non-publishers */}
+                        {dashPubStatus === "none" && (
+                            <div className={styles.widget} style={{ background: "linear-gradient(135deg, rgba(99,102,241,0.08) 0%, rgba(0,220,130,0.06) 100%)", border: "1px solid rgba(99,102,241,0.2)" }}>
+                                <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+                                    <span style={{ fontSize: 20 }}>🏗️</span>
+                                    <span style={{ fontWeight: 600, fontSize: 14, color: "#e2e8f0" }}>Earn with Aporto</span>
+                                </div>
+                                <p style={{ fontSize: 12, color: "#888", lineHeight: 1.6, marginBottom: 14 }}>
+                                    Publish AI skills to the marketplace and earn revenue every time an agent calls your skill.
+                                </p>
+                                <Link
+                                    href="/publisher"
+                                    style={{ display: "inline-block", background: "#6366f1", color: "#fff", borderRadius: 6, padding: "7px 14px", fontSize: 12, fontWeight: 600, textDecoration: "none" }}
+                                >
+                                    Become a Publisher →
+                                </Link>
+                            </div>
+                        )}
                     </div>
                 </div>
             </DashboardLayout>

@@ -119,6 +119,84 @@
     padding: 12px;
 }
 
+/* Context switcher pill */
+.contextSwitcher {
+    display: flex;
+    margin: 0 12px 8px;
+    background-color: #1a1a1a;
+    border-radius: 6px;
+    border: 1px solid #2a2a2a;
+    overflow: hidden;
+}
+
+.switcherTab {
+    flex: 1;
+    padding: 7px 0;
+    font-size: 12px;
+    font-weight: 500;
+    color: #666666;
+    background: none;
+    border: none;
+    cursor: pointer;
+    transition: background-color 0.15s, color 0.15s;
+    border-radius: 5px;
+}
+
+.switcherTab:hover {
+    color: #aaaaaa;
+}
+
+.switcherTabActive {
+    background-color: #222222;
+    color: #ffffff;
+}
+
+/* Publisher badge in nav */
+.navItemWithBadge {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1;
+}
+
+.publisherBadgeLoading {
+    font-size: 10px;
+    color: #555555;
+    letter-spacing: 1px;
+}
+
+.publisherBadgeApproved {
+    font-size: 10px;
+    font-weight: 600;
+    color: #10b981;
+    background-color: rgba(16, 185, 129, 0.1);
+    border-radius: 10px;
+    padding: 2px 6px;
+}
+
+.publisherBadgePending {
+    font-size: 10px;
+    font-weight: 500;
+    color: #f59e0b;
+    background-color: rgba(245, 158, 11, 0.1);
+    border-radius: 10px;
+    padding: 2px 6px;
+}
+
+.publisherBadgeSuspended {
+    font-size: 10px;
+    font-weight: 500;
+    color: #ef4444;
+    background-color: rgba(239, 68, 68, 0.1);
+    border-radius: 10px;
+    padding: 2px 6px;
+}
+
+.publisherBadgeApply {
+    font-size: 11px;
+    color: #555555;
+}
+
 /* Header Styles */
 .userMenuWrapper {
     position: relative;

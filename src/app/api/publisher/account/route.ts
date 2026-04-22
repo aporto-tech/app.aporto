@@ -38,6 +38,7 @@ export async function GET(req: NextRequest) {
     ]);
 
     const account = accountRows[0];
+    if (!account) return NextResponse.json({ error: "Publisher not found." }, { status: 404 });
     const totalUnpaidUSD = Number(unpaidRows[0]?.total ?? 0);
     const submissionsUsed = submissionsRows[0]?.cnt ?? 0;
 
