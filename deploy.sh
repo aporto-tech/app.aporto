@@ -13,7 +13,11 @@ git pull origin main || git pull origin master
 echo "Installing npm dependencies..."
 npm install
 
-# 3. Build the Next.js application
+# 3. Apply any pending database migrations
+echo "Applying database migrations..."
+npx prisma migrate deploy
+
+# 4. Build the Next.js application
 echo "Building Next.js app..."
 npm run build
 

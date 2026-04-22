@@ -5,7 +5,7 @@ import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import styles from "./admin.module.css";
 
-const ADMIN_EMAIL = "pevzner@aporto.tech";
+const ADMIN_EMAILS = new Set(["pevzner@aporto.tech", "it@aporto.tech"]);
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -109,7 +109,7 @@ export default function AdminPage() {
 
     useEffect(() => {
         if (status === "loading") return;
-        if (!session || (session.user as any)?.email !== ADMIN_EMAIL) {
+        if (!session || !ADMIN_EMAILS.has((session.user as any)?.email ?? "")) {
             router.push("/dashboard");
         }
     }, [session, status, router]);
@@ -117,7 +117,7 @@ export default function AdminPage() {
     if (status === "loading") {
         return <div className={styles.container} style={{ color: "#64748b" }}>Loading...</div>;
     }
-    if (!session || (session.user as any)?.email !== ADMIN_EMAIL) {
+    if (!session || !ADMIN_EMAILS.has((session.user as any)?.email ?? "")) {
         return null;
     }
 
