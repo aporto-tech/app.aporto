@@ -16,16 +16,17 @@ import { PrismaClient } from "@prisma/client";
 const prisma = new PrismaClient();
 
 const BASE_URL = process.env.NEXTAUTH_URL ?? "https://app.aporto.tech";
-const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 
 async function embedText(text: string): Promise<number[]> {
-    if (!OPENAI_API_KEY) throw new Error("OPENAI_API_KEY not set");
-    const res = await fetch("https://api.openai.com/v1/embeddings", {
+    const baseUrl = process.env.NEWAPI_URL ?? "https://api.aporto.tech";
+    const apiKey = process.env.NEWAPI_ADMIN_KEY;
+    if (!apiKey) throw new Error("NEWAPI_ADMIN_KEY not set");
+    const res = await fetch(`${baseUrl}/v1/embeddings`, {
         method: "POST",
-        headers: { "Authorization": `Bearer ${OPENAI_API_KEY}`, "Content-Type": "application/json" },
+        headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
         body: JSON.stringify({ model: "text-embedding-3-small", input: text }),
     });
-    if (!res.ok) throw new Error(`OpenAI error ${res.status}: ${await res.text()}`);
+    if (!res.ok) throw new Error(`Embeddings error ${res.status}: ${await res.text()}`);
     const data = await res.json();
     return data.data[0].embedding;
 }
