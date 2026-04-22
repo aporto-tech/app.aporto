@@ -265,7 +265,7 @@ export async function newApiGetLogs(opts: {
     log_type?: string; 
     start_date?: number; // timestamp in seconds
     end_date?: number;   // timestamp in seconds
-}): Promise<{ logs: any[]; total: number }> {
+}): Promise<{ logs: any[]; total: number; totalQuota: number; totalTokens: number }> {
     try {
         const offset = opts.page * opts.size;
         
@@ -304,10 +304,12 @@ export async function newApiGetLogs(opts: {
         }
 
         const totalResult = await prisma.$queryRawUnsafe<any[]>(
-            `SELECT COUNT(*) as count FROM logs ${whereClause}`,
+            `SELECT COUNT(*) as count, COALESCE(SUM(quota), 0) as total_quota, COALESCE(SUM(prompt_tokens + completion_tokens), 0) as total_tokens FROM logs ${whereClause}`,
             ...params
         );
         const total = totalResult[0]?.count ? Number(totalResult[0].count) : 0;
+        const totalQuota = totalResult[0]?.total_quota ? Number(totalResult[0].total_quota) : 0;
+        const totalTokens = totalResult[0]?.total_tokens ? Number(totalResult[0].total_tokens) : 0;
 
         const logsResult = await prisma.$queryRawUnsafe<any[]>(
             `SELECT id, type, created_at, content, model_name, quota, prompt_tokens, completion_tokens, token_name
@@ -333,7 +335,7 @@ export async function newApiGetLogs(opts: {
             completion_tokens: Number(l.completion_tokens || 0)
         }));
 
-        return { logs: formattedLogs, total };
+        return { logs: formattedLogs, total, totalQuota, totalTokens };
     } catch (err) {
         console.error("[newapi] Error fetching logs via Prisma:", err);
         return { logs: [], total: 0 };

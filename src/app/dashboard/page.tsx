@@ -89,6 +89,8 @@ export default function DashboardPage() {
     // Analytics state
     const [analyticsLogs, setAnalyticsLogs] = useState<any[]>([]);
     const [analyticsTotal, setAnalyticsTotal] = useState(0);
+    const [analyticsTotalCost, setAnalyticsTotalCost] = useState(0);
+    const [analyticsTotalTokens, setAnalyticsTotalTokens] = useState(0);
     const [analyticsLoading, setAnalyticsLoading] = useState(false);
     const [analyticsAgent, setAnalyticsAgent] = useState("All Agents");
     const [analyticsAgents, setAnalyticsAgents] = useState<string[]>([]);
@@ -158,7 +160,7 @@ export default function DashboardPage() {
         if (analyticsAgent !== "All Agents") params.append("token_name", analyticsAgent);
         fetch(`/api/newapi/logs?${params.toString()}`, { cache: "no-store" })
             .then(r => r.json())
-            .then(d => { if (d.success) { setAnalyticsLogs(d.logs ?? []); setAnalyticsTotal(d.total ?? 0); } })
+            .then(d => { if (d.success) { setAnalyticsLogs(d.logs ?? []); setAnalyticsTotal(d.total ?? 0); setAnalyticsTotalCost(d.totalCostUSD ?? 0); setAnalyticsTotalTokens(d.totalTokens ?? 0); } })
             .catch(() => {})
             .finally(() => setAnalyticsLoading(false));
     }, [status, activeTab, timeRange, analyticsAgent]);
@@ -560,8 +562,8 @@ export default function DashboardPage() {
                         {activeTab === "analytics" && (() => {
                             // Compute stats from logs
                             const totalRequests = analyticsTotal;
-                            const totalCost = analyticsLogs.reduce((s, l) => s + (l.costUSD ?? 0), 0);
-                            const totalTokens = analyticsLogs.reduce((s, l) => s + (l.prompt_tokens ?? 0) + (l.completion_tokens ?? 0), 0);
+                            const totalCost = analyticsTotalCost;
+                            const totalTokens = analyticsTotalTokens;
                             const modelCounts: Record<string, number> = {};
                             analyticsLogs.forEach(l => { if (l.model_name) modelCounts[l.model_name] = (modelCounts[l.model_name] ?? 0) + 1; });
                             const topModel = Object.entries(modelCounts).sort((a, b) => b[1] - a[1])[0]?.[0] ?? "—";

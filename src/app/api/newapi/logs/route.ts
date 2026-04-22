@@ -24,7 +24,7 @@ export async function GET(req: NextRequest) {
         const start_date = searchParams.get('start_date') ? parseInt(searchParams.get('start_date')!, 10) : undefined;
         const end_date = searchParams.get('end_date') ? parseInt(searchParams.get('end_date')!, 10) : undefined;
 
-        const { logs, total } = await newApiGetLogs({
+        const { logs, total, totalQuota, totalTokens } = await newApiGetLogs({
             userId: Number(newApiUserId),
             page,
             size,
@@ -47,6 +47,8 @@ export async function GET(req: NextRequest) {
             success: true,
             logs: formattedItems,
             total: total,
+            totalCostUSD: totalQuota / QUOTA_PER_DOLLAR,
+            totalTokens: totalTokens,
             page: page,
             pageSize: size
         });
