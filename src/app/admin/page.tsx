@@ -666,6 +666,8 @@ function ProviderModal({ skillId, onClose, onSaved }: { skillId: number; onClose
 }
 
 // ── Publisher Waitlist Tab ────────────────────────────────────────────────────
+
+function WaitlistTab() {
     const [entries, setEntries] = useState<WaitlistEntry[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
