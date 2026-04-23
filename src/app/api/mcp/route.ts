@@ -13,48 +13,42 @@
  *   aporto_chat          — LLM chat completions via Aporto gateway
  *
  * Auth: Authorization: Bearer sk-live-{key}  (same key used for LLM calls)
+ *
+ * Billing notes:
+ *   - search / ai-search / sms / image / chat: billing handled by the service
+ *     endpoint that the provider proxies to (deductUserQuota runs there).
+ *   - tts: provider/tts calls ElevenLabs directly without billing, so the MCP
+ *     tool must deduct quota upfront and refund on failure.
  */
 
 import { NextRequest, NextResponse } from "next/server";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 import { z } from "zod";
-import { validateApiKeyOrSession, deductUserQuota, logServiceUsage } from "@/lib/serviceProxy";
+import { validateApiKeyOrSession, deductUserQuota } from "@/lib/serviceProxy";
 import { prisma } from "@/lib/prisma";
 import { discoverSkills, selectProvider, executeSkillViaProvider, updateProviderStats, recordSkillCall } from "@/lib/routing";
 
 export const dynamic = "force-dynamic";
 
-// ── constants (mirror service routes) ────────────────────────────────────────
+// ── Skill IDs (must match the Skill table) ────────────────────────────────────
 
-const LINKUP_BASE = "https://api.linkupapi.com/v1";
-const YOUCOM_BASE = "https://api.ydc-index.io";
-const PRELUDE_BASE = "https://api.prelude.dev/v2";
-const FAL_BASE = "https://fal.run";
-const ELEVENLABS_BASE = "https://api.elevenlabs.io/v1";
+const SKILL = {
+    SEARCH:    1,
+    AI_SEARCH: 2,
+    SMS:       3,
+    IMAGE:     4,
+    TTS:       5,
+    CHAT:      6,
+} as const;
 
-const MODEL_MAP: Record<string, { falModel: string; costPerMP: number }> = {
-    "flux-schnell": { falModel: "fal-ai/flux/schnell", costPerMP: 0.004 },
-    "flux-dev":     { falModel: "fal-ai/flux/dev",     costPerMP: 0.015 },
-    "flux-pro":     { falModel: "fal-ai/flux-pro",      costPerMP: 0.04  },
-};
-const SIZE_TO_MP: Record<string, number> = {
-    "square_hd":     1.05,
-    "square":        0.25,
-    "portrait_4_3":  0.75,
-    "portrait_16_9": 0.58,
-    "landscape_4_3": 0.75,
-    "landscape_16_9":0.58,
-};
 const QUOTA_PER_DOLLAR = 500_000;
-
-// ── helper: refund quota on provider error ────────────────────────────────────
 
 async function refundQuota(userId: number, costUSD: number) {
     await prisma.$executeRawUnsafe(
         `UPDATE users SET quota = quota + $1, used_quota = used_quota - $1 WHERE id = $2`,
         Math.ceil(costUSD * QUOTA_PER_DOLLAR),
-        userId
+        userId,
     );
 }
 
@@ -65,6 +59,32 @@ function buildMcpServer(userId: number, authHeader: string) {
         name: "aporto",
         version: "1.0.0",
     });
+
+    /**
+     * Route a call through the provider selection + execution layer.
+     * Returns null if no provider is available.
+     */
+    async function callSkill(
+        skillId: number,
+        params: Record<string, unknown>,
+        sessionId: string,
+        costUSD?: number,
+    ): Promise<{ success: boolean; data: unknown } | null> {
+        const provider = await selectProvider(skillId, sessionId, userId);
+        if (!provider) return null;
+
+        const { success, data, latencyMs } = await executeSkillViaProvider(provider, params, authHeader);
+
+        void recordSkillCall({
+            sessionId, newApiUserId: userId, skillId, providerId: provider.id,
+            latencyMs, success, costUSD,
+        }).catch((e) => console.error("[callSkill] recordSkillCall:", e));
+
+        void updateProviderStats(provider.id, latencyMs, success)
+            .catch((e) => console.error("[callSkill] updateProviderStats:", e));
+
+        return { success, data };
+    }
 
     // ── aporto_search ─────────────────────────────────────────────────────────
     server.tool(
@@ -78,27 +98,15 @@ function buildMcpServer(userId: number, authHeader: string) {
                          .describe("sourcedAnswer returns a text answer with sources; searchResults returns raw results"),
         },
         async ({ query, depth = "standard", outputType = "sourcedAnswer" }) => {
+            const sessionId = `mcp-${userId}-${Date.now()}`;
             const costUSD = depth === "deep" ? 0.055 : 0.006;
-            const balanceError = await deductUserQuota(userId, costUSD);
-            if (balanceError) {
-                return { content: [{ type: "text" as const, text: "Error: Insufficient balance. Top up at https://app.aporto.tech/dashboard/billing" }], isError: true };
-            }
 
-            const res = await fetch(`${LINKUP_BASE}/search`, {
-                method: "POST",
-                headers: { "Authorization": `Bearer ${process.env.LINKUP_API_KEY}`, "Content-Type": "application/json" },
-                body: JSON.stringify({ q: query, depth, outputType }),
-            });
-            const data = await res.json();
+            const result = await callSkill(SKILL.SEARCH, { query, depth, outputType }, sessionId, costUSD);
+            if (!result) return { content: [{ type: "text" as const, text: "No providers available" }], isError: true };
+            if (!result.success) return { content: [{ type: "text" as const, text: `Error: ${JSON.stringify(result.data)}` }], isError: true };
 
-            if (!res.ok) {
-                await refundQuota(userId, costUSD);
-                return { content: [{ type: "text" as const, text: `Linkup error: ${data.message ?? res.status}` }], isError: true };
-            }
-
-            await logServiceUsage(userId, "search", "linkup", costUSD, { query, depth });
-            return { content: [{ type: "text" as const, text: JSON.stringify({ ...data, costUSD }, null, 2) }] };
-        }
+            return { content: [{ type: "text" as const, text: JSON.stringify(result.data, null, 2) }] };
+        },
     );
 
     // ── aporto_ai_search ──────────────────────────────────────────────────────
@@ -111,29 +119,15 @@ function buildMcpServer(userId: number, authHeader: string) {
                     .describe("search = $0.005 (web hits), research = $0.0065 (synthesized answer)"),
         },
         async ({ query, type = "search" }) => {
+            const sessionId = `mcp-${userId}-${Date.now()}`;
             const costUSD = type === "research" ? 0.0065 : 0.005;
-            const balanceError = await deductUserQuota(userId, costUSD);
-            if (balanceError) {
-                return { content: [{ type: "text" as const, text: "Error: Insufficient balance. Top up at https://app.aporto.tech/dashboard/billing" }], isError: true };
-            }
 
-            const endpoint = type === "research" ? "/rag" : "/search";
-            const url = new URL(`${YOUCOM_BASE}${endpoint}`);
-            url.searchParams.set("query", query);
+            const result = await callSkill(SKILL.AI_SEARCH, { query, type }, sessionId, costUSD);
+            if (!result) return { content: [{ type: "text" as const, text: "No providers available" }], isError: true };
+            if (!result.success) return { content: [{ type: "text" as const, text: `Error: ${JSON.stringify(result.data)}` }], isError: true };
 
-            const res = await fetch(url.toString(), {
-                headers: { "X-API-Key": process.env.YOUCOM_API_KEY ?? "" },
-            });
-            const data = await res.json();
-
-            if (!res.ok) {
-                await refundQuota(userId, costUSD);
-                return { content: [{ type: "text" as const, text: `You.com error: ${data.message ?? res.status}` }], isError: true };
-            }
-
-            await logServiceUsage(userId, "ai-search", "youcom", costUSD, { query, type });
-            return { content: [{ type: "text" as const, text: JSON.stringify({ ...data, costUSD }, null, 2) }] };
-        }
+            return { content: [{ type: "text" as const, text: JSON.stringify(result.data, null, 2) }] };
+        },
     );
 
     // ── aporto_sms_send ───────────────────────────────────────────────────────
@@ -146,30 +140,14 @@ function buildMcpServer(userId: number, authHeader: string) {
                    .describe("Channel: sms (default) or whatsapp"),
         },
         async ({ to, type = "sms" }) => {
-            const costUSD = 0.015;
-            const balanceError = await deductUserQuota(userId, costUSD);
-            if (balanceError) {
-                return { content: [{ type: "text" as const, text: "Error: Insufficient balance. Top up at https://app.aporto.tech/dashboard/billing" }], isError: true };
-            }
+            const sessionId = `mcp-${userId}-${Date.now()}`;
 
-            const res = await fetch(`${PRELUDE_BASE}/verification`, {
-                method: "POST",
-                headers: { "Authorization": `Bearer ${process.env.PRELUDE_API_KEY}`, "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    target: { type: "phone_number", value: to },
-                    ...(type === "whatsapp" ? { dispatch_id: "whatsapp" } : {}),
-                }),
-            });
-            const data = await res.json();
+            const result = await callSkill(SKILL.SMS, { to, type }, sessionId, 0.015);
+            if (!result) return { content: [{ type: "text" as const, text: "No providers available" }], isError: true };
+            if (!result.success) return { content: [{ type: "text" as const, text: `Error: ${JSON.stringify(result.data)}` }], isError: true };
 
-            if (!res.ok) {
-                await refundQuota(userId, costUSD);
-                return { content: [{ type: "text" as const, text: `Prelude error: ${data.message ?? res.status}` }], isError: true };
-            }
-
-            await logServiceUsage(userId, "sms", "prelude", costUSD, { to, type, status: "sent" });
-            return { content: [{ type: "text" as const, text: JSON.stringify({ success: true, ...data, costUSD }, null, 2) }] };
-        }
+            return { content: [{ type: "text" as const, text: JSON.stringify(result.data, null, 2) }] };
+        },
     );
 
     // ── aporto_image_generate ─────────────────────────────────────────────────
@@ -187,44 +165,29 @@ function buildMcpServer(userId: number, authHeader: string) {
                          .describe("Number of images to generate (1-4)"),
         },
         async ({ prompt, model = "flux-schnell", image_size = "square_hd", num_images = 1 }) => {
-            const modelConfig = MODEL_MAP[model] ?? MODEL_MAP["flux-schnell"];
-            const mp = SIZE_TO_MP[image_size] ?? 1.0;
-            const costUSD = modelConfig.costPerMP * mp * Math.max(1, Math.min(4, num_images));
+            const sessionId = `mcp-${userId}-${Date.now()}`;
 
-            const balanceError = await deductUserQuota(userId, costUSD);
-            if (balanceError) {
-                return { content: [{ type: "text" as const, text: "Error: Insufficient balance. Top up at https://app.aporto.tech/dashboard/billing" }], isError: true };
-            }
+            const result = await callSkill(SKILL.IMAGE, { prompt, model, image_size, num_images }, sessionId);
+            if (!result) return { content: [{ type: "text" as const, text: "No providers available" }], isError: true };
+            if (!result.success) return { content: [{ type: "text" as const, text: `Error: ${JSON.stringify(result.data)}` }], isError: true };
 
-            const res = await fetch(`${FAL_BASE}/${modelConfig.falModel}`, {
-                method: "POST",
-                headers: { "Authorization": `Key ${process.env.FAL_KEY}`, "Content-Type": "application/json" },
-                body: JSON.stringify({ prompt, image_size, num_images: Math.max(1, Math.min(4, num_images)) }),
-            });
-            const data = await res.json();
-
-            if (!res.ok) {
-                await refundQuota(userId, costUSD);
-                return { content: [{ type: "text" as const, text: `fal.ai error: ${data.message ?? res.status}` }], isError: true };
-            }
-
-            await logServiceUsage(userId, "image", "fal", costUSD, { model: modelConfig.falModel, image_size, num_images });
-
-            // Return image URLs as both text and image content blocks
-            const images: { url: string; width: number; height: number }[] = data.images ?? [];
-            const content: Array<{ type: "text"; text: string } | { type: "image"; data: string; mimeType: string }> = [
-                { type: "text", text: `Generated ${images.length} image(s). Cost: $${costUSD.toFixed(4)}` },
-                ...images.map((img) => ({ type: "text" as const, text: `Image URL: ${img.url}` })),
-            ];
-
-            return { content };
-        }
+            const data = result.data as { images?: { url: string }[] };
+            const images = data.images ?? [];
+            return {
+                content: [
+                    { type: "text" as const, text: `Generated ${images.length} image(s).` },
+                    ...images.map((img) => ({ type: "text" as const, text: `Image URL: ${img.url}` })),
+                ],
+            };
+        },
     );
 
     // ── aporto_tts_create ─────────────────────────────────────────────────────
+    // provider/tts calls ElevenLabs + R2 directly without billing, so we
+    // deduct quota here and refund on failure.
     server.tool(
         "aporto_tts_create",
-        "Convert text to speech via ElevenLabs. Returns base64-encoded audio/mpeg. Cost: $0.24 per 1,000 characters.",
+        "Convert text to speech via ElevenLabs. Returns audio URL (valid 24h). Cost: $0.24 per 1,000 characters.",
         {
             text:          z.string().describe("Text to convert to speech"),
             voice_id:      z.string().optional().default("21m00Tcm4TlvDq8ikWAM")
@@ -242,39 +205,26 @@ function buildMcpServer(userId: number, authHeader: string) {
                 return { content: [{ type: "text" as const, text: "Error: Insufficient balance. Top up at https://app.aporto.tech/dashboard/billing" }], isError: true };
             }
 
-            const res = await fetch(`${ELEVENLABS_BASE}/text-to-speech/${voice_id}`, {
-                method: "POST",
-                headers: {
-                    "xi-api-key": process.env.ELEVENLABS_API_KEY ?? "",
-                    "Content-Type": "application/json",
-                    "Accept": "audio/mpeg",
-                },
-                body: JSON.stringify({
-                    text,
-                    model_id,
-                    output_format,
-                    voice_settings: { stability: 0.5, similarity_boost: 0.75 },
-                }),
-            });
+            const sessionId = `mcp-${userId}-${Date.now()}`;
+            const result = await callSkill(SKILL.TTS, { text, voice_id, model_id, output_format }, sessionId, costUSD);
 
-            if (!res.ok) {
-                const errText = await res.text();
+            if (!result) {
                 await refundQuota(userId, costUSD);
-                return { content: [{ type: "text" as const, text: `ElevenLabs error ${res.status}: ${errText}` }], isError: true };
+                return { content: [{ type: "text" as const, text: "No providers available" }], isError: true };
+            }
+            if (!result.success) {
+                await refundQuota(userId, costUSD);
+                return { content: [{ type: "text" as const, text: `ElevenLabs error: ${JSON.stringify(result.data)}` }], isError: true };
             }
 
-            await logServiceUsage(userId, "tts", "elevenlabs", costUSD, { charCount: text.length, voice_id, model_id });
-
-            const audioBuffer = await res.arrayBuffer();
-            const base64Audio = Buffer.from(audioBuffer).toString("base64");
-
+            const data = result.data as { url: string; expires_at: string };
             return {
                 content: [
-                    { type: "text" as const, text: `Audio generated. ${text.length} chars, cost $${costUSD.toFixed(4)}. Format: ${output_format}.` },
-                    { type: "text" as const, text: `base64:audio/mpeg:${base64Audio}` },
+                    { type: "text" as const, text: `Audio generated. ${text.length} chars, cost $${costUSD.toFixed(4)}.` },
+                    { type: "text" as const, text: JSON.stringify({ url: data.url, expires_at: data.expires_at }) },
                 ],
             };
-        }
+        },
     );
 
     // ── aporto_chat ───────────────────────────────────────────────────────────
@@ -291,30 +241,19 @@ function buildMcpServer(userId: number, authHeader: string) {
             temperature: z.number().min(0).max(2).optional().describe("Sampling temperature 0-2"),
         },
         async ({ model, messages, max_tokens, temperature }) => {
-            const newApiUrl = process.env.NEWAPI_URL ?? "https://api.aporto.tech";
+            const sessionId = `mcp-${userId}-${Date.now()}`;
+            const params: Record<string, unknown> = { model, messages };
+            if (max_tokens !== undefined) params.max_tokens = max_tokens;
+            if (temperature !== undefined) params.temperature = temperature;
 
-            const body: Record<string, unknown> = { model, messages };
-            if (max_tokens !== undefined) body.max_tokens = max_tokens;
-            if (temperature !== undefined) body.temperature = temperature;
+            const result = await callSkill(SKILL.CHAT, params, sessionId);
+            if (!result) return { content: [{ type: "text" as const, text: "No providers available" }], isError: true };
+            if (!result.success) return { content: [{ type: "text" as const, text: `LLM error: ${JSON.stringify(result.data)}` }], isError: true };
 
-            const res = await fetch(`${newApiUrl}/v1/chat/completions`, {
-                method: "POST",
-                headers: {
-                    "Authorization": authHeader,
-                    "Content-Type": "application/json",
-                },
-                body: JSON.stringify(body),
-            });
-
-            const data = await res.json();
-
-            if (!res.ok) {
-                return { content: [{ type: "text" as const, text: `LLM error ${res.status}: ${data.error?.message ?? JSON.stringify(data)}` }], isError: true };
-            }
-
-            const reply = data.choices?.[0]?.message?.content ?? JSON.stringify(data);
+            const data = result.data as { choices?: { message?: { content?: string } }[] };
+            const reply = data.choices?.[0]?.message?.content ?? JSON.stringify(result.data);
             return { content: [{ type: "text" as const, text: reply }] };
-        }
+        },
     );
 
     // ── aporto_discover_skills ────────────────────────────────────────────────
@@ -361,7 +300,7 @@ function buildMcpServer(userId: number, authHeader: string) {
                     isError: true,
                 };
             }
-        }
+        },
     );
 
     // ── aporto_execute_skill ──────────────────────────────────────────────────
@@ -375,40 +314,23 @@ function buildMcpServer(userId: number, authHeader: string) {
         },
         async ({ skillId, params, sessionId = `mcp-${userId}-${Date.now()}` }) => {
             try {
-                const provider = await selectProvider(skillId, sessionId, userId);
-                if (!provider) {
+                const result = await callSkill(skillId, params, sessionId, undefined);
+                if (!result) {
                     return {
                         content: [{ type: "text" as const, text: "No active providers available for this skill." }],
                         isError: true,
                     };
                 }
 
-                const { success, data, latencyMs } = await executeSkillViaProvider(provider, params, authHeader);
-
-                // Record call (non-blocking)
-                void recordSkillCall({
-                    sessionId,
-                    newApiUserId: userId,
-                    skillId,
-                    providerId: provider.id,
-                    latencyMs,
-                    success,
-                    costUSD: provider.pricePerCall,
-                }).catch((e) => console.error("[execute_skill] recordSkillCall:", e));
-
-                // Update provider stats fire-and-forget
-                void updateProviderStats(provider.id, latencyMs, success)
-                    .catch((e) => console.error("[execute_skill] updateProviderStats:", e));
-
-                if (!success) {
+                if (!result.success) {
                     return {
-                        content: [{ type: "text" as const, text: `Provider error: ${JSON.stringify(data)}` }],
+                        content: [{ type: "text" as const, text: `Provider error: ${JSON.stringify(result.data)}` }],
                         isError: true,
                     };
                 }
 
                 return {
-                    content: [{ type: "text" as const, text: JSON.stringify({ provider: provider.name, latencyMs, costUSD: provider.pricePerCall, result: data }, null, 2) }],
+                    content: [{ type: "text" as const, text: JSON.stringify(result.data, null, 2) }],
                 };
             } catch (err) {
                 return {
@@ -416,7 +338,7 @@ function buildMcpServer(userId: number, authHeader: string) {
                     isError: true,
                 };
             }
-        }
+        },
     );
 
     return server;

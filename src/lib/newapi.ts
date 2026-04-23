@@ -26,6 +26,7 @@ interface NewApiToken {
     expired_time: number;
     remain_quota: number;
     unlimited_quota: boolean;
+    used_quota: number;
 }
 
 function getConfig() {
@@ -227,9 +228,9 @@ export async function newApiUpdatePassword(opts: {
 export async function newApiListTokens(userId: number): Promise<NewApiToken[]> {
     try {
         const tokens = await prisma.$queryRawUnsafe<any[]>(
-            `SELECT id, key, name, status, created_time, accessed_time, expired_time, remain_quota, unlimited_quota 
-             FROM tokens 
-             WHERE user_id = $1 AND deleted_at IS NULL 
+            `SELECT id, key, name, status, created_time, accessed_time, expired_time, remain_quota, unlimited_quota, used_quota
+             FROM tokens
+             WHERE user_id = $1 AND deleted_at IS NULL
              ORDER BY created_time DESC`,
             userId
         );
@@ -244,7 +245,8 @@ export async function newApiListTokens(userId: number): Promise<NewApiToken[]> {
             accessed_time: Number(t.accessed_time),
             expired_time: Number(t.expired_time),
             remain_quota: Number(t.remain_quota),
-            unlimited_quota: Boolean(t.unlimited_quota)
+            unlimited_quota: Boolean(t.unlimited_quota),
+            used_quota: Number(t.used_quota ?? 0),
         }));
     } catch (err) {
         console.error("[newapi] Error listing tokens via Prisma:", err);
@@ -262,77 +264,123 @@ export async function newApiGetLogs(opts: {
     size: number;
     model_name?: string;
     token_name?: string;
-    log_type?: string; 
+    log_type?: string;
     start_date?: number; // timestamp in seconds
     end_date?: number;   // timestamp in seconds
 }): Promise<{ logs: any[]; total: number; totalQuota: number; totalTokens: number }> {
     try {
         const offset = opts.page * opts.size;
-        
-        let whereClause = `WHERE user_id = $1 AND type IN (1, 2)`;
+
+        // ── logs (LLM calls via New-API) ──────────────────────────────────────
+        const logsConditions: string[] = [`user_id = $1`, `type IN (1, 2)`];
         const params: any[] = [opts.userId];
-        let pCount = 1;
+        let p = 1;
+
+        // ── ServiceUsage (non-LLM: search, TTS, SMS, image) ──────────────────
+        const svConditions: string[] = [`"newApiUserId" = $1`];
+        // Exclude service_usages when filter only matches logs
+        let excludeSv = false;
 
         if (opts.model_name && opts.model_name !== "All Models") {
-            pCount++;
-            whereClause += ` AND model_name = $${pCount}`;
+            p++;
+            logsConditions.push(`model_name = $${p}`);
+            svConditions.push(`service = $${p}`);
             params.push(opts.model_name);
         }
         if (opts.token_name && opts.token_name !== "All Agents") {
-            pCount++;
-            whereClause += ` AND token_name = $${pCount}`;
+            p++;
+            logsConditions.push(`token_name = $${p}`);
             params.push(opts.token_name);
+            excludeSv = true; // ServiceUsage has no token info
         }
         if (opts.log_type && opts.log_type !== "All Types") {
             if (opts.log_type === "Consume") {
-                whereClause += ` AND type = 2 AND (content = '' OR content IS NULL)`;
+                logsConditions.push(`type = 2 AND (content = '' OR content IS NULL)`);
+                // service_usages are always "Consume" — keep them
             } else if (opts.log_type === "Error") {
-                whereClause += ` AND type = 2 AND content != '' AND content IS NOT NULL`;
+                logsConditions.push(`type = 2 AND content != '' AND content IS NOT NULL`);
+                excludeSv = true; // service_usages are never errors
             } else if (opts.log_type === "Top-up") {
-                whereClause += ` AND type = 1`;
+                logsConditions.push(`type = 1`);
+                excludeSv = true; // service_usages are never top-ups
             }
         }
         if (opts.start_date) {
-            pCount++;
-            whereClause += ` AND created_at >= $${pCount}`;
+            p++;
+            logsConditions.push(`created_at >= $${p}`);
+            svConditions.push(`EXTRACT(EPOCH FROM "createdAt") >= $${p}`);
             params.push(opts.start_date);
         }
         if (opts.end_date) {
-            pCount++;
-            whereClause += ` AND created_at <= $${pCount}`;
+            p++;
+            logsConditions.push(`created_at <= $${p}`);
+            svConditions.push(`EXTRACT(EPOCH FROM "createdAt") <= $${p}`);
             params.push(opts.end_date);
         }
 
+        const logsSubquery = `
+            SELECT
+                id::text             AS id,
+                created_at,
+                type,
+                COALESCE(content, '')      AS content,
+                COALESCE(model_name, '')   AS model_name,
+                COALESCE(token_name, '')   AS token_name,
+                COALESCE(quota, 0)         AS quota,
+                COALESCE(prompt_tokens, 0) AS prompt_tokens,
+                COALESCE(completion_tokens, 0) AS completion_tokens
+            FROM logs
+            WHERE ${logsConditions.join(" AND ")}`;
+
+        const svSubquery = `
+            SELECT
+                id                                         AS id,
+                EXTRACT(EPOCH FROM "createdAt")::bigint    AS created_at,
+                2                                          AS type,
+                ''                                         AS content,
+                service                                    AS model_name,
+                ''                                         AS token_name,
+                ("costUSD" * 500000)::bigint               AS quota,
+                0                                          AS prompt_tokens,
+                0                                          AS completion_tokens
+            FROM "ServiceUsage"
+            WHERE ${svConditions.join(" AND ")}`;
+
+        const combined = excludeSv
+            ? logsSubquery
+            : `${logsSubquery} UNION ALL ${svSubquery}`;
+
         const totalResult = await prisma.$queryRawUnsafe<any[]>(
-            `SELECT COUNT(*) as count, COALESCE(SUM(quota), 0) as total_quota, COALESCE(SUM(prompt_tokens + completion_tokens), 0) as total_tokens FROM logs ${whereClause}`,
-            ...params
+            `SELECT COUNT(*) AS count,
+                    COALESCE(SUM(quota), 0) AS total_quota,
+                    COALESCE(SUM(prompt_tokens + completion_tokens), 0) AS total_tokens
+             FROM (${combined}) _c`,
+            ...params,
         );
-        const total = totalResult[0]?.count ? Number(totalResult[0].count) : 0;
-        const totalQuota = totalResult[0]?.total_quota ? Number(totalResult[0].total_quota) : 0;
-        const totalTokens = totalResult[0]?.total_tokens ? Number(totalResult[0].total_tokens) : 0;
+        const total      = Number(totalResult[0]?.count       ?? 0);
+        const totalQuota = Number(totalResult[0]?.total_quota  ?? 0);
+        const totalTokens = Number(totalResult[0]?.total_tokens ?? 0);
 
         const logsResult = await prisma.$queryRawUnsafe<any[]>(
-            `SELECT id, type, created_at, content, model_name, quota, prompt_tokens, completion_tokens, token_name
-             FROM logs
-             ${whereClause}
-             ORDER BY id DESC
-             LIMIT $${pCount + 1} OFFSET $${pCount + 2}`,
+            `SELECT * FROM (${combined}) _c
+             ORDER BY created_at DESC
+             LIMIT $${p + 1} OFFSET $${p + 2}`,
             ...params,
             opts.size,
-            offset
+            offset,
         );
 
-        // Convert Prisma BigInts and properly map the columns
-        const formattedLogs = logsResult.map(l => ({
-            id: Number(l.id),
+        const formattedLogs = logsResult.map((l, i) => ({
+            id: opts.page * opts.size + i + 1,
             type: Number(l.type),
             created_at: Number(l.created_at),
             content: l.content || "",
             model_name: l.model_name || "",
             token_name: l.token_name || "",
             quota: Number(l.quota || 0),
+            costUSD: Number(l.quota || 0) / 500_000,
             prompt_tokens: Number(l.prompt_tokens || 0),
-            completion_tokens: Number(l.completion_tokens || 0)
+            completion_tokens: Number(l.completion_tokens || 0),
         }));
 
         return { logs: formattedLogs, total, totalQuota, totalTokens };
@@ -385,25 +433,38 @@ export async function newApiDeleteToken(tokenId: number, userId: number): Promis
 }
 
 /**
- * Aggregate daily API spending for a user from the New-API logs table.
- * Excludes today (data for today is partial and excluded by design).
- * Returns last 60 days with non-zero spend, newest first.
+ * Aggregate daily API spending for a user — combines LLM logs + ServiceUsage.
+ * Excludes today (partial data). Returns last 60 days, newest first.
  */
 export async function newApiGetDailySpend(userId: number): Promise<{ date: string; spentUSD: number }[]> {
     try {
         const rows = await prisma.$queryRawUnsafe<any[]>(
-            `SELECT
-                to_char(date_trunc('day', to_timestamp(created_at)), 'YYYY-MM-DD') AS date,
-                SUM(quota) AS total_quota
-             FROM logs
-             WHERE user_id = $1
-               AND type = 2
-               AND (content = '' OR content IS NULL)
-               AND created_at < EXTRACT(EPOCH FROM date_trunc('day', NOW()))
-             GROUP BY date_trunc('day', to_timestamp(created_at))
-             ORDER BY date_trunc('day', to_timestamp(created_at)) DESC
+            `SELECT date, SUM(total_quota) AS total_quota
+             FROM (
+               SELECT
+                 to_char(date_trunc('day', to_timestamp(created_at)), 'YYYY-MM-DD') AS date,
+                 SUM(quota) AS total_quota
+               FROM logs
+               WHERE user_id = $1
+                 AND type = 2
+                 AND (content = '' OR content IS NULL)
+                 AND created_at < EXTRACT(EPOCH FROM date_trunc('day', NOW()))
+               GROUP BY date_trunc('day', to_timestamp(created_at))
+
+               UNION ALL
+
+               SELECT
+                 to_char(date_trunc('day', "createdAt"), 'YYYY-MM-DD') AS date,
+                 SUM("costUSD" * 500000) AS total_quota
+               FROM "ServiceUsage"
+               WHERE "newApiUserId" = $1
+                 AND "createdAt" < date_trunc('day', NOW())
+               GROUP BY date_trunc('day', "createdAt")
+             ) _combined
+             GROUP BY date
+             ORDER BY date DESC
              LIMIT 60`,
-            userId
+            userId,
         );
 
         const QUOTA_PER_DOLLAR = 500_000;
