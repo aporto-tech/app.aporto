@@ -217,11 +217,20 @@ function buildMcpServer(userId: number, authHeader: string) {
                 return { content: [{ type: "text" as const, text: `ElevenLabs error: ${JSON.stringify(result.data)}` }], isError: true };
             }
 
-            const data = result.data as { url: string; expires_at: string };
+            const data = result.data as { url: string | null; audio_base64?: string; expires_at?: string };
+            if (data.url) {
+                return {
+                    content: [
+                        { type: "text" as const, text: `Audio generated. ${text.length} chars, cost $${costUSD.toFixed(4)}.` },
+                        { type: "text" as const, text: JSON.stringify({ url: data.url, expires_at: data.expires_at }) },
+                    ],
+                };
+            }
+            // S3 not yet configured — return base64 fallback
             return {
                 content: [
                     { type: "text" as const, text: `Audio generated. ${text.length} chars, cost $${costUSD.toFixed(4)}.` },
-                    { type: "text" as const, text: JSON.stringify({ url: data.url, expires_at: data.expires_at }) },
+                    { type: "text" as const, text: `base64:audio/mpeg:${data.audio_base64}` },
                 ],
             };
         },

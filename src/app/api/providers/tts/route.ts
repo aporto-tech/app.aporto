@@ -66,20 +66,32 @@ export async function POST(req: NextRequest) {
         }
 
         const audioBuffer = await res.arrayBuffer();
+        const audioBuf = Buffer.from(audioBuffer);
 
-        // Upload to R2 — key includes a 24h expiry prefix for easy lifecycle cleanup
-        const key = `tts/${new Date().toISOString().slice(0, 10)}/${randomUUID()}.mp3`;
-        const url = await uploadToR2(key, Buffer.from(audioBuffer), "audio/mpeg");
-        const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
-
-        return NextResponse.json({
-            success: true,
-            url,
-            expires_at: expiresAt,
-            char_count: text.length,
-            model_id,
-            voice_id,
-        });
+        // Try to upload to S3/R2; fall back to base64 if permissions aren't configured yet
+        try {
+            const key = `tts/${new Date().toISOString().slice(0, 10)}/${randomUUID()}.mp3`;
+            const url = await uploadToR2(key, audioBuf, "audio/mpeg");
+            const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+            return NextResponse.json({
+                success: true,
+                url,
+                expires_at: expiresAt,
+                char_count: text.length,
+                model_id,
+                voice_id,
+            });
+        } catch (uploadError) {
+            console.warn("[providers/tts] S3 upload failed, returning base64 fallback:", String(uploadError));
+            return NextResponse.json({
+                success: true,
+                url: null,
+                audio_base64: audioBuf.toString("base64"),
+                char_count: text.length,
+                model_id,
+                voice_id,
+            });
+        }
     } catch (error) {
         console.error("[providers/tts] POST error:", error);
         return NextResponse.json({ success: false, message: String(error) }, { status: 500 });
