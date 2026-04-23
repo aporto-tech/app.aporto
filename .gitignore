@@ -54,3 +54,4 @@ check_db.mjs
 query_logs.mjs
 query_user.mjs
 test_register2.mjs
+.gstack/

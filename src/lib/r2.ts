@@ -4,22 +4,21 @@ let _client: S3Client | null = null;
 
 function getClient(): S3Client {
     if (_client) return _client;
-    const accountId = process.env.R2_ACCOUNT_ID;
-    const accessKeyId = process.env.R2_ACCESS_KEY_ID;
-    const secretAccessKey = process.env.R2_SECRET_ACCESS_KEY;
-    if (!accountId || !accessKeyId || !secretAccessKey) {
-        throw new Error("R2 credentials not configured (R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY)");
+    const accessKeyId = process.env.AWS_ACCESS_KEY_ID;
+    const secretAccessKey = process.env.AWS_SECRET_ACCESS_KEY;
+    const region = process.env.AWS_REGION ?? "us-east-1";
+    if (!accessKeyId || !secretAccessKey) {
+        throw new Error("S3 credentials not configured (AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY)");
     }
     _client = new S3Client({
-        region: "auto",
-        endpoint: `https://${accountId}.r2.cloudflarestorage.com`,
+        region,
         credentials: { accessKeyId, secretAccessKey },
     });
     return _client;
 }
 
 /**
- * Upload a buffer to R2 and return the public URL.
+ * Upload a buffer to S3 and return the public URL.
  * The bucket must have public access enabled.
  */
 export async function uploadToR2(
@@ -27,10 +26,10 @@ export async function uploadToR2(
     body: Buffer | Uint8Array,
     contentType: string,
 ): Promise<string> {
-    const bucket = process.env.R2_BUCKET_NAME;
-    const publicUrl = process.env.R2_PUBLIC_URL?.replace(/\/$/, "");
+    const bucket = process.env.AWS_S3_BUCKET_NAME;
+    const publicUrl = process.env.AWS_S3_PUBLIC_URL?.replace(/\/$/, "");
     if (!bucket || !publicUrl) {
-        throw new Error("R2 bucket not configured (R2_BUCKET_NAME, R2_PUBLIC_URL)");
+        throw new Error("S3 bucket not configured (AWS_S3_BUCKET_NAME, AWS_S3_PUBLIC_URL)");
     }
     await getClient().send(
         new PutObjectCommand({
