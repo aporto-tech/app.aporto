@@ -6,6 +6,8 @@ on:
     - cron: "0 * * * *"
     # Weekly digest — every Monday at 9:00 UTC
     - cron: "0 9 * * 1"
+    # Provider options sync — daily at 2:17 UTC
+    - cron: "17 2 * * *"
   # Allow manual trigger from GitHub Actions UI
   workflow_dispatch:
     inputs:
@@ -16,6 +18,7 @@ on:
         options:
           - spending-alerts
           - weekly-digest
+          - sync-provider-options
 
 jobs:
   spending-alerts:
@@ -55,5 +58,25 @@ jobs:
           echo "Response: $response"
           if [ "$response" != "200" ]; then
             echo "ERROR: weekly-digest returned HTTP $response"
+            exit 1
+          fi
+
+  sync-provider-options:
+    name: Sync Provider Options
+    # Run on daily 2:17 UTC schedule OR manual trigger for sync-provider-options
+    if: |
+      github.event_name == 'workflow_dispatch' && github.event.inputs.job == 'sync-provider-options' ||
+      github.event_name == 'schedule' && github.event.schedule == '17 2 * * *'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger provider options sync
+        run: |
+          response=$(curl -s -o /dev/null -w "%{http_code}" \
+            -X POST "${{ secrets.APP_URL }}/api/cron/sync-provider-options" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            -H "Content-Type: application/json")
+          echo "Response: $response"
+          if [ "$response" != "200" ]; then
+            echo "ERROR: sync-provider-options returned HTTP $response"
             exit 1
           fi

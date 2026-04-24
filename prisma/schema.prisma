@@ -190,6 +190,7 @@ model Skill {
   providers    Provider[]
   calls        SkillCall[]
   revenue      SkillRevenue[]
+  options      ProviderOption[]
 
   @@index([status])
   @@index([publisherId])
@@ -208,8 +209,29 @@ model Provider {
   timeoutRate     Float      @default(0)
   providerSecret  String?
   isActive        Boolean    @default(true)
+  syncEndpoint    String?    // URL to fetch options from: "https://api.elevenlabs.io/v1/voices"
+  syncConfig      String?    // JSON config: {auth, dataPath, mapping, optionType}
   createdAt       DateTime   @default(now())
   calls           SkillCall[]
+  options         ProviderOption[]
+}
+
+model ProviderOption {
+  id           Int      @id @default(autoincrement())
+  providerId   Int
+  provider     Provider @relation(fields: [providerId], references: [id])
+  skillId      Int
+  skill        Skill    @relation(fields: [skillId], references: [id])
+  optionType   String   // "voice" | "model" | "language" | "style" | "format"
+  optionKey    String   // actual value for params: "EXAVITQu4vr4xnSDxMaL"
+  label        String   // "Bella (young, female, American English)"
+  metadata     Json     // JSONB: {gender, age, languages, accent, preview_url, ...}
+  isActive     Boolean  @default(true)
+  lastSyncedAt DateTime @default(now())
+  createdAt    DateTime @default(now())
+
+  @@unique([providerId, skillId, optionType, optionKey])
+  @@index([skillId, optionType])
 }
 
 model SkillCall {

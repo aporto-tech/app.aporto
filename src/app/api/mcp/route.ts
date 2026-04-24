@@ -187,7 +187,13 @@ function buildMcpServer(userId: number, authHeader: string) {
     // deduct quota here and refund on failure.
     server.tool(
         "aporto_tts_create",
-        "Convert text to speech via ElevenLabs. Returns audio URL (valid 24h). Cost: $0.24 per 1,000 characters.",
+        "Convert text to speech via ElevenLabs. Returns audio URL (valid 24h). Cost: $0.24 per 1,000 characters. " +
+        "Use aporto_list_options(skillId=5, optionType=\"voice\") to discover available voices before calling this. " +
+        "Common voices: Rachel (21m00Tcm4TlvDq8ikWAM, female adult american), " +
+        "Bella (EXAVITQu4vr4xnSDxMaL, female young american), " +
+        "Charlotte (XB0fDUnXU5powFXDhCwa, female young british, multilingual), " +
+        "Daniel (onwK4e9ZLuTAKqWW03F9, male middle-aged british), " +
+        "Adam (pNInz6obpgDQGcFmaJgB, male middle-aged american).",
         {
             text:          z.string().describe("Text to convert to speech"),
             voice_id:      z.string().optional().default("21m00Tcm4TlvDq8ikWAM")
@@ -262,6 +268,41 @@ function buildMcpServer(userId: number, authHeader: string) {
             const data = result.data as { choices?: { message?: { content?: string } }[] };
             const reply = data.choices?.[0]?.message?.content ?? JSON.stringify(result.data);
             return { content: [{ type: "text" as const, text: reply }] };
+        },
+    );
+
+    // ── aporto_list_options ───────────────────────────────────────────────────
+    server.tool(
+        "aporto_list_options",
+        "List available options for a skill (voices, models, languages, etc.). " +
+        "Call before aporto_execute_skill or aporto_tts_create to discover valid parameter values. " +
+        "Example: aporto_list_options(skillId=5, optionType=\"voice\", query=\"young female russian\") returns Bella, Charlotte.",
+        {
+            skillId:    z.number().int().describe("Skill ID from aporto_discover_skills"),
+            optionType: z.string().describe("Type of option: 'voice', 'model', 'language', 'style', etc."),
+            query:      z.string().optional().describe("Natural language filter: 'young female', 'russian', 'british', 'fast', etc."),
+            page:       z.number().int().min(0).optional().default(0).describe("Page index (0-based, 10 results per page)"),
+        },
+        async ({ skillId, optionType, query = null, page = 0 }) => {
+            try {
+                const PAGE_SIZE = 10;
+                const q = query ? `%${query}%` : null;
+                const options = await prisma.$queryRawUnsafe<{
+                    optionKey: string; label: string; metadata: unknown;
+                    providerId: number; lastSyncedAt: string;
+                }[]>(
+                    `SELECT "optionKey", label, metadata, "providerId", "lastSyncedAt"
+                     FROM "ProviderOption"
+                     WHERE "skillId" = $1 AND "optionType" = $2 AND "isActive" = true
+                       AND ($3::text IS NULL OR label ILIKE $3 OR metadata::text ILIKE $3)
+                     ORDER BY label ASC
+                     LIMIT $4 OFFSET $5`,
+                    skillId, optionType, q, PAGE_SIZE, page * PAGE_SIZE,
+                );
+                return { content: [{ type: "text" as const, text: JSON.stringify(options, null, 2) }] };
+            } catch (err) {
+                return { content: [{ type: "text" as const, text: `Options error: ${String(err)}` }], isError: true };
+            }
         },
     );
 

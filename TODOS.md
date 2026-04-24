@@ -84,3 +84,57 @@ Items deferred from the Email Verification + Bitrix24 + SDK plan review.
 **Where to start:** Add a `Rule` type `auto_recharge` with `minBalanceUSD` and `rechargeAmountUSD`. Trigger from `deductUserQuota()` when balance drops below threshold.
 
 **Depends on:** Transactional emails PR shipped (to notify on recharge); T4 (email preferences for recharge notification).
+
+---
+
+## T6 — Voice preview proxy
+
+**What:** Proxy voice preview audio through Aporto (`GET /api/proxy/preview?url={preview_url}`) instead of loading directly from ElevenLabs URLs. Cache in R2 on first hit.
+
+**Why:** When the dashboard plays a voice preview, the browser sends the Aporto dashboard domain as a referrer to ElevenLabs. ElevenLabs can see which voices your users audition — a competitive intelligence leak. A proxy also enables caching: once a user plays Bella's preview, subsequent plays are instant.
+
+**Pros:** Breaks the referrer chain. R2 cache eliminates repeat latency. No ElevenLabs rate-limit exposure on preview traffic.
+
+**Cons:** Adds a streaming proxy route and R2 cost (~negligible per audio file). Slightly more complex `/dashboard/voices` audio implementation.
+
+**Context:** The Capability Catalog plan (Capability Catalog, 2026-04-23) defers this. The `preview_url` from ElevenLabs is stored in `ProviderOption.metadata.preview_url` during sync. The proxy just fetches that URL server-side and streams it back.
+
+**Where to start:** `src/app/api/proxy/preview/route.ts` — validate the `url` param (must be an allowed domain), fetch, stream response. Add R2 caching layer with a long TTL (preview audio doesn't change).
+
+**Depends on:** Capability Catalog V1 shipped (sync stores preview_url in metadata).
+
+---
+
+## T7 — Replace GitHub Actions sync cron with in-app scheduler
+
+**What:** Move the `sync-provider-options` daily cron from GitHub Actions to an in-app scheduler with delivery guarantees (Inngest or Trigger.dev).
+
+**Why:** GitHub Actions scheduled workflows are documented as best-effort — they can be delayed hours under load, or silently skipped if the repo has no recent activity. For a sync that gates what voices agents see, a missed run means 24h+ stale data with no alert. Inngest/Trigger.dev provide: delivery guarantees, built-in run history, manual trigger via UI, and failure alerting.
+
+**Pros:** Reliable delivery. Observable run history without digging through GitHub Actions logs. Manual trigger from admin UI when something looks stale.
+
+**Cons:** New dependency. Inngest free tier covers ~50k function runs/month. Trigger.dev has similar pricing. Requires updating the cron auth to use the scheduler's signature verification instead of `CRON_SECRET`.
+
+**Context:** Chosen as GitHub Actions in Capability Catalog plan due to lack of Vercel deployment. If Aporto ever moves to Vercel, use Vercel cron instead. If staying on current hosting, Inngest is the right call.
+
+**Where to start:** Replace `src/app/api/cron/sync-provider-options/route.ts` POST handler with an Inngest function. Keep the same logic. Remove the GitHub Actions workflow file.
+
+**Depends on:** Capability Catalog V1 shipped and running.
+
+---
+
+## T8 — Voice Browser UI
+
+**What:** Build `/dashboard/voices` — a developer-facing page to browse, preview, and copy voice IDs without needing to call the MCP tool manually.
+
+**Why:** V2 was cut from the initial Capability Catalog scope because Aporto is an agent-first product and agents use `aporto_list_options` directly. But developers still need to discover and audition voices when configuring their agents. A decent voice browser removes the need to cross-reference ElevenLabs docs.
+
+**Pros:** Developer experience win. Makes Aporto self-contained — no need to visit ElevenLabs dashboard to find voice IDs. Adds a visible UI artifact that demonstrates the catalog is working.
+
+**Cons:** Agents don't need it — pure developer DX, not agent value. Blocked on T6 (voice preview proxy) for proper privacy.
+
+**Context:** Design review decision from 2026-04-23. Approved design direction: **list view + filter chips** (not card grid). Approved mockup saved at `~/.gstack/projects/aporto-tech-app.aporto/designs/voice-browser-20260423/variant-B.png`. REST endpoint needed: `GET /api/skills/{skillId}/options?type=voice&query=...&page=0`. Files: `src/app/dashboard/voices/page.tsx`, `src/app/api/skills/[id]/options/route.ts`.
+
+**Where to start:** Read the approved mockup. Build the REST endpoint first (simple SELECT from ProviderOption). Then build the page with DashboardLayout, a search input, filter chips (gender/language), and a list row per voice with Copy ID button.
+
+**Depends on:** Capability Catalog V1 shipped. T6 (voice preview proxy) recommended before launch.
