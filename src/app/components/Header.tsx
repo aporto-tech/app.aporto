@@ -2,10 +2,13 @@
 
 import React, { useEffect, useRef, useState } from "react";
 import { signOut, useSession } from "next-auth/react";
+import { usePathname } from "next/navigation";
+import Link from "next/link";
 import styles from "./layout.module.css";
 
 const Header = () => {
     const { data: session } = useSession();
+    const pathname = usePathname();
     const [open, setOpen] = useState(false);
     const ref = useRef<HTMLDivElement>(null);
 
@@ -22,9 +25,21 @@ const Header = () => {
 
     const email = session?.user?.email ?? "user@example.com";
     const name = session?.user?.name ?? email;
+    const isPublisherSection = pathname.startsWith("/publisher");
 
     return (
         <header className={styles.header}>
+            {/* Context button */}
+            {isPublisherSection ? (
+                <Link href="/dashboard" className={styles.headerCtaSecondary}>
+                    Dashboard
+                </Link>
+            ) : (
+                <Link href="/publisher/skills/new" className={styles.headerCta}>
+                    + Add Skill
+                </Link>
+            )}
+
             <div ref={ref} className={styles.userMenuWrapper}>
                 {/* Trigger */}
                 <button

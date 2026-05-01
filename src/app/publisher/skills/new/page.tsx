@@ -225,12 +225,12 @@ export default function NewSkillPage() {
     return (
         <div style={{ maxWidth: 640, margin: "0 auto" }}>
             <h1 style={{ fontWeight: 700, fontSize: 24, marginBottom: 8 }}>Add Your API to Aporto</h1>
-            <p style={{ color: "#94a3b8", fontSize: 14, marginBottom: 24 }}>
+            <p style={{ color: "#888888", fontSize: 14, marginBottom: 24 }}>
                 Fill in the basics and we'll generate the skill registration for you.
             </p>
 
             {formError && (
-                <div style={{ background: "#1c1917", border: "1px solid #ef4444", borderRadius: 6, padding: "8px 12px", marginBottom: 16, color: "#fca5a5", fontSize: 13 }}>
+                <div style={{ background: "#1a1a1a", border: "1px solid #ef4444", borderRadius: 6, padding: "8px 12px", marginBottom: 16, color: "#fca5a5", fontSize: 13 }}>
                     {formError}
                 </div>
             )}
@@ -239,7 +239,7 @@ export default function NewSkillPage() {
             {formStep === "form" && (
                 <form onSubmit={handleFormSubmit}>
                     <div style={{ marginBottom: 16 }}>
-                        <label style={labelStyle}>Documentation URL <span style={{ color: "#475569" }}>(optional)</span></label>
+                        <label style={labelStyle}>Documentation URL <span style={{ color: "#666666" }}>(optional)</span></label>
                         <input
                             value={docUrl}
                             onChange={e => setDocUrl(e.target.value)}
@@ -250,7 +250,7 @@ export default function NewSkillPage() {
                     </div>
 
                     <div style={{ marginBottom: 16 }}>
-                        <label style={labelStyle}>Your API Key <span style={{ color: "#475569" }}>(optional)</span></label>
+                        <label style={labelStyle}>Your API Key <span style={{ color: "#666666" }}>(optional)</span></label>
                         <input
                             value={apiKey}
                             onChange={e => setApiKey(e.target.value)}
@@ -275,23 +275,23 @@ export default function NewSkillPage() {
                     </div>
 
                     <div style={{ marginBottom: 24, display: "flex", alignItems: "center", gap: 12 }}>
-                        <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: 14, color: "#e2e8f0" }}>
+                        <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: 14, color: "#ffffff" }}>
                             <input
                                 type="checkbox"
                                 checked={submitForReview}
                                 onChange={e => setSubmitForReview(e.target.checked)}
-                                style={{ width: 16, height: 16, accentColor: "#6366f1" }}
+                                style={{ width: 16, height: 16, accentColor: "#00dc82" }}
                             />
                             Submit for review immediately
                         </label>
-                        <span style={{ fontSize: 11, color: "#475569" }}>
+                        <span style={{ fontSize: 11, color: "#666666" }}>
                             {submitForReview ? "Skill will be reviewed by Aporto team" : "Saved as draft — submit when ready"}
                         </span>
                     </div>
 
                     <button
                         type="submit"
-                        style={{ width: "100%", padding: "12px", borderRadius: 8, border: "none", background: "#6366f1", color: "#fff", fontSize: 15, fontWeight: 600, cursor: "pointer" }}
+                        style={{ width: "100%", padding: "12px", borderRadius: 8, border: "none", background: "#00dc82", color: "#fff", fontSize: 15, fontWeight: 600, cursor: "pointer" }}
                     >
                         Generate Skill →
                     </button>
@@ -302,14 +302,14 @@ export default function NewSkillPage() {
             {formStep === "generating" && (
                 <div style={{ textAlign: "center", padding: "48px 0" }}>
                     <div style={{ fontSize: 24, marginBottom: 16 }}>⏳</div>
-                    <div style={{ color: "#94a3b8", fontSize: 14 }}>{progressText || "Processing..."}</div>
+                    <div style={{ color: "#888888", fontSize: 14 }}>{progressText || "Processing..."}</div>
                 </div>
             )}
 
             {/* ── STEP: Preview ──────────────────────────────────────────────── */}
             {formStep === "preview" && (
                 <div>
-                    <div style={{ background: "#052e16", border: "1px solid #10b981", borderRadius: 6, padding: "8px 12px", marginBottom: 16, fontSize: 13, color: "#a7f3d0" }}>
+                    <div style={{ background: "#052e16", border: "1px solid #00dc82", borderRadius: 6, padding: "8px 12px", marginBottom: 16, fontSize: 13, color: "#a7f3d0" }}>
                         Review the generated fields below. Edit anything that looks wrong, then save.
                     </div>
 
@@ -334,7 +334,7 @@ export default function NewSkillPage() {
                         </div>
 
                         {draft?.providers?.[0] && (
-                            <div style={{ borderTop: "1px solid #1e293b", paddingTop: 14 }}>
+                            <div style={{ borderTop: "1px solid #111111", paddingTop: 14 }}>
                                 <div style={{ fontSize: 12, fontWeight: 600, color: "#64748b", marginBottom: 8 }}>PROVIDER (inferred)</div>
                                 <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 12 }}>
                                     <div>
@@ -352,7 +352,7 @@ export default function NewSkillPage() {
                         {draft?.skill?.paramsSchema && (
                             <div>
                                 <label style={labelStyle}>Params Schema (inferred)</label>
-                                <pre style={{ background: "#0f172a", border: "1px solid #1e293b", borderRadius: 6, padding: 8, fontSize: 11, color: "#94a3b8", overflow: "auto", maxHeight: 100, margin: 0 }}>
+                                <pre style={{ background: "#0a0a0a", border: "1px solid #111111", borderRadius: 6, padding: 8, fontSize: 11, color: "#888888", overflow: "auto", maxHeight: 100, margin: 0 }}>
                                     {JSON.stringify(draft.skill.paramsSchema, null, 2)}
                                 </pre>
                             </div>
@@ -362,14 +362,14 @@ export default function NewSkillPage() {
                     <div style={{ display: "flex", gap: 8, marginTop: 20 }}>
                         <button
                             onClick={() => setFormStep("form")}
-                            style={{ flex: 1, padding: "10px", borderRadius: 6, border: "1px solid #334155", background: "transparent", color: "#94a3b8", cursor: "pointer", fontSize: 13 }}
+                            style={{ flex: 1, padding: "10px", borderRadius: 6, border: "1px solid #222222", background: "transparent", color: "#888888", cursor: "pointer", fontSize: 13 }}
                         >
                             ← Back
                         </button>
                         <button
                             onClick={handleSave}
                             disabled={saving}
-                            style={{ flex: 2, padding: "10px", borderRadius: 6, border: "none", background: submitForReview ? "#6366f1" : "#334155", color: "#fff", cursor: "pointer", fontSize: 14, fontWeight: 600 }}
+                            style={{ flex: 2, padding: "10px", borderRadius: 6, border: "none", background: submitForReview ? "#00dc82" : "#222222", color: "#fff", cursor: "pointer", fontSize: 14, fontWeight: 600 }}
                         >
                             {saving ? "Saving..." : submitForReview ? "Submit for Review" : "Save as Draft"}
                         </button>
@@ -378,10 +378,10 @@ export default function NewSkillPage() {
             )}
 
             {/* ── Collapsible Chat ───────────────────────────────────────────── */}
-            <div style={{ marginTop: 32, borderTop: "1px solid #1e293b", paddingTop: 16 }}>
+            <div style={{ marginTop: 32, borderTop: "1px solid #111111", paddingTop: 16 }}>
                 <button
                     onClick={() => setShowChat(!showChat)}
-                    style={{ background: "none", border: "none", color: "#6366f1", cursor: "pointer", fontSize: 13, padding: 0 }}
+                    style={{ background: "none", border: "none", color: "#00dc82", cursor: "pointer", fontSize: 13, padding: 0 }}
                 >
                     {showChat ? "▾ Hide AI assistant chat" : "▸ Need more control? Chat with AI assistant"}
                 </button>
@@ -390,24 +390,24 @@ export default function NewSkillPage() {
                     <div style={{ marginTop: 12 }}>
                         <div style={{ maxHeight: 300, overflowY: "auto", marginBottom: 8 }}>
                             {messages.length === 0 && (
-                                <div style={{ color: "#475569", fontSize: 13, padding: "8px 0" }}>
+                                <div style={{ color: "#666666", fontSize: 13, padding: "8px 0" }}>
                                     Describe your API in detail for a more tailored skill registration.
                                 </div>
                             )}
                             {messages.map((m, i) => (
                                 <div key={i} style={{
                                     marginBottom: 8, padding: "8px 12px", borderRadius: 6,
-                                    background: m.role === "user" ? "#1e293b" : "#0f172a",
-                                    border: m.role === "assistant" ? "1px solid #1e293b" : "none",
-                                    fontSize: 13, lineHeight: 1.5, color: "#e2e8f0", whiteSpace: "pre-wrap",
+                                    background: m.role === "user" ? "#111111" : "#0a0a0a",
+                                    border: m.role === "assistant" ? "1px solid #111111" : "none",
+                                    fontSize: 13, lineHeight: 1.5, color: "#ffffff", whiteSpace: "pre-wrap",
                                 }}>
-                                    <span style={{ color: m.role === "user" ? "#6366f1" : "#10b981", fontWeight: 600, fontSize: 10 }}>
+                                    <span style={{ color: m.role === "user" ? "#00dc82" : "#00dc82", fontWeight: 600, fontSize: 10 }}>
                                         {m.role === "user" ? "YOU" : "ASSISTANT"}
                                     </span>
                                     <div style={{ marginTop: 2 }}>{m.content}</div>
                                 </div>
                             ))}
-                            {thinking && <div style={{ color: "#6366f1", fontSize: 12, padding: 8 }}>Generating...</div>}
+                            {thinking && <div style={{ color: "#00dc82", fontSize: 12, padding: 8 }}>Generating...</div>}
                             <div ref={bottomRef} />
                         </div>
 
@@ -420,7 +420,7 @@ export default function NewSkillPage() {
                                 style={{ ...inputStyle, flex: 1 }}
                                 disabled={thinking}
                             />
-                            <button onClick={sendChat} disabled={thinking || !chatInput.trim()} style={{ padding: "8px 16px", borderRadius: 6, border: "none", background: "#6366f1", color: "#fff", cursor: "pointer", fontSize: 13 }}>
+                            <button onClick={sendChat} disabled={thinking || !chatInput.trim()} style={{ padding: "8px 16px", borderRadius: 6, border: "none", background: "#00dc82", color: "#fff", cursor: "pointer", fontSize: 13 }}>
                                 Send
                             </button>
                         </div>
@@ -432,15 +432,15 @@ export default function NewSkillPage() {
 }
 
 const inputStyle: React.CSSProperties = {
-    width: "100%", padding: "10px 12px", borderRadius: 6,
-    border: "1px solid #334155", background: "#1e293b", color: "#e2e8f0",
+    width: "100%", padding: "10px 12px", borderRadius: 8,
+    border: "1px solid #222222", background: "#111111", color: "#ffffff",
     fontSize: 14, boxSizing: "border-box",
 };
 
 const labelStyle: React.CSSProperties = {
-    display: "block", fontSize: 13, color: "#cbd5e1", marginBottom: 4, fontWeight: 500,
+    display: "block", fontSize: 13, color: "#888888", marginBottom: 4, fontWeight: 500,
 };
 
 const hintStyle: React.CSSProperties = {
-    fontSize: 11, color: "#475569", marginTop: 4,
+    fontSize: 11, color: "#666666", marginTop: 4,
 };

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import styles from "../../dashboard.module.css";
 
 interface PublisherAccount {
     publisherId: string; displayName: string; status: string;
@@ -25,13 +26,11 @@ export default function PublisherPage() {
         if (status === "loading") return;
         if (!session) { router.push("/login"); return; }
 
-        // Check publisher status via session auth (no key needed)
         fetch("/api/publisher/status")
             .then(r => r.json())
             .then(d => {
                 if (d.status && d.status !== "none") {
                     setHasPublisher(true);
-                    // Load full account data
                     fetch("/api/publisher/account")
                         .then(r => r.json())
                         .then(acc => {
@@ -51,30 +50,73 @@ export default function PublisherPage() {
     }, [session, status, router]);
 
     if (status === "loading" || loading) {
-        return <div style={{ color: "#64748b" }}>Loading...</div>;
+        return <div style={{ color: "#666" }}>Loading...</div>;
     }
 
-    // New user — show get started
     if (!hasPublisher) {
         return <GetStarted />;
     }
 
-    // Existing publisher — dashboard
     return (
         <div>
-            <h1 style={{ fontWeight: 700, fontSize: 24, marginBottom: 4 }}>Welcome, {account?.displayName ?? session?.user?.name}</h1>
-            <p style={{ color: "#64748b", marginBottom: 32 }}>Revenue share: {account?.revenueSharePercent ?? "85%"} per call</p>
-
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16, marginBottom: 32 }}>
-                <StatCard label="Unpaid Earnings" value={`$${(earnings?.totalUnpaidUSD ?? 0).toFixed(4)}`} />
-                <StatCard label="Pending Submissions" value={`${submissions?.used ?? 0} / ${submissions?.limit ?? 10}`} />
-                <StatCard label="Slots Remaining" value={`${submissions?.remaining ?? 10}`} />
+            {/* Welcome card */}
+            <div className={styles.welcomeCard}>
+                <div className={styles.welcomeText}>
+                    <h1>Welcome, {account?.displayName ?? session?.user?.name}</h1>
+                    <p>Revenue share: {account?.revenueSharePercent ?? "85%"} per call. Publish skills and earn when agents use them.</p>
+                </div>
+                <div className={styles.welcomeProgress}>
+                    <div className={styles.progressValue}>${(earnings?.totalUnpaidUSD ?? 0).toFixed(2)}</div>
+                    <span className={styles.progressLabel}>Unpaid earnings</span>
+                </div>
             </div>
 
-            <div style={{ display: "flex", gap: 12 }}>
-                <Link href="/publisher/skills/new" style={btnStyle("#6366f1")}>+ New Skill</Link>
-                <Link href="/publisher/skills" style={btnStyle("#1e293b")}>View Skills</Link>
-                <Link href="/publisher/earnings" style={btnStyle("#1e293b")}>Earnings</Link>
+            {/* Stats grid */}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16, margin: "24px 0" }}>
+                <StatCard label="Pending Submissions" value={`${submissions?.used ?? 0} / ${submissions?.limit ?? 10}`} />
+                <StatCard label="Slots Remaining" value={`${submissions?.remaining ?? 10}`} />
+                <StatCard label="Revenue Share" value={account?.revenueSharePercent ?? "85%"} />
+            </div>
+
+            {/* Quick actions */}
+            <div className={styles.quickActionsHeader}>Quick Actions</div>
+            <div className={styles.actionGrid}>
+                <Link href="/publisher/skills/new" style={{ textDecoration: "none", color: "inherit" }}>
+                    <div className={styles.actionCard}>
+                        <div className={styles.actionIcon}>+</div>
+                        <div className={styles.actionInfo}>
+                            <h3>Add Skill</h3>
+                            <p>Publish a new API as a skill</p>
+                        </div>
+                    </div>
+                </Link>
+                <Link href="/publisher/skills" style={{ textDecoration: "none", color: "inherit" }}>
+                    <div className={styles.actionCard}>
+                        <div className={styles.actionIcon}>⚡</div>
+                        <div className={styles.actionInfo}>
+                            <h3>View Skills</h3>
+                            <p>Manage your published skills</p>
+                        </div>
+                    </div>
+                </Link>
+                <Link href="/publisher/earnings" style={{ textDecoration: "none", color: "inherit" }}>
+                    <div className={styles.actionCard}>
+                        <div className={styles.actionIcon}>$</div>
+                        <div className={styles.actionInfo}>
+                            <h3>Earnings</h3>
+                            <p>Track revenue and payouts</p>
+                        </div>
+                    </div>
+                </Link>
+                <Link href="/publisher/keys" style={{ textDecoration: "none", color: "inherit" }}>
+                    <div className={styles.actionCard}>
+                        <div className={styles.actionIcon}>🔑</div>
+                        <div className={styles.actionInfo}>
+                            <h3>API Keys</h3>
+                            <p>Manage programmatic access</p>
+                        </div>
+                    </div>
+                </Link>
             </div>
         </div>
     );
@@ -82,67 +124,77 @@ export default function PublisherPage() {
 
 function GetStarted() {
     return (
-        <div style={{ maxWidth: 560 }}>
-            <h1 style={{ fontWeight: 700, fontSize: 28, marginBottom: 8 }}>Publish Your API</h1>
-            <p style={{ color: "#94a3b8", fontSize: 15, marginBottom: 32, lineHeight: 1.6 }}>
-                Turn your API into a skill that AI agents can discover and call. You earn 85% revenue share on every call.
-            </p>
-
-            <div style={{ marginBottom: 32 }}>
-                <h2 style={{ fontSize: 16, fontWeight: 600, marginBottom: 16 }}>How it works</h2>
-                <div style={{ display: "grid", gap: 12 }}>
-                    <Step num={1} title="Add your API" desc="Paste your docs URL and API key. Our AI generates the skill registration." />
-                    <Step num={2} title="Review & submit" desc="Check the generated metadata, edit if needed, submit for review." />
-                    <Step num={3} title="Go live" desc="Once approved, agents discover your skill via semantic search. You get a direct link to share." />
-                    <Step num={4} title="Earn per call" desc="Every time an agent calls your skill through Aporto, you earn 85% of the fee." />
+        <div>
+            {/* Welcome banner */}
+            <div className={styles.servicesHub}>
+                <div className={styles.hubContent}>
+                    <h2>Publish Your API <span className={styles.hubBadge}>85% rev share</span></h2>
+                    <p>Turn your API into a skill that AI agents discover and call. Earn per request.</p>
                 </div>
             </div>
 
-            <Link
-                href="/publisher/skills/new"
-                style={{
-                    display: "inline-block", padding: "12px 24px", borderRadius: 8,
-                    background: "#6366f1", color: "#fff", textDecoration: "none",
-                    fontSize: 15, fontWeight: 600,
-                }}
-            >
-                Add Your First Skill →
-            </Link>
+            {/* Checklist */}
+            <div className={styles.checklistCard} style={{ marginTop: 24 }}>
+                <div className={styles.checklistHeader}>
+                    <h3>Get Started</h3>
+                </div>
 
-            <p style={{ color: "#475569", fontSize: 12, marginTop: 16 }}>
-                No approval needed to start. Your publisher account is created automatically.
+                <div className={styles.checklistItem}>
+                    <div className={styles.itemInfo}>
+                        <div className={styles.itemNumber}>1</div>
+                        <div className={styles.itemText}>
+                            <h4>Add your API</h4>
+                            <p>Paste your docs URL and API key. Our AI generates the skill registration.</p>
+                        </div>
+                    </div>
+                    <Link href="/publisher/skills/new">
+                        <button className={styles.itemButton}>Add Skill</button>
+                    </Link>
+                </div>
+
+                <div className={styles.checklistItem}>
+                    <div className={styles.itemInfo}>
+                        <div className={styles.itemNumber}>2</div>
+                        <div className={styles.itemText}>
+                            <h4>Review & submit</h4>
+                            <p>Check the generated metadata, edit if needed, submit for review.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div className={styles.checklistItem}>
+                    <div className={styles.itemInfo}>
+                        <div className={styles.itemNumber}>3</div>
+                        <div className={styles.itemText}>
+                            <h4>Go live</h4>
+                            <p>Once approved, agents discover your skill via semantic search. You get a direct link.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div className={styles.checklistItem}>
+                    <div className={styles.itemInfo}>
+                        <div className={styles.itemNumber}>4</div>
+                        <div className={styles.itemText}>
+                            <h4>Earn per call</h4>
+                            <p>Every time an agent calls your skill, you earn 85% of the fee.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <p style={{ color: "#666", fontSize: 12, marginTop: 16 }}>
+                No approval needed to start. Your publisher account is created automatically when you add your first skill.
             </p>
-        </div>
-    );
-}
-
-function Step({ num, title, desc }: { num: number; title: string; desc: string }) {
-    return (
-        <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
-            <div style={{
-                width: 28, height: 28, borderRadius: "50%", background: "#1e293b",
-                display: "flex", alignItems: "center", justifyContent: "center",
-                fontSize: 13, fontWeight: 600, color: "#6366f1", flexShrink: 0,
-            }}>
-                {num}
-            </div>
-            <div>
-                <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 2 }}>{title}</div>
-                <div style={{ color: "#94a3b8", fontSize: 13 }}>{desc}</div>
-            </div>
         </div>
     );
 }
 
 function StatCard({ label, value }: { label: string; value: string }) {
     return (
-        <div style={{ background: "#0f172a", border: "1px solid #1e293b", borderRadius: 8, padding: 16 }}>
-            <div style={{ color: "#64748b", fontSize: 12, marginBottom: 4 }}>{label}</div>
-            <div style={{ fontWeight: 700, fontSize: 20 }}>{value}</div>
+        <div style={{ backgroundColor: "#111111", border: "1px solid #222222", borderRadius: 12, padding: 20 }}>
+            <div style={{ color: "#666", fontSize: 12, marginBottom: 4, textTransform: "uppercase" }}>{label}</div>
+            <div style={{ fontWeight: 700, fontSize: 24 }}>{value}</div>
         </div>
     );
-}
-
-function btnStyle(bg: string): React.CSSProperties {
-    return { display: "inline-block", padding: "8px 16px", borderRadius: 6, background: bg, color: "#e2e8f0", textDecoration: "none", fontSize: 14, fontWeight: 500 };
 }
