@@ -50,7 +50,18 @@ export default function PublisherPage() {
     }, [session, status, router]);
 
     if (status === "loading" || loading) {
-        return <div style={{ color: "#666" }}>Loading...</div>;
+        return (
+            <div>
+                <div style={{ height: 80, background: "#111", borderRadius: 12, marginBottom: 24, animation: "pulse 1.5s infinite" }} />
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16, marginBottom: 24 }}>
+                    {[1, 2, 3].map(i => <div key={i} style={{ height: 72, background: "#111", borderRadius: 12, animation: "pulse 1.5s infinite" }} />)}
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+                    {[1, 2, 3, 4].map(i => <div key={i} style={{ height: 64, background: "#111", borderRadius: 12, animation: "pulse 1.5s infinite" }} />)}
+                </div>
+                <style jsx>{`@keyframes pulse { 0%, 100% { opacity: 0.4; } 50% { opacity: 0.7; } }`}</style>
+            </div>
+        );
     }
 
     if (!hasPublisher) {

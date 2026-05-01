@@ -13,12 +13,16 @@ export default function KeysPage() {
     const [copied, setCopied] = useState(false);
     const [error, setError] = useState("");
 
-    const getKey = () => localStorage.getItem("publisher_api_key") ?? "";
+    const authHeaders = (): HeadersInit => {
+        const key = localStorage.getItem("publisher_api_key");
+        const headers: HeadersInit = { "Content-Type": "application/json" };
+        if (key) (headers as Record<string, string>)["Authorization"] = `Bearer ${key}`;
+        return headers;
+    };
 
     const load = () => {
-        const key = getKey();
-        if (!key) { setLoading(false); return; }
-        fetch("/api/publisher/keys", { headers: { Authorization: `Bearer ${key}` } })
+        setLoading(true);
+        fetch("/api/publisher/keys", { headers: authHeaders() })
             .then(r => r.json())
             .then(d => { if (d.success) setKeys(d.keys ?? []); })
             .finally(() => setLoading(false));
@@ -28,10 +32,9 @@ export default function KeysPage() {
 
     const create = async () => {
         setCreating(true); setError("");
-        const key = getKey();
         const res = await fetch("/api/publisher/keys", {
             method: "POST",
-            headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
+            headers: authHeaders(),
             body: JSON.stringify({ name: keyName }),
         });
         const d = await res.json();
@@ -44,24 +47,28 @@ export default function KeysPage() {
     };
 
     const revoke = async (id: string) => {
-        const key = getKey();
-        await fetch(`/api/publisher/keys/${id}`, { method: "DELETE", headers: { Authorization: `Bearer ${key}` } });
+        if (!confirm("Revoke this key? It will stop working immediately.")) return;
+        await fetch(`/api/publisher/keys/${id}`, { method: "DELETE", headers: authHeaders() });
         load();
     };
 
     const copy = () => { navigator.clipboard.writeText(newKey); setCopied(true); setTimeout(() => setCopied(false), 2000); };
 
-    if (loading) return <div style={{ color: "#64748b" }}>Loading...</div>;
+    const activeKeys = keys.filter(k => !k.revoked_at);
+    const revokedKeys = keys.filter(k => k.revoked_at);
 
     return (
         <div>
-            <h1 style={{ fontWeight: 700, fontSize: 24, marginBottom: 24 }}>API Keys</h1>
+            <h1 style={{ fontWeight: 700, fontSize: 24, marginBottom: 8 }}>API Keys</h1>
+            <p style={{ color: "#888", fontSize: 14, marginBottom: 24 }}>
+                API keys are for programmatic access (CI/CD, scripts). The web UI works without them.
+            </p>
 
             {newKey && (
-                <div style={{ marginBottom: 24, padding: 16, background: "#0f1f0a", border: "1px solid #15803d", borderRadius: 8 }}>
-                    <div style={{ color: "#86efac", fontSize: 13, fontWeight: 600, marginBottom: 8 }}>New key created — copy it now, it won't be shown again.</div>
-                    <div style={{ fontFamily: "monospace", fontSize: 13, color: "#a5f3fc", wordBreak: "break-all", marginBottom: 8 }}>{newKey}</div>
-                    <button onClick={copy} style={{ padding: "5px 12px", borderRadius: 6, border: "1px solid #15803d", background: "transparent", color: "#86efac", cursor: "pointer", fontSize: 12 }}>
+                <div style={{ marginBottom: 24, padding: 16, background: "#0a1a0a", border: "1px solid #00dc82", borderRadius: 8 }}>
+                    <div style={{ color: "#00dc82", fontSize: 13, fontWeight: 600, marginBottom: 8 }}>New key created — copy it now, it won't be shown again.</div>
+                    <div style={{ fontFamily: "monospace", fontSize: 13, color: "#fff", wordBreak: "break-all", background: "#111", padding: 8, borderRadius: 6, marginBottom: 8 }}>{newKey}</div>
+                    <button onClick={copy} style={{ padding: "5px 12px", borderRadius: 6, border: "1px solid #00dc82", background: "transparent", color: "#00dc82", cursor: "pointer", fontSize: 12 }}>
                         {copied ? "Copied!" : "Copy"}
                     </button>
                 </div>
@@ -70,41 +77,66 @@ export default function KeysPage() {
             {error && <div style={{ color: "#ef4444", fontSize: 13, marginBottom: 12 }}>{error}</div>}
 
             <div style={{ display: "flex", gap: 8, marginBottom: 24 }}>
-                <input value={keyName} onChange={e => setKeyName(e.target.value)} style={{ padding: "7px 12px", borderRadius: 6, border: "1px solid #334155", background: "#1e293b", color: "#e2e8f0", fontSize: 14, width: 200 }} placeholder="Key name" />
-                <button onClick={create} disabled={creating} style={{ padding: "7px 14px", borderRadius: 6, border: "none", background: "#6366f1", color: "#fff", cursor: "pointer" }}>
+                <input value={keyName} onChange={e => setKeyName(e.target.value)} style={{ padding: "8px 12px", borderRadius: 8, border: "1px solid #222", background: "#111", color: "#fff", fontSize: 14, width: 200 }} placeholder="Key name" />
+                <button onClick={create} disabled={creating} style={{ padding: "8px 14px", borderRadius: 8, border: "none", background: "#00dc82", color: "#000", cursor: "pointer", fontWeight: 600, fontSize: 13 }}>
                     {creating ? "Creating..." : "+ Create Key"}
                 </button>
             </div>
 
-            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-                <thead>
-                    <tr style={{ borderBottom: "1px solid #1e293b" }}>
-                        {["Name", "Prefix", "Last Used", "Status", ""].map(h => (
-                            <th key={h} style={{ textAlign: "left", padding: "6px 0", color: "#64748b", fontWeight: 500 }}>{h}</th>
-                        ))}
-                    </tr>
-                </thead>
-                <tbody>
-                    {keys.map(k => (
-                        <tr key={k.id} style={{ borderBottom: "1px solid #0f172a" }}>
-                            <td style={{ padding: "10px 0", fontWeight: 500 }}>{k.name}</td>
-                            <td style={{ fontFamily: "monospace", color: "#94a3b8" }}>{k.prefix}...</td>
-                            <td style={{ color: "#64748b" }}>{k.last_used_at ? new Date(k.last_used_at).toLocaleDateString() : "Never"}</td>
-                            <td>
-                                {k.revoked_at
-                                    ? <span style={{ color: "#ef4444" }}>Revoked</span>
-                                    : <span style={{ color: "#10b981" }}>Active</span>
-                                }
-                            </td>
-                            <td>
-                                {!k.revoked_at && (
-                                    <button onClick={() => { if (confirm("Revoke this key?")) revoke(k.id); }} style={{ padding: "3px 8px", borderRadius: 4, border: "1px solid #ef4444", background: "transparent", color: "#ef4444", cursor: "pointer", fontSize: 11 }}>Revoke</button>
-                                )}
-                            </td>
-                        </tr>
+            {loading ? (
+                <div style={{ display: "grid", gap: 8 }}>
+                    {[1, 2, 3].map(i => (
+                        <div key={i} style={{ height: 48, background: "#111", borderRadius: 8, animation: "pulse 1.5s infinite" }} />
                     ))}
-                </tbody>
-            </table>
+                </div>
+            ) : keys.length === 0 ? (
+                <div style={{ color: "#666", fontSize: 14, padding: "24px 0" }}>
+                    No API keys yet. Create one for programmatic access.
+                </div>
+            ) : (
+                <>
+                    <div style={{ fontSize: 12, color: "#666", marginBottom: 8 }}>
+                        {activeKeys.length} active · {revokedKeys.length} revoked
+                    </div>
+                    <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                        <thead>
+                            <tr style={{ borderBottom: "1px solid #222" }}>
+                                {["Name", "Prefix", "Created", "Last Used", "Status", ""].map(h => (
+                                    <th key={h} style={{ textAlign: "left", padding: "8px 0", color: "#666", fontWeight: 500, fontSize: 12 }}>{h}</th>
+                                ))}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {keys.map(k => (
+                                <tr key={k.id} style={{ borderBottom: "1px solid #111" }}>
+                                    <td style={{ padding: "10px 0", fontWeight: 500 }}>{k.name}</td>
+                                    <td style={{ fontFamily: "monospace", color: "#888" }}>{k.prefix}...</td>
+                                    <td style={{ color: "#666" }}>{new Date(k.created_at).toLocaleDateString()}</td>
+                                    <td style={{ color: "#666" }}>{k.last_used_at ? new Date(k.last_used_at).toLocaleDateString() : "Never"}</td>
+                                    <td>
+                                        {k.revoked_at
+                                            ? <span style={{ color: "#ef4444", fontSize: 12 }}>Revoked</span>
+                                            : <span style={{ color: "#00dc82", fontSize: 12 }}>Active</span>
+                                        }
+                                    </td>
+                                    <td>
+                                        {!k.revoked_at && (
+                                            <button onClick={() => revoke(k.id)} style={{ padding: "3px 8px", borderRadius: 4, border: "1px solid #333", background: "transparent", color: "#888", cursor: "pointer", fontSize: 11 }}>Revoke</button>
+                                        )}
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </>
+            )}
+
+            <style jsx>{`
+                @keyframes pulse {
+                    0%, 100% { opacity: 0.4; }
+                    50% { opacity: 0.7; }
+                }
+            `}</style>
         </div>
     );
 }
