@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import styles from "../../dashboard.module.css";
+import styles from "../dashboard.module.css";
 
 interface PublisherAccount {
     publisherId: string; displayName: string; status: string;
