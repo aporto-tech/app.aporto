@@ -56,7 +56,7 @@ export async function POST(req: NextRequest) {
     if (forbidden) return forbidden;
 
     const body = await req.json();
-    const { name, description, paramsSchema, tags } = body;
+    const { name, description, paramsSchema, tags, providers } = body;
 
     if (!name || !description) {
         return NextResponse.json({ error: "name and description are required" }, { status: 400 });
@@ -67,6 +67,45 @@ export async function POST(req: NextRequest) {
     const embedding = await embedQuery(embedText);
     const vectorLiteral = `[${embedding.join(",")}]`;
 
+    // If providers are included (from assistant draft), wrap in transaction
+    if (providers && Array.isArray(providers) && providers.length > 0) {
+        const result = await prisma.$transaction(async (tx) => {
+            const skillRows = await tx.$queryRawUnsafe<{ id: number }[]>(
+                `INSERT INTO "Skill" (name, description, embedding, "paramsSchema", tags, category, capabilities, "inputTypes", "outputTypes", "isActive", status, "createdAt")
+                 VALUES ($1, $2, $3::vector, $4, $5, $6, $7, $8, $9, true, 'live', NOW())
+                 RETURNING id`,
+                name, description, vectorLiteral,
+                paramsSchema ? JSON.stringify(paramsSchema) : null,
+                tags ? JSON.stringify(tags) : null,
+                classification.category,
+                JSON.stringify(classification.capabilities),
+                JSON.stringify(classification.inputTypes),
+                JSON.stringify(classification.outputTypes),
+            );
+            const skillId = skillRows[0].id;
+
+            // Create providers
+            for (const prov of providers) {
+                if (!prov.name || !prov.endpoint) continue;
+                await tx.$executeRawUnsafe(
+                    `INSERT INTO "Provider" ("skillId", name, endpoint, "pricePerCall", "avgLatencyMs", "retryRate", "isActive", "providerSecret", "createdAt")
+                     VALUES ($1, $2, $3, $4, 500, 0, true, $5, NOW())`,
+                    skillId,
+                    prov.name,
+                    prov.endpoint,
+                    prov.pricePerCall ?? 0.01,
+                    prov.providerSecret ?? null,
+                );
+            }
+
+            return skillId;
+        });
+
+        console.log(`[admin] Skill ${result} created with ${providers.length} provider(s) via AI assistant`);
+        return NextResponse.json({ success: true, id: result, classification, providersCreated: providers.length });
+    }
+
+    // Original flow: skill only, no providers
     const rows = await prisma.$queryRawUnsafe<{ id: number }[]>(
         `INSERT INTO "Skill" (name, description, embedding, "paramsSchema", tags, category, capabilities, "inputTypes", "outputTypes", "isActive", "createdAt")
          VALUES ($1, $2, $3::vector, $4, $5, $6, $7, $8, $9, true, NOW())

@@ -1,13 +1,16 @@
 /**
- * Provider wrapper: Sound Effects (ElevenLabs → R2)
- *
- * Called by the routing layer (routing/execute), which already deducted
- * the per-char cost before calling this endpoint.
+ * Provider: Sound Effects (ElevenLabs → R2)
+ * Called by routing/execute with Authorization: Bearer {ELEVENLABS_API_KEY} (providerSecret).
  *
  * Returns JSON: { url, expires_at, char_count }
  * Audio is uploaded to R2 with a 24-hour lifecycle key.
  *
- * Billing: costPerChar = $0.00024 / char (same as TTS eleven_multilingual_v2)
+ * Params (from routing layer):
+ *   text               string  — text/prompt describing the sound effect
+ *   duration_seconds   number  — optional, 0.5–22
+ *   prompt_influence   number  — 0–1, how closely to follow prompt (default: 0.3)
+ *
+ * Billing: costPerChar = $0.00024 / char
  */
 import { NextRequest, NextResponse } from "next/server";
 import { uploadToR2 } from "@/lib/r2";
@@ -17,6 +20,7 @@ export const dynamic = "force-dynamic";
 
 export async function POST(req: NextRequest) {
     try {
+        const apiKey = req.headers.get("authorization")?.replace("Bearer ", "") ?? "";
         const body = await req.json();
         const {
             text,
@@ -28,7 +32,6 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ success: false, message: "Missing required field: text" }, { status: 400 });
         }
 
-        const apiKey = process.env.ELEVENLABS_API_KEY;
         if (!apiKey) {
             return NextResponse.json({ success: false, message: "ElevenLabs API key not configured" }, { status: 503 });
         }

@@ -5,19 +5,24 @@
  * Input:  { message: string, context?: { draftSkillId?: number }, url?: string }
  * Output: { reply: string, draft?: { skill: {...}, providers: [...] } }
  *
+ * Auth: accepts EITHER publisher API key (Bearer sk-pub-...) OR admin session (NextAuth).
+ *
  * IMPORTANT: The assistant ONLY drafts skills. Nothing is saved or published automatically.
  * The publisher must review the draft and explicitly call POST /api/publisher/skills.
+ * Admins publish via POST /api/admin/skills (separate endpoint).
  *
  * Security:
  * - URL fetch uses SSRF guard (same as provider registration)
  * - Fetched content is used as structured data input only, not as instructions
  * - 5s timeout, 100KB body limit
  * - GET only for URL fetch (never POST/PUT)
+ * - Redirect: manual + re-validate Location header
  */
 import { NextRequest, NextResponse } from "next/server";
 import { validatePublisherKey } from "@/lib/publisherAuth";
 import { pubAuthError, pubError } from "@/lib/pubErrors";
 import { validateEndpointUrl } from "@/lib/ssrfGuard";
+import { isAdmin } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
@@ -34,10 +39,30 @@ async function fetchUrlSafely(url: string): Promise<{ content: string; error?: s
         const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
         const res = await fetch(url, {
             method: "GET",
+            redirect: "manual",
             signal: controller.signal,
             headers: { "User-Agent": "Aporto-Publisher-Assistant/1.0" },
         });
         clearTimeout(timer);
+
+        // Handle redirects — re-validate the Location header
+        if (res.status >= 300 && res.status < 400) {
+            const location = res.headers.get("location");
+            if (!location) return { content: "", error: "Redirect with no Location header" };
+            const redirectSsrf = await validateEndpointUrl(location);
+            if (!redirectSsrf.ok) return { content: "", error: `Redirect URL not allowed: ${redirectSsrf.error}` };
+            const controller2 = new AbortController();
+            const timer2 = setTimeout(() => controller2.abort(), FETCH_TIMEOUT_MS);
+            const res2 = await fetch(location, {
+                method: "GET",
+                redirect: "manual",
+                signal: controller2.signal,
+                headers: { "User-Agent": "Aporto-Publisher-Assistant/1.0" },
+            });
+            clearTimeout(timer2);
+            const text = await res2.text();
+            return { content: text.slice(0, MAX_BODY_BYTES) };
+        }
 
         const text = await res.text();
         const truncated = text.slice(0, MAX_BODY_BYTES);
@@ -48,9 +73,19 @@ async function fetchUrlSafely(url: string): Promise<{ content: string; error?: s
 }
 
 export async function POST(req: NextRequest) {
-    const authResult = await validatePublisherKey(req);
-    if (!authResult.ok || !authResult.auth) return pubAuthError(authResult.errorCode, authResult.message);
-    const { publisherId } = authResult.auth;
+    // Dual auth: try admin session first, then publisher key
+    let publisherId: string | null = null;
+    let authSource: "admin" | "publisher" = "publisher";
+
+    const adminAuthed = await isAdmin();
+    if (adminAuthed) {
+        authSource = "admin";
+        publisherId = "admin"; // Admin doesn't need a publisherId
+    } else {
+        const authResult = await validatePublisherKey(req);
+        if (!authResult.ok || !authResult.auth) return pubAuthError(authResult.errorCode, authResult.message);
+        publisherId = authResult.auth.publisherId;
+    }
 
     const body = await req.json();
     const { message, url } = body;
@@ -160,8 +195,8 @@ Output format (valid JSON at the end of your reply, wrapped in \`\`\`json ... \`
     void prisma.$executeRawUnsafe(
         `INSERT INTO "ServiceUsage" (id, "newApiUserId", service, provider, "costUSD", metadata, "createdAt")
          VALUES (gen_random_uuid()::text, 0, 'publisher-assistant', 'gpt-4o-mini', 0, $1, NOW())`,
-        JSON.stringify({ publisherId }),
+        JSON.stringify({ publisherId, authSource }),
     ).catch(() => {/* non-critical */});
 
-    return NextResponse.json({ success: true, reply, draft });
+    return NextResponse.json({ success: true, reply, draft, authSource });
 }

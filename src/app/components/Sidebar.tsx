@@ -6,6 +6,8 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 
+const ADMIN_EMAILS = new Set(["pevzner@aporto.tech", "it@aporto.tech"]);
+
 type SidebarContext = "user" | "publisher";
 type PublisherStatus = "loading" | "none" | "pending" | "approved" | "suspended";
 
@@ -13,6 +15,8 @@ const Sidebar = () => {
     const pathname = usePathname();
     const router = useRouter();
     const { data: session, status } = useSession();
+
+    const isAdmin = ADMIN_EMAILS.has((session?.user as any)?.email ?? "");
 
     // ─── Balance state ────────────────────────────────────────────────────────
     const [balance, setBalance] = useState<{ remainingUSD: number; usedUSD: number } | null>(null);
@@ -247,6 +251,12 @@ const Sidebar = () => {
             </nav>
 
             <div className={styles.sidebarFooter}>
+                {isAdmin && (
+                    <Link href="/admin" className={`${styles.navItem} ${pathname.startsWith("/admin") ? styles.navItemActive : ""}`}>
+                        <span>🔧</span>
+                        <span>Admin</span>
+                    </Link>
+                )}
                 <Link href="/settings" className={styles.navItem}>
                     <span>⚙️</span>
                     <span>Settings</span>

@@ -43,6 +43,8 @@ export interface ScoredProvider {
     timeoutRate: number;
     /** Per-provider secret for outbound auth. When set, forwarded as Bearer token instead of caller's key. */
     secret: string | null;
+    /** Provider-specific config merged into params before forwarding (e.g. { actorId: "..." } for Apify). */
+    syncConfig: Record<string, unknown> | null;
 }
 
 type ErrorType = "success" | "timeout" | "network_error" | "error_5xx" | "error_4xx";
@@ -116,7 +118,7 @@ export async function selectProvider(
     // Unified CTE: exclude providers used in this session (24h) OR same paramsHash (2 min)
     // For third-party skills: also exclude providers without a providerSecret (T1 guard)
     const rows = await prisma.$queryRawUnsafe<
-        { id: number; name: string; endpoint: string; price_per_call: number; cost_per_char: number | null; avg_latency_ms: number; retry_rate: number; timeout_rate: number; secret: string | null }[]
+        { id: number; name: string; endpoint: string; price_per_call: number; cost_per_char: number | null; avg_latency_ms: number; retry_rate: number; timeout_rate: number; secret: string | null; sync_config: string | null }[]
     >(
         `WITH used AS (
             SELECT DISTINCT "providerId"
@@ -143,7 +145,8 @@ export async function selectProvider(
             p."avgLatencyMs"    AS avg_latency_ms,
             p."retryRate"       AS retry_rate,
             p."timeoutRate"     AS timeout_rate,
-            p."providerSecret"  AS secret
+            p."providerSecret"  AS secret,
+            p."syncConfig"      AS sync_config
         FROM "Provider" p
         WHERE p."skillId" = $3
           AND p."isActive" = true
@@ -195,6 +198,7 @@ export async function selectProvider(
         retryRate: Number(best.retry_rate),
         timeoutRate: Number(best.timeout_rate),
         secret: best.secret ?? null,
+        syncConfig: best.sync_config ? JSON.parse(best.sync_config) : null,
     };
 }
 
@@ -214,6 +218,12 @@ export async function executeSkillViaProvider(
 
     const start = Date.now();
 
+    // Merge provider-level config (e.g. actorId for Apify) into params.
+    // syncConfig keys are set by provider admin and never exposed to callers.
+    const mergedParams = provider.syncConfig
+        ? { ...params, ...provider.syncConfig }
+        : params;
+
     let res: Response;
     try {
         res = await fetch(provider.endpoint, {
@@ -225,7 +235,7 @@ export async function executeSkillViaProvider(
                 // when onboarding each external provider.
                 "Authorization": provider.secret ? `Bearer ${provider.secret}` : authHeader,
             },
-            body: JSON.stringify(params),
+            body: JSON.stringify(mergedParams),
             // 10s timeout — Vercel function limit is 10s on hobby, 30s on pro
             signal: AbortSignal.timeout(10_000),
         });

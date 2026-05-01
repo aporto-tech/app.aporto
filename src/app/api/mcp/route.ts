@@ -25,7 +25,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 import { z } from "zod";
-import { validateApiKeyOrSession, deductUserQuota } from "@/lib/serviceProxy";
+import { validateApiKeyOrSession, deductUserQuota, logServiceUsage } from "@/lib/serviceProxy";
 import { prisma } from "@/lib/prisma";
 import { discoverSkills, selectProvider, executeSkillViaProvider, updateProviderStats, recordSkillCall } from "@/lib/routing";
 
@@ -225,6 +225,8 @@ function buildMcpServer(userId: number, authHeader: string) {
 
             const data = result.data as { url: string | null; audio_base64?: string; expires_at?: string };
             if (data.url) {
+                void logServiceUsage(userId, "tts", "elevenlabs", costUSD, { text_length: text.length, voice_id, model_id })
+                    .catch((e) => console.error("[mcp/tts] logServiceUsage:", e));
                 return {
                     content: [
                         { type: "text" as const, text: `Audio generated. ${text.length} chars, cost $${costUSD.toFixed(4)}.` },
@@ -233,6 +235,8 @@ function buildMcpServer(userId: number, authHeader: string) {
                 };
             }
             // S3 not yet configured — return base64 fallback
+            void logServiceUsage(userId, "tts", "elevenlabs", costUSD, { text_length: text.length, voice_id, model_id })
+                .catch((e) => console.error("[mcp/tts] logServiceUsage:", e));
             return {
                 content: [
                     { type: "text" as const, text: `Audio generated. ${text.length} chars, cost $${costUSD.toFixed(4)}.` },

@@ -1,17 +1,21 @@
 /**
- * Provider wrapper: Text-to-Speech (ElevenLabs → R2)
- *
- * Called by the routing layer (routing/execute), which already deducted
- * the per-char cost before calling this endpoint.
+ * Provider: Text-to-Speech (ElevenLabs → R2)
+ * Called by routing/execute with Authorization: Bearer {ELEVENLABS_API_KEY} (providerSecret).
  *
  * Returns JSON: { url, expires_at, char_count, model_id }
  * Audio is uploaded to R2 with a 24-hour lifecycle key.
  *
- * Per-char pricing (used by routing/execute pricePerCall override via params.model_id):
- *   eleven_flash_v2_5:       $0.08 / 1K chars
- *   eleven_turbo_v2_5:       $0.15 / 1K chars
- *   eleven_multilingual_v2:  $0.24 / 1K chars  (default)
- *   eleven_v3:               $0.30 / 1K chars
+ * Params (from routing layer):
+ *   text          string  — text to synthesize
+ *   voice_id      string  — ElevenLabs voice ID (default: Rachel 21m00Tcm4TlvDq8ikWAM)
+ *   model_id      string  — eleven_flash_v2_5 | eleven_turbo_v2_5 | eleven_multilingual_v2 | eleven_v3
+ *   output_format string  — mp3_44100_128 (default)
+ *
+ * Per-char pricing by model (billed via costPerChar on Provider row):
+ *   eleven_flash_v2_5:       $0.00008 / char  ($0.08 / 1K)
+ *   eleven_turbo_v2_5:       $0.00015 / char  ($0.15 / 1K)
+ *   eleven_multilingual_v2:  $0.00024 / char  ($0.24 / 1K)
+ *   eleven_v3:               $0.00030 / char  ($0.30 / 1K)
  */
 import { NextRequest, NextResponse } from "next/server";
 import { uploadToR2 } from "@/lib/r2";
@@ -25,6 +29,7 @@ const DEFAULT_MODEL = "eleven_multilingual_v2";
 
 export async function POST(req: NextRequest) {
     try {
+        const apiKey = req.headers.get("authorization")?.replace("Bearer ", "") ?? "";
         const body = await req.json();
         const {
             text,
@@ -37,7 +42,6 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ success: false, message: "Missing required field: text" }, { status: 400 });
         }
 
-        const apiKey = process.env.ELEVENLABS_API_KEY;
         if (!apiKey) {
             return NextResponse.json({ success: false, message: "ElevenLabs API key not configured" }, { status: 503 });
         }

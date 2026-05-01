@@ -1,28 +1,27 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
 datasource db {
   provider  = "postgresql"
   url       = env("DATABASE_URL")
   directUrl = env("DIRECT_URL")
 }
 
-generator client {
-  provider = "prisma-client-js"
-}
-
 model Account {
-  id                 String  @id @default(cuid())
-  userId             String
-  type               String
-  provider           String
-  providerAccountId  String
-  refresh_token      String?
-  access_token       String?
-  expires_at         Int?
-  token_type         String?
-  scope              String?
-  id_token           String?
-  session_state      String?
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([provider, providerAccountId])
 }
@@ -36,22 +35,23 @@ model Session {
 }
 
 model User {
-  id            String    @id @default(cuid())
-  name          String?
-  email         String?   @unique
-  emailVerified DateTime?
-  image         String?
-  password      String?
-  newApiUserId                  Int?
-  stripeCustomerId              String?
-  stripePaymentMethodId         String?
-  stripePaymentMethodBrand      String?
-  stripePaymentMethodLast4      String?
-  stripePaymentMethodExpiry     String?
-  lastInsufficientBalanceEmailAt DateTime?
-  accounts                      Account[]
-  sessions                      Session[]
-  publisher                     Publisher?
+  id                             String            @id @default(cuid())
+  name                           String?
+  email                          String?           @unique
+  emailVerified                  DateTime?
+  image                          String?
+  password                       String?
+  newApiUserId                   Int?
+  stripeCustomerId               String?
+  stripePaymentMethodId          String?
+  stripePaymentMethodBrand       String?
+  stripePaymentMethodLast4       String?
+  stripePaymentMethodExpiry      String?
+  lastInsufficientBalanceEmailAt DateTime?         @db.Timestamptz(6)
+  accounts                       Account[]
+  PromoRedemption                PromoRedemption[]
+  publisher                      Publisher?
+  sessions                       Session[]
 }
 
 model PasswordResetToken {
@@ -88,13 +88,13 @@ model Rule {
   newApiUserId   Int
   tokenId        Int
   tokenName      String
-  type           String    // "total_limit" | "daily_limit" | "model_allowlist"
+  type           String
   limitUSD       Float?
   models         String?
   enabled        Boolean   @default(true)
-  createdAt      DateTime  @default(now())
-  alert80SentAt  DateTime?
-  alert100SentAt DateTime?
+  createdAt      DateTime  @default(now()) @db.Timestamptz(6)
+  alert80SentAt  DateTime? @db.Timestamptz(6)
+  alert100SentAt DateTime? @db.Timestamptz(6)
   webhookUrl     String?
 }
 
@@ -104,8 +104,8 @@ model PromoCode {
   creditUSD   Float
   maxUses     Int               @default(1)
   usedCount   Int               @default(0)
-  createdAt   DateTime          @default(now())
-  expiresAt   DateTime?
+  createdAt   DateTime          @default(now()) @db.Timestamptz(6)
+  expiresAt   DateTime?         @db.Timestamptz(6)
   redemptions PromoRedemption[]
 }
 
@@ -113,8 +113,9 @@ model PromoRedemption {
   id          String    @id @default(cuid())
   promoCodeId String
   userId      String
-  redeemedAt  DateTime  @default(now())
-  promoCode   PromoCode @relation(fields: [promoCodeId], references: [id])
+  redeemedAt  DateTime  @default(now()) @db.Timestamptz(6)
+  promoCode   PromoCode @relation(fields: [promoCodeId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  User        User      @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
   @@unique([promoCodeId, userId])
 }
@@ -122,10 +123,10 @@ model PromoRedemption {
 model ServiceUsage {
   id           String   @id @default(cuid())
   newApiUserId Int
-  service      String   // "sms" | "search" | "ai-search" | "tts" | "image"
-  provider     String   // "prelude" | "linkup" | "youcom" | "elevenlabs" | "fal"
+  service      String
+  provider     String
   costUSD      Float
-  metadata     String?  // JSON: request params + response metadata
+  metadata     String?
   createdAt    DateTime @default(now())
 
   @@index([newApiUserId])
@@ -133,20 +134,20 @@ model ServiceUsage {
 }
 
 model Publisher {
-  id              String    @id @default(cuid())
-  userId          String    @unique
-  user            User      @relation(fields: [userId], references: [id])
+  id              String            @id @default(cuid())
+  userId          String            @unique
   displayName     String
   website         String?
   description     String?
-  status          String    @default("pending")  // "pending" | "approved" | "suspended"
+  status          String            @default("pending")
   approvedAt      DateTime?
-  approvedBy      String?   // admin email
-  revenueShare    Float     @default(0.85)
+  approvedBy      String?
+  revenueShare    Float             @default(0.85)
   stripeAccountId String?
-  createdAt       DateTime  @default(now())
-  skills          Skill[]
+  createdAt       DateTime          @default(now())
+  user            User              @relation(fields: [userId], references: [id])
   apiKeys         PublisherApiKey[]
+  skills          Skill[]
   revenue         SkillRevenue[]
 
   @@index([status])
@@ -155,123 +156,124 @@ model Publisher {
 model PublisherApiKey {
   id          String    @id @default(cuid())
   publisherId String
-  publisher   Publisher @relation(fields: [publisherId], references: [id])
   name        String
-  lookupHash  String    @unique  // sha256(key) — fast indexed lookup
-  keyHmac     String             // hmac-sha256(key, PUBLISHER_KEY_HMAC_SECRET) — anti-rainbow
-  prefix      String             // first 8 chars shown in UI: "sk-pub-ab12..."
+  lookupHash  String    @unique
+  keyHmac     String
+  prefix      String
   lastUsedAt  DateTime?
   revokedAt   DateTime?
   createdAt   DateTime  @default(now())
+  publisher   Publisher @relation(fields: [publisherId], references: [id])
 
   @@index([publisherId])
 }
 
 model Skill {
-  id           Int        @id @default(autoincrement())
+  id           Int                    @id @default(autoincrement())
   name         String
   description  String
-  embedding    Unsupported("vector(1536)")?
-  paramsSchema String?    // JSON: {field: type} for execute_skill params
-  tags         String?    // JSON array for display/filtering
-  category     String?    // e.g. "media/image", "search/web", "llm/chat"
-  capabilities String?    // JSON array: ["generate", "search", ...]
-  inputTypes   String?    // JSON array: ["text", "image", "audio", "url", "json"]
-  outputTypes  String?    // JSON array: ["text", "image", "audio", "url", "json", "binary"]
-  isActive     Boolean    @default(true)
-  publisherId  String?    // null = Aporto internal; FK to Publisher
-  publisher    Publisher? @relation(fields: [publisherId], references: [id])
-  status       String     @default("live")  // "draft" | "pending_review" | "live" | "rejected"
-  reviewNote   String?    // admin note on rejection
-  lastEditedAt DateTime?  // for resubmit guard: must be > rejectedAt
-  inputSchema  String?    // JSON Schema (MCP compatibility)
-  mcpVersion   String?    // MCP protocol version
-  createdAt    DateTime   @default(now())
+  paramsSchema String?
+  tags         String?
+  isActive     Boolean                @default(true)
+  createdAt    DateTime               @default(now())
+  embedding    Unsupported("vector")?
+  category     String?
+  capabilities String?
+  inputTypes   String?
+  outputTypes  String?
+  publisherId  String?
+  status       String                 @default("live")
+  reviewNote   String?
+  lastEditedAt DateTime?
+  inputSchema  String?
+  mcpVersion   String?
   providers    Provider[]
+  options      ProviderOption[]
+  publisher    Publisher?             @relation(fields: [publisherId], references: [id])
   calls        SkillCall[]
   revenue      SkillRevenue[]
-  options      ProviderOption[]
 
   @@index([status])
   @@index([publisherId])
+  @@index([category])
+  @@index([embedding], map: "Skill_embedding_ivfflat_idx")
 }
 
 model Provider {
-  id           Int        @id @default(autoincrement())
-  skillId      Int
-  skill        Skill      @relation(fields: [skillId], references: [id])
-  name         String
-  endpoint     String
-  pricePerCall Float
-  costPerChar  Float?     // if set, cost = costPerChar * params.text.length (overrides pricePerCall)
-  avgLatencyMs Int        @default(500)
-  retryRate    Float      @default(0)
-  timeoutRate     Float      @default(0)
-  providerSecret  String?
-  isActive        Boolean    @default(true)
-  syncEndpoint    String?    // URL to fetch options from: "https://api.elevenlabs.io/v1/voices"
-  syncConfig      String?    // JSON config: {auth, dataPath, mapping, optionType}
-  createdAt       DateTime   @default(now())
-  calls           SkillCall[]
-  options         ProviderOption[]
+  id             Int              @id @default(autoincrement())
+  skillId        Int
+  name           String
+  endpoint       String
+  pricePerCall   Float
+  avgLatencyMs   Int              @default(500)
+  retryRate      Float            @default(0)
+  isActive       Boolean          @default(true)
+  createdAt      DateTime         @default(now())
+  timeoutRate    Float            @default(0)
+  providerSecret String?
+  costPerChar    Float?
+  syncEndpoint   String?
+  syncConfig     String?
+  skill          Skill            @relation(fields: [skillId], references: [id])
+  options        ProviderOption[]
+  calls          SkillCall[]
 }
 
 model ProviderOption {
   id           Int      @id @default(autoincrement())
   providerId   Int
-  provider     Provider @relation(fields: [providerId], references: [id])
   skillId      Int
-  skill        Skill    @relation(fields: [skillId], references: [id])
-  optionType   String   // "voice" | "model" | "language" | "style" | "format"
-  optionKey    String   // actual value for params: "EXAVITQu4vr4xnSDxMaL"
-  label        String   // "Bella (young, female, American English)"
-  metadata     Json     // JSONB: {gender, age, languages, accent, preview_url, ...}
+  optionType   String
+  optionKey    String
+  label        String
+  metadata     Json     @default("{}")
   isActive     Boolean  @default(true)
   lastSyncedAt DateTime @default(now())
   createdAt    DateTime @default(now())
+  provider     Provider @relation(fields: [providerId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  skill        Skill    @relation(fields: [skillId], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
   @@unique([providerId, skillId, optionType, optionKey])
   @@index([skillId, optionType])
 }
 
 model SkillCall {
-  id             Int      @id @default(autoincrement())
-  sessionId      String
-  newApiUserId   Int
-  skillId        Int
-  providerId     Int
-  isRetry        Boolean  @default(false)
-  latencyMs      Int?
-  success        Boolean?
-  costUSD        Float?
-  paramsHash     String?
-  errorType      String?
-  createdAt      DateTime @default(now())
+  id           Int           @id @default(autoincrement())
+  sessionId    String
+  newApiUserId Int
+  skillId      Int
+  providerId   Int
+  isRetry      Boolean       @default(false)
+  latencyMs    Int?
+  success      Boolean?
+  costUSD      Float?
+  createdAt    DateTime      @default(now())
+  paramsHash   String?
+  errorType    String?
+  provider     Provider      @relation(fields: [providerId], references: [id])
+  skill        Skill         @relation(fields: [skillId], references: [id])
+  skillRevenue SkillRevenue?
 
-  skill          Skill    @relation(fields: [skillId], references: [id])
-  provider       Provider @relation(fields: [providerId], references: [id])
-  skillRevenue   SkillRevenue?
-
-  @@index([sessionId, newApiUserId, skillId, createdAt])
   @@index([newApiUserId])
-  @@index([newApiUserId, paramsHash, createdAt])
   @@index([createdAt(sort: Desc)])
+  @@index([newApiUserId, paramsHash, createdAt], map: "SkillCall_params_retry_idx")
+  @@index([sessionId, newApiUserId, skillId, createdAt], map: "SkillCall_session_skill_idx")
 }
 
 model SkillRevenue {
   id                  String    @id @default(cuid())
   skillId             Int
-  skill               Skill     @relation(fields: [skillId], references: [id])
   publisherId         String
-  publisher           Publisher @relation(fields: [publisherId], references: [id])
   skillCallId         Int       @unique
-  skillCall           SkillCall @relation(fields: [skillCallId], references: [id])
   grossUSD            Float
   revenueShare        Float
   publisherEarningUSD Float
   paidOut             Boolean   @default(false)
   paidOutAt           DateTime?
   createdAt           DateTime  @default(now())
+  publisher           Publisher @relation(fields: [publisherId], references: [id])
+  skillCall           SkillCall @relation(fields: [skillCallId], references: [id])
+  skill               Skill     @relation(fields: [skillId], references: [id])
 
   @@index([publisherId, paidOut])
   @@index([publisherId, createdAt(sort: Desc)])
@@ -284,4 +286,533 @@ model PublisherWaitlist {
   useCase   String?
   createdAt DateTime @default(now())
   approved  Boolean  @default(false)
+}
+
+model abilities {
+  group      String   @db.VarChar(64)
+  model      String   @db.VarChar(255)
+  channel_id BigInt
+  enabled    Boolean?
+  priority   BigInt?  @default(0)
+  weight     BigInt?  @default(0)
+  tag        String?
+
+  @@id([group, model, channel_id])
+  @@index([channel_id], map: "idx_abilities_channel_id")
+  @@index([priority], map: "idx_abilities_priority")
+  @@index([tag], map: "idx_abilities_tag")
+  @@index([weight], map: "idx_abilities_weight")
+}
+
+model channels {
+  id                   BigInt   @id @default(autoincrement())
+  type                 BigInt?  @default(0)
+  key                  String
+  open_ai_organization String?
+  test_model           String?
+  status               BigInt?  @default(1)
+  name                 String?
+  weight               BigInt?  @default(0)
+  created_time         BigInt?
+  test_time            BigInt?
+  response_time        BigInt?
+  base_url             String?  @default("")
+  other                String?
+  balance              Decimal? @db.Decimal
+  balance_updated_time BigInt?
+  models               String?
+  group                String?  @default("default") @db.VarChar(64)
+  used_quota           BigInt?  @default(0)
+  model_mapping        String?
+  status_code_mapping  String?  @default("") @db.VarChar(1024)
+  priority             BigInt?  @default(0)
+  auto_ban             BigInt?  @default(1)
+  other_info           String?
+  tag                  String?
+  setting              String?
+  param_override       String?
+  header_override      String?
+  remark               String?  @db.VarChar(255)
+  channel_info         Json?    @db.Json
+  settings             String?
+
+  @@index([name], map: "idx_channels_name")
+  @@index([tag], map: "idx_channels_tag")
+}
+
+model checkins {
+  id            BigInt  @id @default(autoincrement())
+  user_id       BigInt
+  checkin_date  String  @db.VarChar(10)
+  quota_awarded BigInt
+  created_at    BigInt?
+
+  @@unique([user_id, checkin_date], map: "idx_user_checkin_date")
+}
+
+model custom_oauth_providers {
+  id                     BigInt    @id @default(autoincrement())
+  name                   String    @db.VarChar(64)
+  slug                   String    @unique(map: "idx_custom_oauth_providers_slug") @db.VarChar(64)
+  icon                   String?   @default("") @db.VarChar(128)
+  enabled                Boolean?  @default(false)
+  client_id              String?   @db.VarChar(256)
+  client_secret          String?   @db.VarChar(512)
+  authorization_endpoint String?   @db.VarChar(512)
+  token_endpoint         String?   @db.VarChar(512)
+  user_info_endpoint     String?   @db.VarChar(512)
+  scopes                 String?   @default("openid profile email") @db.VarChar(256)
+  user_id_field          String?   @default("sub") @db.VarChar(128)
+  username_field         String?   @default("preferred_username") @db.VarChar(128)
+  display_name_field     String?   @default("name") @db.VarChar(128)
+  email_field            String?   @default("email") @db.VarChar(128)
+  well_known             String?   @db.VarChar(512)
+  auth_style             BigInt?   @default(0)
+  access_policy          String?
+  access_denied_message  String?   @db.VarChar(512)
+  created_at             DateTime? @db.Timestamptz(6)
+  updated_at             DateTime? @db.Timestamptz(6)
+}
+
+model daily_spending_by_user_cache {
+  day           DateTime @db.Date
+  user_id       Int
+  username      String   @default("")
+  total_usd     Decimal  @default(0) @db.Decimal(12, 6)
+  request_count Int      @default(0)
+  cached_at     DateTime @default(now()) @db.Timestamptz(6)
+
+  @@id([day, user_id])
+  @@index([day], map: "idx_dsbuc_day")
+}
+
+model daily_spending_cache {
+  day           DateTime @id @db.Date
+  total_usd     Decimal  @default(0) @db.Decimal(12, 6)
+  request_count Int      @default(0)
+  cached_at     DateTime @default(now()) @db.Timestamptz(6)
+
+  @@index([day], map: "idx_dsc_day")
+  @@index([day], map: "idx_dsc_month")
+}
+
+model logs {
+  id                BigInt   @id @default(autoincrement())
+  user_id           BigInt?
+  created_at        BigInt?
+  type              BigInt?
+  content           String?
+  username          String?  @default("")
+  token_name        String?  @default("")
+  model_name        String?  @default("")
+  quota             BigInt?  @default(0)
+  prompt_tokens     BigInt?  @default(0)
+  completion_tokens BigInt?  @default(0)
+  use_time          BigInt?  @default(0)
+  is_stream         Boolean?
+  channel_id        BigInt?
+  channel_name      String?
+  token_id          BigInt?  @default(0)
+  group             String?
+  ip                String?  @default("")
+  request_id        String?  @default("") @db.VarChar(64)
+  other             String?
+
+  @@index([id, created_at], map: "idx_created_at_id")
+  @@index([created_at, type], map: "idx_created_at_type")
+  @@index([channel_id], map: "idx_logs_channel_id")
+  @@index([group], map: "idx_logs_group")
+  @@index([ip], map: "idx_logs_ip")
+  @@index([model_name], map: "idx_logs_model_name")
+  @@index([request_id], map: "idx_logs_request_id")
+  @@index([token_id], map: "idx_logs_token_id")
+  @@index([token_name], map: "idx_logs_token_name")
+  @@index([user_id], map: "idx_logs_user_id")
+  @@index([username], map: "idx_logs_username")
+  @@index([user_id, id], map: "idx_user_id_id")
+  @@index([model_name, username], map: "index_username_model_name")
+}
+
+model midjourneys {
+  id          BigInt  @id @default(autoincrement())
+  code        BigInt?
+  user_id     BigInt?
+  action      String? @db.VarChar(40)
+  mj_id       String?
+  prompt      String?
+  prompt_en   String?
+  description String?
+  state       String?
+  submit_time BigInt?
+  start_time  BigInt?
+  finish_time BigInt?
+  image_url   String?
+  video_url   String?
+  video_urls  String?
+  status      String? @db.VarChar(20)
+  progress    String? @db.VarChar(30)
+  fail_reason String?
+  channel_id  BigInt?
+  quota       BigInt?
+  buttons     String?
+  properties  String?
+
+  @@index([action], map: "idx_midjourneys_action")
+  @@index([finish_time], map: "idx_midjourneys_finish_time")
+  @@index([mj_id], map: "idx_midjourneys_mj_id")
+  @@index([progress], map: "idx_midjourneys_progress")
+  @@index([start_time], map: "idx_midjourneys_start_time")
+  @@index([status], map: "idx_midjourneys_status")
+  @@index([submit_time], map: "idx_midjourneys_submit_time")
+  @@index([user_id], map: "idx_midjourneys_user_id")
+}
+
+model models {
+  id            BigInt    @id @default(autoincrement())
+  model_name    String    @db.VarChar(128)
+  description   String?
+  icon          String?   @db.VarChar(128)
+  tags          String?   @db.VarChar(255)
+  vendor_id     BigInt?
+  endpoints     String?
+  status        BigInt?   @default(1)
+  sync_official BigInt?   @default(1)
+  created_time  BigInt?
+  updated_time  BigInt?
+  deleted_at    DateTime? @db.Timestamptz(6)
+  name_rule     BigInt?   @default(0)
+
+  @@unique([model_name, deleted_at], map: "uk_model_name_delete_at")
+  @@index([deleted_at], map: "idx_models_deleted_at")
+  @@index([vendor_id], map: "idx_models_vendor_id")
+}
+
+model options {
+  key   String  @id
+  value String?
+}
+
+model passkey_credentials {
+  id               BigInt    @id @default(autoincrement())
+  user_id          BigInt    @unique(map: "idx_passkey_credentials_user_id")
+  credential_id    String    @unique(map: "idx_passkey_credentials_credential_id") @db.VarChar(512)
+  public_key       String
+  attestation_type String?   @db.VarChar(255)
+  aa_guid          String?   @db.VarChar(512)
+  sign_count       BigInt?   @default(0)
+  clone_warning    Boolean?
+  user_present     Boolean?
+  user_verified    Boolean?
+  backup_eligible  Boolean?
+  backup_state     Boolean?
+  transports       String?
+  attachment       String?   @db.VarChar(32)
+  last_used_at     DateTime? @db.Timestamptz(6)
+  created_at       DateTime? @db.Timestamptz(6)
+  updated_at       DateTime? @db.Timestamptz(6)
+  deleted_at       DateTime? @db.Timestamptz(6)
+
+  @@index([deleted_at], map: "idx_passkey_credentials_deleted_at")
+}
+
+model prefill_groups {
+  id           BigInt    @id @default(autoincrement())
+  name         String    @unique(map: "idx_prefill_groups_name") @db.VarChar(64)
+  type         String    @db.VarChar(32)
+  items        Json?     @db.Json
+  description  String?   @db.VarChar(255)
+  created_time BigInt?
+  updated_time BigInt?
+  deleted_at   DateTime? @db.Timestamptz(6)
+
+  @@index([deleted_at], map: "idx_prefill_groups_deleted_at")
+  @@index([type], map: "idx_prefill_groups_type")
+}
+
+model quota_data {
+  id         BigInt  @id @default(autoincrement())
+  user_id    BigInt?
+  username   String? @default("") @db.VarChar(64)
+  model_name String? @default("") @db.VarChar(64)
+  created_at BigInt?
+  token_used BigInt? @default(0)
+  count      BigInt? @default(0)
+  quota      BigInt? @default(0)
+
+  @@index([created_at], map: "idx_qdt_created_at")
+  @@index([model_name, username], map: "idx_qdt_model_user_name")
+  @@index([user_id], map: "idx_quota_data_user_id")
+}
+
+model redemptions {
+  id            BigInt    @id @default(autoincrement())
+  user_id       BigInt?
+  key           String?   @unique(map: "idx_redemptions_key") @db.Char(32)
+  status        BigInt?   @default(1)
+  name          String?
+  quota         BigInt?   @default(100)
+  created_time  BigInt?
+  redeemed_time BigInt?
+  used_user_id  BigInt?
+  deleted_at    DateTime? @db.Timestamptz(6)
+  expired_time  BigInt?
+
+  @@index([deleted_at], map: "idx_redemptions_deleted_at")
+  @@index([name], map: "idx_redemptions_name")
+}
+
+model setups {
+  id             BigInt @id @default(autoincrement())
+  version        String @db.VarChar(50)
+  initialized_at BigInt
+}
+
+model subscription_orders {
+  id               BigInt   @id @default(autoincrement())
+  user_id          BigInt?
+  plan_id          BigInt?
+  money            Decimal? @db.Decimal
+  trade_no         String?  @unique @db.VarChar(255)
+  payment_method   String?  @db.VarChar(50)
+  status           String?
+  create_time      BigInt?
+  complete_time    BigInt?
+  provider_payload String?
+
+  @@index([plan_id], map: "idx_subscription_orders_plan_id")
+  @@index([trade_no], map: "idx_subscription_orders_trade_no")
+  @@index([user_id], map: "idx_subscription_orders_user_id")
+}
+
+model subscription_plans {
+  id                         BigInt   @id @default(autoincrement())
+  title                      String   @db.VarChar(128)
+  subtitle                   String?  @default("") @db.VarChar(255)
+  price_amount               Decimal  @default(0.000000) @db.Decimal(10, 6)
+  currency                   String   @default("USD") @db.VarChar(8)
+  duration_unit              String   @default("month") @db.VarChar(16)
+  duration_value             BigInt   @default(1)
+  custom_seconds             BigInt   @default(0)
+  enabled                    Boolean? @default(true)
+  sort_order                 BigInt?  @default(0)
+  stripe_price_id            String?  @default("") @db.VarChar(128)
+  creem_product_id           String?  @default("") @db.VarChar(128)
+  max_purchase_per_user      BigInt?  @default(0)
+  upgrade_group              String?  @default("") @db.VarChar(64)
+  total_amount               BigInt   @default(0)
+  quota_reset_period         String?  @default("never") @db.VarChar(16)
+  quota_reset_custom_seconds BigInt?  @default(0)
+  created_at                 BigInt?
+  updated_at                 BigInt?
+}
+
+model subscription_pre_consume_records {
+  id                   BigInt  @id @default(autoincrement())
+  request_id           String? @unique(map: "idx_subscription_pre_consume_records_request_id") @db.VarChar(64)
+  user_id              BigInt?
+  user_subscription_id BigInt?
+  pre_consumed         BigInt  @default(0)
+  status               String? @db.VarChar(32)
+  created_at           BigInt?
+  updated_at           BigInt?
+
+  @@index([status], map: "idx_subscription_pre_consume_records_status")
+  @@index([updated_at], map: "idx_subscription_pre_consume_records_updated_at")
+  @@index([user_id], map: "idx_subscription_pre_consume_records_user_id")
+  @@index([user_subscription_id], map: "idx_subscription_pre_consume_records_user_subscription_id")
+}
+
+model tasks {
+  id           BigInt  @id @default(autoincrement())
+  created_at   BigInt?
+  updated_at   BigInt?
+  task_id      String? @db.VarChar(191)
+  platform     String? @db.VarChar(30)
+  user_id      BigInt?
+  group        String? @db.VarChar(50)
+  channel_id   BigInt?
+  quota        BigInt?
+  action       String? @db.VarChar(40)
+  status       String? @db.VarChar(20)
+  fail_reason  String?
+  submit_time  BigInt?
+  start_time   BigInt?
+  finish_time  BigInt?
+  progress     String? @db.VarChar(20)
+  properties   Json?   @db.Json
+  private_data Json?   @db.Json
+  data         Json?   @db.Json
+
+  @@index([action], map: "idx_tasks_action")
+  @@index([channel_id], map: "idx_tasks_channel_id")
+  @@index([created_at], map: "idx_tasks_created_at")
+  @@index([finish_time], map: "idx_tasks_finish_time")
+  @@index([platform], map: "idx_tasks_platform")
+  @@index([progress], map: "idx_tasks_progress")
+  @@index([start_time], map: "idx_tasks_start_time")
+  @@index([status], map: "idx_tasks_status")
+  @@index([submit_time], map: "idx_tasks_submit_time")
+  @@index([task_id], map: "idx_tasks_task_id")
+  @@index([user_id], map: "idx_tasks_user_id")
+}
+
+model tokens {
+  id                   BigInt    @id @default(autoincrement())
+  user_id              BigInt?
+  key                  String?   @unique(map: "idx_tokens_key") @db.Char(48)
+  status               BigInt?   @default(1)
+  name                 String?
+  created_time         BigInt?
+  accessed_time        BigInt?
+  expired_time         BigInt?   @default(-1)
+  remain_quota         BigInt?   @default(0)
+  unlimited_quota      Boolean?
+  model_limits_enabled Boolean?
+  model_limits         String?
+  allow_ips            String?   @default("")
+  used_quota           BigInt?   @default(0)
+  group                String?   @default("")
+  cross_group_retry    Boolean?
+  deleted_at           DateTime? @db.Timestamptz(6)
+
+  @@index([deleted_at], map: "idx_tokens_deleted_at")
+  @@index([name], map: "idx_tokens_name")
+  @@index([user_id], map: "idx_tokens_user_id")
+}
+
+model top_ups {
+  id             BigInt   @id @default(autoincrement())
+  user_id        BigInt?
+  amount         BigInt?
+  money          Decimal? @db.Decimal
+  trade_no       String?  @unique @db.VarChar(255)
+  payment_method String?  @db.VarChar(50)
+  create_time    BigInt?
+  complete_time  BigInt?
+  status         String?
+
+  @@index([trade_no], map: "idx_top_ups_trade_no")
+  @@index([user_id], map: "idx_top_ups_user_id")
+}
+
+model two_fa_backup_codes {
+  id         BigInt    @id @default(autoincrement())
+  user_id    BigInt
+  code_hash  String    @db.VarChar(255)
+  is_used    Boolean?
+  used_at    DateTime? @db.Timestamptz(6)
+  created_at DateTime? @db.Timestamptz(6)
+  deleted_at DateTime? @db.Timestamptz(6)
+
+  @@index([deleted_at], map: "idx_two_fa_backup_codes_deleted_at")
+  @@index([user_id], map: "idx_two_fa_backup_codes_user_id")
+}
+
+model two_fas {
+  id              BigInt    @id @default(autoincrement())
+  user_id         BigInt    @unique
+  secret          String    @db.VarChar(255)
+  is_enabled      Boolean?
+  failed_attempts BigInt?   @default(0)
+  locked_until    DateTime? @db.Timestamptz(6)
+  last_used_at    DateTime? @db.Timestamptz(6)
+  created_at      DateTime? @db.Timestamptz(6)
+  updated_at      DateTime? @db.Timestamptz(6)
+  deleted_at      DateTime? @db.Timestamptz(6)
+
+  @@index([deleted_at], map: "idx_two_fas_deleted_at")
+  @@index([user_id], map: "idx_two_fas_user_id")
+}
+
+model user_oauth_bindings {
+  id               BigInt    @id @default(autoincrement())
+  user_id          BigInt
+  provider_id      BigInt
+  provider_user_id String    @db.VarChar(256)
+  created_at       DateTime? @db.Timestamptz(6)
+
+  @@unique([provider_id, provider_user_id], map: "ux_provider_userid")
+  @@unique([user_id, provider_id], map: "ux_user_provider")
+}
+
+model user_subscriptions {
+  id              BigInt  @id @default(autoincrement())
+  user_id         BigInt?
+  plan_id         BigInt?
+  amount_total    BigInt  @default(0)
+  amount_used     BigInt  @default(0)
+  start_time      BigInt?
+  end_time        BigInt?
+  status          String? @db.VarChar(32)
+  source          String? @default("order") @db.VarChar(32)
+  last_reset_time BigInt? @default(0)
+  next_reset_time BigInt? @default(0)
+  upgrade_group   String? @default("") @db.VarChar(64)
+  prev_user_group String? @default("") @db.VarChar(64)
+  created_at      BigInt?
+  updated_at      BigInt?
+
+  @@index([user_id, status, end_time], map: "idx_user_sub_active")
+  @@index([end_time], map: "idx_user_subscriptions_end_time")
+  @@index([next_reset_time], map: "idx_user_subscriptions_next_reset_time")
+  @@index([plan_id], map: "idx_user_subscriptions_plan_id")
+  @@index([status], map: "idx_user_subscriptions_status")
+  @@index([user_id], map: "idx_user_subscriptions_user_id")
+}
+
+model users {
+  id              BigInt    @id @default(autoincrement())
+  username        String?   @unique
+  password        String
+  display_name    String?
+  role            BigInt?   @default(1)
+  status          BigInt?   @default(1)
+  email           String?
+  github_id       String?
+  discord_id      String?
+  oidc_id         String?
+  wechat_id       String?
+  telegram_id     String?
+  access_token    String?   @unique(map: "idx_users_access_token") @db.Char(32)
+  quota           BigInt?   @default(0)
+  used_quota      BigInt?   @default(0)
+  request_count   BigInt?   @default(0)
+  group           String?   @default("default") @db.VarChar(64)
+  aff_code        String?   @unique(map: "idx_users_aff_code") @db.VarChar(32)
+  aff_count       BigInt?   @default(0)
+  aff_quota       BigInt?   @default(0)
+  aff_history     BigInt?   @default(0)
+  inviter_id      BigInt?
+  deleted_at      DateTime? @db.Timestamptz(6)
+  linux_do_id     String?
+  setting         String?
+  remark          String?   @db.VarChar(255)
+  stripe_customer String?   @db.VarChar(64)
+
+  @@index([deleted_at], map: "idx_users_deleted_at")
+  @@index([discord_id], map: "idx_users_discord_id")
+  @@index([display_name], map: "idx_users_display_name")
+  @@index([email], map: "idx_users_email")
+  @@index([github_id], map: "idx_users_git_hub_id")
+  @@index([inviter_id], map: "idx_users_inviter_id")
+  @@index([linux_do_id], map: "idx_users_linux_do_id")
+  @@index([oidc_id], map: "idx_users_oidc_id")
+  @@index([stripe_customer], map: "idx_users_stripe_customer")
+  @@index([telegram_id], map: "idx_users_telegram_id")
+  @@index([username], map: "idx_users_username")
+  @@index([wechat_id], map: "idx_users_we_chat_id")
+}
+
+model vendors {
+  id           BigInt    @id @default(autoincrement())
+  name         String    @db.VarChar(128)
+  description  String?
+  icon         String?   @db.VarChar(128)
+  status       BigInt?   @default(1)
+  created_time BigInt?
+  updated_time BigInt?
+  deleted_at   DateTime? @db.Timestamptz(6)
+
+  @@unique([name, deleted_at], map: "uk_vendor_name_delete_at")
+  @@index([deleted_at], map: "idx_vendors_deleted_at")
 }

@@ -300,6 +300,7 @@ function SkillsTab() {
     const [error, setError] = useState<string | null>(null);
     const [selectedSkillId, setSelectedSkillId] = useState<number | null>(null);
     const [showCreateSkill, setShowCreateSkill] = useState(false);
+    const [showAiOnboard, setShowAiOnboard] = useState(false);
     const [editingSkill, setEditingSkill] = useState<Skill | null>(null);
 
     useEffect(() => { fetchSkills(); }, []);
@@ -346,7 +347,10 @@ function SkillsTab() {
         <>
             <div className={styles.tabHeader}>
                 <span className={styles.tabCount}>{skills.length} skill{skills.length !== 1 ? "s" : ""}</span>
-                <button className={styles.generateBtn} onClick={() => setShowCreateSkill(true)}>+ Add Skill</button>
+                <div style={{ display: "flex", gap: 8 }}>
+                    <button className={styles.generateBtn} onClick={() => setShowAiOnboard(true)} style={{ background: "#6366f1" }}>AI Onboard</button>
+                    <button className={styles.generateBtn} onClick={() => setShowCreateSkill(true)}>+ Add Skill</button>
+                </div>
             </div>
 
             <div className={styles.section}>
@@ -420,6 +424,12 @@ function SkillsTab() {
                     skill={editingSkill}
                     onClose={() => setEditingSkill(null)}
                     onSaved={() => { setEditingSkill(null); fetchSkills(); }}
+                />
+            )}
+            {showAiOnboard && (
+                <AiOnboardModal
+                    onClose={() => setShowAiOnboard(false)}
+                    onPublished={() => { setShowAiOnboard(false); fetchSkills(); }}
                 />
             )}
         </>
@@ -501,6 +511,262 @@ function SkillModal({ skill, onClose, onSaved }: { skill?: Skill; onClose: () =>
                         <button type="submit" className={styles.submitBtn} disabled={submitting}>{submitting ? "Saving..." : skill ? "Save Changes" : "Create Skill"}</button>
                     </div>
                 </form>
+            </div>
+        </div>
+    );
+}
+
+// ── AI Onboard Modal ─────────────────────────────────────────────────────────
+
+interface AiDraft {
+    skill?: { name?: string; description?: string; category?: string; tags?: string[]; paramsSchema?: Record<string, unknown> };
+    providers?: Array<{ name?: string; endpoint?: string; pricePerCall?: number }>;
+}
+
+function AiOnboardModal({ onClose, onPublished }: { onClose: () => void; onPublished: () => void }) {
+    const [messages, setMessages] = useState<Array<{ role: "user" | "assistant"; content: string }>>([]);
+    const [input, setInput] = useState("");
+    const [url, setUrl] = useState("");
+    const [draft, setDraft] = useState<AiDraft | null>(null);
+    const [thinking, setThinking] = useState(false);
+    const [publishing, setPublishing] = useState(false);
+    const [error, setError] = useState("");
+    const [step, setStep] = useState<"chat" | "preview">("chat");
+
+    // Editable preview fields
+    const [editName, setEditName] = useState("");
+    const [editDesc, setEditDesc] = useState("");
+    const [editCategory, setEditCategory] = useState("");
+    const [editTags, setEditTags] = useState("");
+    const [editEndpoint, setEditEndpoint] = useState("");
+    const [editPrice, setEditPrice] = useState("0.01");
+    const [editProviderName, setEditProviderName] = useState("");
+
+    const send = async () => {
+        if (!input.trim()) return;
+        const userMsg = { role: "user" as const, content: input };
+        setMessages(prev => [...prev, userMsg]);
+        setInput("");
+        setThinking(true);
+        setError("");
+
+        try {
+            const res = await fetch("/api/publisher/assistant", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ message: input, url: url || undefined }),
+            });
+            const d = await res.json();
+            setThinking(false);
+
+            if (d.success) {
+                const cleanReply = d.reply.replace(/```json[\s\S]*?```/g, "[Draft generated — see preview below]");
+                setMessages(prev => [...prev, { role: "assistant", content: cleanReply }]);
+                if (d.draft) {
+                    setDraft(d.draft);
+                    // Pre-fill editable fields
+                    setEditName(d.draft.skill?.name ?? "");
+                    setEditDesc(d.draft.skill?.description ?? "");
+                    setEditCategory(d.draft.skill?.category ?? "");
+                    setEditTags((d.draft.skill?.tags ?? []).join(", "));
+                    const prov = d.draft.providers?.[0];
+                    setEditEndpoint(prov?.endpoint ?? "");
+                    setEditPrice(String(prov?.pricePerCall ?? 0.01));
+                    setEditProviderName(prov?.name ?? "");
+                }
+            } else {
+                setMessages(prev => [...prev, { role: "assistant", content: `Error: ${d.message}` }]);
+            }
+        } catch (e) {
+            setThinking(false);
+            setError(`Request failed: ${(e as Error).message}`);
+        }
+    };
+
+    const publish = async () => {
+        if (!editName.trim() || !editDesc.trim()) {
+            setError("Name and description are required.");
+            return;
+        }
+        if (!editEndpoint.trim()) {
+            setError("Provider endpoint is required.");
+            return;
+        }
+        setPublishing(true);
+        setError("");
+
+        try {
+            const res = await fetch("/api/admin/skills", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    name: editName.trim(),
+                    description: editDesc.trim(),
+                    tags: editTags.split(",").map(t => t.trim()).filter(Boolean),
+                    paramsSchema: draft?.skill?.paramsSchema ?? null,
+                    providers: [{
+                        name: editProviderName.trim() || editName.trim(),
+                        endpoint: editEndpoint.trim(),
+                        pricePerCall: parseFloat(editPrice) || 0.01,
+                    }],
+                }),
+            });
+            const d = await res.json();
+            setPublishing(false);
+
+            if (d.success) {
+                onPublished();
+            } else {
+                setError(d.error ?? "Failed to publish.");
+            }
+        } catch (e) {
+            setPublishing(false);
+            setError(`Publish failed: ${(e as Error).message}`);
+        }
+    };
+
+    return (
+        <div className={styles.overlay} onClick={onClose}>
+            <div className={styles.modal} style={{ width: 800, maxHeight: "85vh", display: "flex", flexDirection: "column" }} onClick={e => e.stopPropagation()}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+                    <h2 style={{ margin: 0 }}>AI Skill Onboard</h2>
+                    <div style={{ display: "flex", gap: 8 }}>
+                        <button
+                            onClick={() => setStep("chat")}
+                            style={{ padding: "4px 12px", borderRadius: 4, border: step === "chat" ? "1px solid #6366f1" : "1px solid #334155", background: step === "chat" ? "#6366f1" : "transparent", color: "#e2e8f0", cursor: "pointer", fontSize: 12 }}
+                        >Chat</button>
+                        <button
+                            onClick={() => setStep("preview")}
+                            disabled={!draft}
+                            style={{ padding: "4px 12px", borderRadius: 4, border: step === "preview" ? "1px solid #10b981" : "1px solid #334155", background: step === "preview" ? "#10b981" : "transparent", color: draft ? "#e2e8f0" : "#475569", cursor: draft ? "pointer" : "not-allowed", fontSize: 12 }}
+                        >Preview & Publish</button>
+                    </div>
+                </div>
+
+                {step === "chat" && (
+                    <div style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0 }}>
+                        {/* URL input */}
+                        <div style={{ marginBottom: 8 }}>
+                            <input
+                                value={url}
+                                onChange={e => setUrl(e.target.value)}
+                                placeholder="Documentation URL (optional) — e.g. https://docs.api.com/v1"
+                                style={{ width: "100%", padding: "6px 10px", borderRadius: 6, border: "1px solid #334155", background: "#1e293b", color: "#e2e8f0", fontSize: 13, boxSizing: "border-box" }}
+                            />
+                        </div>
+
+                        {/* Messages */}
+                        <div style={{ flex: 1, overflowY: "auto", marginBottom: 8, minHeight: 200, maxHeight: 350 }}>
+                            {messages.length === 0 && (
+                                <div style={{ color: "#475569", fontSize: 13, padding: "16px 0" }}>
+                                    Describe the API you want to onboard. Example: "I want to add a PDF summarizer at https://api.example.com/summarize — it takes a URL param and returns a summary text."
+                                </div>
+                            )}
+                            {messages.map((m, i) => (
+                                <div key={i} style={{
+                                    marginBottom: 8, padding: "8px 12px", borderRadius: 6,
+                                    background: m.role === "user" ? "#1e293b" : "#0f172a",
+                                    border: m.role === "assistant" ? "1px solid #1e293b" : "none",
+                                    fontSize: 13, lineHeight: 1.5, color: "#e2e8f0", whiteSpace: "pre-wrap",
+                                }}>
+                                    <span style={{ color: m.role === "user" ? "#6366f1" : "#10b981", fontWeight: 600, fontSize: 10 }}>
+                                        {m.role === "user" ? "YOU" : "ASSISTANT"}
+                                    </span>
+                                    <div style={{ marginTop: 4 }}>{m.content}</div>
+                                </div>
+                            ))}
+                            {thinking && <div style={{ color: "#6366f1", fontSize: 12, padding: 8 }}>Generating draft...</div>}
+                        </div>
+
+                        {/* Input */}
+                        <div style={{ display: "flex", gap: 8 }}>
+                            <input
+                                value={input}
+                                onChange={e => setInput(e.target.value)}
+                                onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
+                                placeholder="Describe the API..."
+                                style={{ flex: 1, padding: "8px 12px", borderRadius: 6, border: "1px solid #334155", background: "#1e293b", color: "#e2e8f0", fontSize: 13 }}
+                                disabled={thinking}
+                            />
+                            <button onClick={send} disabled={thinking || !input.trim()} style={{ padding: "8px 16px", borderRadius: 6, border: "none", background: "#6366f1", color: "#fff", cursor: "pointer", fontWeight: 600, fontSize: 13 }}>
+                                Send
+                            </button>
+                        </div>
+
+                        {draft && (
+                            <div style={{ marginTop: 8, padding: "8px 12px", background: "#052e16", border: "1px solid #10b981", borderRadius: 6, fontSize: 12, color: "#a7f3d0" }}>
+                                Draft ready: <strong>{draft.skill?.name}</strong> — <button onClick={() => setStep("preview")} style={{ background: "none", border: "none", color: "#10b981", cursor: "pointer", textDecoration: "underline", fontSize: 12 }}>Review & Publish →</button>
+                            </div>
+                        )}
+                    </div>
+                )}
+
+                {step === "preview" && draft && (
+                    <div style={{ flex: 1, overflowY: "auto" }}>
+                        <div style={{ fontSize: 12, color: "#94a3b8", marginBottom: 12 }}>Review and edit the generated skill. Click "Publish Now" to make it live immediately.</div>
+                        <div style={{ display: "grid", gap: 12 }}>
+                            <div className={styles.formGroup}>
+                                <label style={{ fontSize: 12 }}>Skill Name</label>
+                                <input className={styles.formInput} value={editName} onChange={e => setEditName(e.target.value)} />
+                            </div>
+                            <div className={styles.formGroup}>
+                                <label style={{ fontSize: 12 }}>Description</label>
+                                <textarea className={styles.formInput} rows={3} value={editDesc} onChange={e => setEditDesc(e.target.value)} style={{ resize: "vertical" }} />
+                            </div>
+                            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                                <div className={styles.formGroup}>
+                                    <label style={{ fontSize: 12 }}>Category</label>
+                                    <input className={styles.formInput} value={editCategory} onChange={e => setEditCategory(e.target.value)} placeholder="e.g. search/web" />
+                                </div>
+                                <div className={styles.formGroup}>
+                                    <label style={{ fontSize: 12 }}>Tags (comma-separated)</label>
+                                    <input className={styles.formInput} value={editTags} onChange={e => setEditTags(e.target.value)} />
+                                </div>
+                            </div>
+                            <div style={{ borderTop: "1px solid #1e293b", paddingTop: 12, marginTop: 4 }}>
+                                <div style={{ fontSize: 12, fontWeight: 600, color: "#94a3b8", marginBottom: 8 }}>Provider</div>
+                                <div style={{ display: "grid", gridTemplateColumns: "1fr 2fr 1fr", gap: 12 }}>
+                                    <div className={styles.formGroup}>
+                                        <label style={{ fontSize: 11 }}>Provider Name</label>
+                                        <input className={styles.formInput} value={editProviderName} onChange={e => setEditProviderName(e.target.value)} placeholder="Provider name" />
+                                    </div>
+                                    <div className={styles.formGroup}>
+                                        <label style={{ fontSize: 11 }}>Endpoint URL</label>
+                                        <input className={styles.formInput} value={editEndpoint} onChange={e => setEditEndpoint(e.target.value)} placeholder="https://..." />
+                                    </div>
+                                    <div className={styles.formGroup}>
+                                        <label style={{ fontSize: 11 }}>Price/call ($)</label>
+                                        <input className={styles.formInput} type="number" step="0.001" value={editPrice} onChange={e => setEditPrice(e.target.value)} />
+                                    </div>
+                                </div>
+                            </div>
+                            {draft.skill?.paramsSchema && (
+                                <div className={styles.formGroup}>
+                                    <label style={{ fontSize: 12 }}>Params Schema (inferred)</label>
+                                    <pre style={{ background: "#0f172a", border: "1px solid #1e293b", borderRadius: 6, padding: 8, fontSize: 11, color: "#94a3b8", overflow: "auto", maxHeight: 100 }}>
+                                        {JSON.stringify(draft.skill.paramsSchema, null, 2)}
+                                    </pre>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                )}
+
+                {error && <p style={{ color: "#ef4444", fontSize: 13, margin: "8px 0 0" }}>{error}</p>}
+
+                <div className={styles.modalFooter}>
+                    <button type="button" className={styles.cancelBtn} onClick={onClose}>Close</button>
+                    {step === "preview" && (
+                        <button
+                            className={styles.submitBtn}
+                            onClick={publish}
+                            disabled={publishing}
+                            style={{ background: "#10b981" }}
+                        >
+                            {publishing ? "Publishing..." : "Publish Now"}
+                        </button>
+                    )}
+                </div>
             </div>
         </div>
     );
