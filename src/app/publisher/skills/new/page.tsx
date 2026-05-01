@@ -44,12 +44,16 @@ export default function NewSkillPage() {
     useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
 
     const getKey = () => {
-        const key = localStorage.getItem("publisher_api_key");
-        if (!key) {
-            setFormError("No API key found. Go to API Keys to create one first.");
-            return null;
-        }
-        return key;
+        // Try localStorage for backward compat (programmatic users may have sk-pub stored)
+        // But session auth works without it — just return null to skip Authorization header
+        return localStorage.getItem("publisher_api_key") || null;
+    };
+
+    const authHeaders = (): HeadersInit => {
+        const key = getKey();
+        const headers: HeadersInit = { "Content-Type": "application/json" };
+        if (key) (headers as Record<string, string>)["Authorization"] = `Bearer ${key}`;
+        return headers;
     };
 
     // ── Simple Form Submit ───────────────────────────────────────────────────
@@ -61,9 +65,6 @@ export default function NewSkillPage() {
             setFormError("Please describe what your API does.");
             return;
         }
-
-        const key = getKey();
-        if (!key) return;
 
         setFormStep("generating");
         setProgressText("Fetching documentation...");
@@ -78,7 +79,7 @@ export default function NewSkillPage() {
 
             const res = await fetch("/api/publisher/assistant", {
                 method: "POST",
-                headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
+                headers: authHeaders(),
                 body: JSON.stringify({ message, url: docUrl || undefined }),
             });
             const d = await res.json();
@@ -119,9 +120,6 @@ export default function NewSkillPage() {
             return;
         }
 
-        const key = getKey();
-        if (!key) return;
-
         setSaving(true);
         setFormError("");
 
@@ -129,7 +127,7 @@ export default function NewSkillPage() {
             // Step 1: Create skill
             const res = await fetch("/api/publisher/skills", {
                 method: "POST",
-                headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
+                headers: authHeaders(),
                 body: JSON.stringify({
                     name: editName.trim(),
                     description: editDesc.trim(),
@@ -152,7 +150,7 @@ export default function NewSkillPage() {
             if (editEndpoint.trim()) {
                 const provRes = await fetch("/api/publisher/providers", {
                     method: "POST",
-                    headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
+                    headers: authHeaders(),
                     body: JSON.stringify({
                         skillId,
                         name: editName.trim(),
@@ -163,7 +161,6 @@ export default function NewSkillPage() {
                 });
                 const provData = await provRes.json();
                 if (!provData.success) {
-                    // Skill created but provider failed — redirect anyway, user can fix later
                     console.warn("Provider creation failed:", provData.message);
                 }
             }
@@ -172,11 +169,10 @@ export default function NewSkillPage() {
             if (submitForReview) {
                 const submitRes = await fetch(`/api/publisher/skills/${skillId}/submit`, {
                     method: "POST",
-                    headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
+                    headers: authHeaders(),
                 });
                 const submitData = await submitRes.json();
                 if (!submitData.success) {
-                    // Skill created but submit failed — redirect to skill page with note
                     console.warn("Auto-submit failed:", submitData.message);
                 }
             }
@@ -192,8 +188,6 @@ export default function NewSkillPage() {
     // ── Chat Send ────────────────────────────────────────────────────────────
     const sendChat = async () => {
         if (!chatInput.trim()) return;
-        const key = getKey();
-        if (!key) return;
 
         const userMsg: Message = { role: "user", content: chatInput };
         setMessages(prev => [...prev, userMsg]);
@@ -202,7 +196,7 @@ export default function NewSkillPage() {
 
         const res = await fetch("/api/publisher/assistant", {
             method: "POST",
-            headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
+            headers: authHeaders(),
             body: JSON.stringify({ message: chatInput, url: docUrl || undefined }),
         });
         const d = await res.json();

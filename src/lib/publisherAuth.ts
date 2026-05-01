@@ -9,6 +9,8 @@
  */
 import { createHash, createHmac, timingSafeEqual } from "crypto";
 import { NextRequest } from "next/server";
+import { getServerSession } from "next-auth/next";
+import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { prisma } from "@/lib/prisma";
 
 export interface PublisherAuth {
@@ -51,6 +53,19 @@ export interface AuthResult {
 }
 
 export async function validatePublisherKey(req: NextRequest): Promise<AuthResult> {
+    const header = req.headers.get("authorization");
+
+    // If sk-pub key provided, use key-based auth
+    if (header?.startsWith("Bearer sk-pub-")) {
+        return validatePublisherKeyOnly(req);
+    }
+
+    // Otherwise try session auth (browser UI)
+    return validatePublisherKeyOrSession(req);
+}
+
+/** Key-only validation (original implementation). */
+async function validatePublisherKeyOnly(req: NextRequest): Promise<AuthResult> {
     const header = req.headers.get("authorization");
     if (!header?.startsWith("Bearer sk-pub-")) {
         return { ok: false, errorCode: "MISSING_HEADER", message: "Missing or invalid Authorization header. Expected: Bearer sk-pub-..." };
@@ -145,4 +160,74 @@ export function generatePublisherKey(): { key: string; lookupHash: string; keyHm
     const lookupHash = sha256hex(key);
     const keyHmac = hmacHex(key);
     return { key, lookupHash, keyHmac, prefix };
+}
+
+/**
+ * Validate publisher via NextAuth session (for browser UI calls).
+ * Auto-creates a Publisher record with status="approved" if user has none.
+ * Falls back to sk-pub key if no session found.
+ */
+export async function validatePublisherKeyOrSession(req: NextRequest): Promise<AuthResult> {
+    // First try: sk-pub key in Authorization header (programmatic access)
+    const header = req.headers.get("authorization");
+    if (header?.startsWith("Bearer sk-pub-")) {
+        return validatePublisherKey(req);
+    }
+
+    // Second try: NextAuth session (browser UI)
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.email) {
+        return { ok: false, errorCode: "MISSING_HEADER", message: "Not authenticated. Please log in." };
+    }
+
+    // Find user
+    const userRows = await prisma.$queryRawUnsafe<{ id: string; name: string | null }[]>(
+        `SELECT id, name FROM "User" WHERE email = $1 LIMIT 1`,
+        session.user.email,
+    );
+    if (userRows.length === 0) {
+        return { ok: false, errorCode: "KEY_NOT_FOUND", message: "User account not found." };
+    }
+    const userId = userRows[0].id;
+    const userName = userRows[0].name ?? session.user.email!.split("@")[0];
+
+    // Find or auto-create Publisher
+    let pubRows = await prisma.$queryRawUnsafe<{
+        id: string; displayName: string; revenueShare: number; status: string;
+    }[]>(
+        `SELECT id, "displayName", "revenueShare", status FROM "Publisher" WHERE "userId" = $1 LIMIT 1`,
+        userId,
+    );
+
+    if (pubRows.length === 0) {
+        // Auto-create publisher (approved immediately, skills still require review)
+        pubRows = await prisma.$queryRawUnsafe<{
+            id: string; displayName: string; revenueShare: number; status: string;
+        }[]>(
+            `INSERT INTO "Publisher" (id, "userId", "displayName", status, "approvedAt", "createdAt")
+             VALUES (gen_random_uuid()::text, $1, $2, 'approved', NOW(), NOW())
+             RETURNING id, "displayName", "revenueShare", status`,
+            userId,
+            userName,
+        );
+    }
+
+    const pub = pubRows[0];
+
+    if (pub.status === "suspended") {
+        return { ok: false, errorCode: "PUBLISHER_SUSPENDED", message: "Your publisher account has been suspended." };
+    }
+
+    return {
+        ok: true,
+        auth: {
+            publisherId: pub.id,
+            publisher: {
+                id: pub.id,
+                displayName: pub.displayName,
+                revenueShare: Number(pub.revenueShare),
+                status: pub.status,
+            },
+        },
+    };
 }
