@@ -45,13 +45,13 @@ const Sidebar = () => {
 
     const userNavItems = [
         { name: "Dashboard", icon: "📊", path: "/dashboard" },
-        { name: "Service Hub", icon: "⚡", path: "/services" },
+        { name: "Skill Network", icon: "⚡", path: "/services" },
         { name: "Guide", icon: "📖", path: "/guide" },
     ];
 
     const userManagementItems = [
         { name: "Agents", icon: "🤖", path: "/agents" },
-        { name: "Services", icon: "📁", path: "/all-services" },
+        { name: "Skills", icon: "📁", path: "/all-services" },
         { name: "Rules", icon: "🛡️", path: "/rules" },
         { name: "Activity", icon: "📈", path: "/activity" },
     ];

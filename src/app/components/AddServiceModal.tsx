@@ -137,7 +137,7 @@ console.log(chat.choices[0].message.content);`;
                 <div className={styles.header}>
                     <div className={styles.headerLeft}>
                         <div className={styles.plusIcon}>+</div>
-                        <span className={styles.headerTitle}>Add a Service</span>
+                        <span className={styles.headerTitle}>Add a Skill</span>
                     </div>
                     <div className={styles.headerCenter}>
                         <div className={styles.stepper}>
@@ -159,8 +159,8 @@ console.log(chat.choices[0].message.content);`;
                     {/* ── Step 1: Choose method ── */}
                     {step === 1 && (
                         <>
-                            <h2 className={styles.title}>Connect to Aporto API</h2>
-                            <p className={styles.subtitle}>Choose how you want to integrate</p>
+                            <h2 className={styles.title}>Connect to Aporto Skill Network</h2>
+                            <p className={styles.subtitle}>Choose how your agent will call skills</p>
                             <div className={styles.methodCards}>
                                 <button
                                     className={`${styles.methodCard} ${method === "sdk" ? styles.methodCardActive : ""}`}
@@ -168,7 +168,7 @@ console.log(chat.choices[0].message.content);`;
                                 >
                                     <div className={styles.methodIcon}>📦</div>
                                     <div className={styles.methodName}>SDK</div>
-                                    <div className={styles.methodDesc}>Install <code>@aporto-tech/sdk</code> and use typed modules</div>
+                                    <div className={styles.methodDesc}>Install <code>@aporto-tech/sdk</code> and call typed skills</div>
                                 </button>
                                 <button
                                     className={`${styles.methodCard} ${method === "baseurl" ? styles.methodCardActive : ""}`}
@@ -176,7 +176,7 @@ console.log(chat.choices[0].message.content);`;
                                 >
                                     <div className={styles.methodIcon}>🔗</div>
                                     <div className={styles.methodName}>Base URL</div>
-                                    <div className={styles.methodDesc}>Use any OpenAI-compatible client — Cursor, Claude, LangChain</div>
+                                    <div className={styles.methodDesc}>Use any OpenAI-compatible client or agent framework</div>
                                 </button>
                             </div>
                         </>
@@ -188,7 +188,7 @@ console.log(chat.choices[0].message.content);`;
                             <h2 className={styles.title}>{method === "sdk" ? "Install the SDK" : "Connect via Base URL"}</h2>
                             <p className={styles.subtitle}>
                                 {method === "sdk"
-                                    ? "Use our SDK to send requests. Your API key is pre-filled."
+                                    ? "Use our SDK to send requests through Aporto. Your API key is pre-filled."
                                     : "Point any OpenAI-compatible client at our Base URL."}
                             </p>
 

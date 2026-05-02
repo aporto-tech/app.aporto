@@ -458,7 +458,7 @@ export default function DashboardPage() {
     return (
         <>
             <DashboardLayout>
-                {/* Services Hub Banner */}
+                {/* Skill Network Banner */}
                 <div className={styles.servicesHub} style={{ marginBottom: 24 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
                         <div style={{
@@ -468,16 +468,16 @@ export default function DashboardPage() {
                         }}>⚡</div>
                         <div className={styles.hubContent}>
                             <h2 style={{ margin: 0, fontSize: 16, fontWeight: 600, display: "flex", alignItems: "center", gap: 8 }}>
-                                Services Hub
-                                <span className={styles.hubBadge}>12 services</span>
+                                AI Skill Network
+                                <span className={styles.hubBadge}>1000+ skills</span>
                             </h2>
                             <p style={{ margin: 0, color: "#888888", fontSize: 13, marginTop: 4 }}>
-                                Search, SMS, Email, Inference, Image Gen &amp; more — one API, built-in metering
+                                One MCP router for scraping, search, AI, automation, and paid provider routing
                             </p>
                         </div>
                     </div>
                     <Link href="/services" className={styles.exploreLink} style={{ whiteSpace: "nowrap" }}>
-                        Explore Services →
+                        Explore Skills →
                     </Link>
                 </div>
 

@@ -48,13 +48,13 @@ export default function Home() {
     <DashboardLayout>
       <div className={styles.dashboardGrid}>
         <div className={styles.mainCol}>
-          {/* Services Hub Banner */}
+          {/* Skill Network Banner */}
           <div className={styles.servicesHub}>
             <div className={styles.hubContent}>
-              <h2>⚡ Services Hub <span className={styles.hubBadge}>12 services</span></h2>
-              <p>Search, SMS, Email, Inference, Image Gen & more — one API, built-in metering</p>
+              <h2>⚡ AI Skill Network <span className={styles.hubBadge}>1000+ skills</span></h2>
+              <p>One MCP router for scraping, search, AI, automation, and paid provider routing</p>
             </div>
-            <a href="#" className={styles.exploreLink}>Explore Services →</a>
+            <a href="/services" className={styles.exploreLink}>Explore Skills →</a>
           </div>
 
           {/* Welcome Card */}
