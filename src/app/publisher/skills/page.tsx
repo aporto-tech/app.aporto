@@ -6,7 +6,7 @@ import { Skeleton } from "@/app/components/Skeleton";
 
 interface Submission {
     id: number; name: string; description: string; status: string;
-    reviewNote: string | null; category: string | null; providerCount: number;
+    reviewNote: string | null; category: string | null;
     resultSkillId: number | null; createdAt: string;
 }
 
@@ -28,7 +28,7 @@ const STATUS_COLOR: Record<string, string> = {
 };
 
 const STATUS_LABEL: Record<string, string> = {
-    draft: "DRAFT", pending: "PENDING", reviewing: "AI REVIEWING", approved: "APPROVED", rejected: "REJECTED", merged: "MERGED",
+    draft: "DRAFT", pending: "PENDING", reviewing: "AI REVIEWING", approved: "APPROVED", rejected: "REJECTED", merged: "APPROVED",
 };
 
 const fetcher = async (url: string): Promise<SkillsResponse> => {
@@ -116,7 +116,7 @@ export default function SkillsPage() {
                                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
                                     <div>
                                         <div style={{ fontWeight: 600, fontSize: 15 }}>{s.name}</div>
-                                        <div style={{ color: "#94a3b8", fontSize: 12, marginTop: 2 }}>{s.category ?? "uncategorized"} · {s.providerCount} provider(s)</div>
+                                        <div style={{ color: "#94a3b8", fontSize: 12, marginTop: 2 }}>{s.category ?? "uncategorized"}</div>
                                     </div>
                                     <span style={{ color: STATUS_COLOR[s.status] ?? "#64748b", fontWeight: 600, fontSize: 12, padding: "2px 8px", border: `1px solid ${STATUS_COLOR[s.status] ?? "#64748b"}`, borderRadius: 4 }}>
                                         {STATUS_LABEL[s.status] ?? s.status.toUpperCase()}
@@ -132,7 +132,7 @@ export default function SkillsPage() {
                                 )}
                                 {s.status === "merged" && s.resultSkillId && (
                                     <div style={{ marginTop: 8, padding: "8px 12px", background: "#0a1e0f", border: "1px solid #15523f", borderRadius: 6, fontSize: 12, color: "#86efac" }}>
-                                        Merged as provider to skill #{s.resultSkillId}
+                                        Skill approved: #{s.resultSkillId}
                                     </div>
                                 )}
                                 {s.status === "approved" && s.resultSkillId && (

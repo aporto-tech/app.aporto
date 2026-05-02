@@ -12,8 +12,6 @@ export default function NewSkillPage() {
     const [docUrl, setDocUrl] = useState("");
     const [apiKey, setApiKey] = useState("");
     const [description, setDescription] = useState("");
-    const [skillName, setSkillName] = useState("");
-    const [autoPublish, setAutoPublish] = useState(true);
     const [saving, setSaving] = useState(false);
     const [formError, setFormError] = useState("");
 
@@ -38,26 +36,29 @@ export default function NewSkillPage() {
         e.preventDefault();
         setFormError("");
 
-        if (!description.trim()) {
-            setFormError("Please describe what your API does.");
+        if (!docUrl.trim()) {
+            setFormError("Please provide a documentation URL.");
             return;
         }
-        if (!skillName.trim()) {
-            setFormError("Please provide a skill name.");
+        if (!apiKey.trim()) {
+            setFormError("Please provide an API key for Aporto.");
+            return;
+        }
+        if (!description.trim()) {
+            setFormError("Please describe what your API does.");
             return;
         }
 
         setSaving(true);
 
         try {
-            // Step 1: Create skill as draft
             const res = await fetch("/api/publisher/skills", {
                 method: "POST",
                 headers: authHeaders(),
                 body: JSON.stringify({
-                    name: skillName.trim(),
+                    docUrl: docUrl.trim(),
+                    apiKey: apiKey.trim(),
                     description: description.trim(),
-                    // Store doc URL and auto-publish preference in metadata
                 }),
             });
             const d = await res.json();
@@ -68,31 +69,8 @@ export default function NewSkillPage() {
                 return;
             }
 
-            const skillId = d.id;
-
-            // Step 2: Create provider with endpoint from docs + API key
-            if (docUrl.trim() || apiKey.trim()) {
-                await fetch("/api/publisher/providers", {
-                    method: "POST",
-                    headers: authHeaders(),
-                    body: JSON.stringify({
-                        skillId,
-                        name: skillName.trim(),
-                        endpoint: docUrl.trim() || "pending-configuration",
-                        pricePerCall: 0.01,
-                        providerSecret: apiKey.trim() || undefined,
-                    }),
-                });
-            }
-
-            // Step 3: Submit for review
-            await fetch(`/api/publisher/skills/${skillId}/submit`, {
-                method: "POST",
-                headers: authHeaders(),
-            });
-
             setSaving(false);
-            router.push(`/publisher/skills/${skillId}`);
+            router.push(`/publisher/skills/${d.id}`);
         } catch (e) {
             setSaving(false);
             setFormError(`Failed: ${(e as Error).message}`);
@@ -120,7 +98,6 @@ export default function NewSkillPage() {
             const cleanReply = d.reply.replace(/```json[\s\S]*?```/g, "[Draft generated]");
             setMessages(prev => [...prev, { role: "assistant", content: cleanReply }]);
             if (d.draft?.skill) {
-                setSkillName(d.draft.skill.name ?? "");
                 setDescription(d.draft.skill.description ?? "");
             }
         } else {
@@ -144,18 +121,32 @@ export default function NewSkillPage() {
 
             <form onSubmit={handleSubmit}>
                 <div style={{ marginBottom: 16 }}>
-                    <label style={labelStyle}>Skill Name *</label>
+                    <label style={labelStyle}>Documentation URL *</label>
                     <input
-                        value={skillName}
-                        onChange={e => setSkillName(e.target.value)}
-                        placeholder="e.g. PDF Summarizer, Weather API, Image Resize"
+                        value={docUrl}
+                        onChange={e => setDocUrl(e.target.value)}
+                        placeholder="https://docs.yourapi.com/v1"
+                        type="url"
                         style={inputStyle}
                         required
                     />
-                    <div style={hintStyle}>Short name for your skill as it will appear in the marketplace</div>
+                    <div style={hintStyle}>Link to your API docs or OpenAPI spec. Helps our team configure the skill faster.</div>
                 </div>
 
                 <div style={{ marginBottom: 16 }}>
+                    <label style={labelStyle}>API Key for Aporto *</label>
+                    <input
+                        value={apiKey}
+                        onChange={e => setApiKey(e.target.value)}
+                        placeholder="sk-abc123... or Bearer token"
+                        type="password"
+                        style={inputStyle}
+                        required
+                    />
+                    <div style={hintStyle}>A key you generated on your service for Aporto to make requests. Stored encrypted.</div>
+                </div>
+
+                <div style={{ marginBottom: 24 }}>
                     <label style={labelStyle}>What does your API do? *</label>
                     <textarea
                         value={description}
@@ -165,45 +156,7 @@ export default function NewSkillPage() {
                         style={{ ...inputStyle, resize: "vertical" }}
                         required
                     />
-                    <div style={hintStyle}>1-3 sentences. What input does it take? What output does it return?</div>
-                </div>
-
-                <div style={{ marginBottom: 16 }}>
-                    <label style={labelStyle}>Documentation URL</label>
-                    <input
-                        value={docUrl}
-                        onChange={e => setDocUrl(e.target.value)}
-                        placeholder="https://docs.yourapi.com/v1"
-                        style={inputStyle}
-                    />
-                    <div style={hintStyle}>Link to your API docs or OpenAPI spec. Helps our team configure the skill faster.</div>
-                </div>
-
-                <div style={{ marginBottom: 16 }}>
-                    <label style={labelStyle}>API Key for Aporto</label>
-                    <input
-                        value={apiKey}
-                        onChange={e => setApiKey(e.target.value)}
-                        placeholder="sk-abc123... or Bearer token"
-                        type="password"
-                        style={inputStyle}
-                    />
-                    <div style={hintStyle}>A key you generated on your service for Aporto to make requests. Stored encrypted.</div>
-                </div>
-
-                <div style={{ marginBottom: 24, display: "flex", alignItems: "center", gap: 8 }}>
-                    <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: 14, color: "#fff" }}>
-                        <input
-                            type="checkbox"
-                            checked={autoPublish}
-                            onChange={e => setAutoPublish(e.target.checked)}
-                            style={{ width: 16, height: 16, accentColor: "#00dc82" }}
-                        />
-                        Auto-publish after review
-                    </label>
-                    <span style={{ fontSize: 11, color: "#666" }}>
-                        {autoPublish ? "Goes live automatically once approved" : "You'll publish manually after approval"}
-                    </span>
+                    <div style={hintStyle}>1-3 sentences. The review assistant will decide whether this becomes a new skill or joins an existing one.</div>
                 </div>
 
                 <button
@@ -233,7 +186,7 @@ export default function NewSkillPage() {
                         <div style={{ maxHeight: 300, overflowY: "auto", marginBottom: 8 }}>
                             {messages.length === 0 && (
                                 <div style={{ color: "#666", fontSize: 13, padding: "8px 0" }}>
-                                    Describe your API and I'll help you write the name and description.
+                                    Describe your API and I will help you write the name and description.
                                 </div>
                             )}
                             {messages.map((m, i) => (

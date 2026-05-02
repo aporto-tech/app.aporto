@@ -66,7 +66,8 @@ export async function POST(req: NextRequest, { params }: Params) {
         catch { violations.push({ field: "paramsSchema", code: "INVALID_JSON", detail: "paramsSchema must be valid JSON." }); }
     }
 
-    // Must have at least one provider with HTTPS endpoint and providerSecret
+    // Provider details are captured from the simple publisher form when present.
+    // Do not force publishers through a separate provider-management step.
     const providers = await prisma.$queryRawUnsafe<{
         id: number; endpoint: string; provider_secret: string | null;
         price_per_call: number; cost_per_char: number | null;
@@ -77,19 +78,17 @@ export async function POST(req: NextRequest, { params }: Params) {
         submissionId,
     );
 
-    if (providers.length === 0) {
-        violations.push({ field: "providers", code: "NO_PROVIDERS", detail: "At least one provider is required." });
-    } else {
+    if (providers.length > 0) {
         for (const p of providers) {
-            if (!p.provider_secret || p.provider_secret.length < 32) {
-                violations.push({ field: "providers", code: "MISSING_PROVIDER_SECRET", detail: `Provider id=${p.id} needs providerSecret (min 32 chars).` });
+            if (!p.provider_secret) {
+                violations.push({ field: "apiKey", code: "MISSING_API_KEY", detail: `Provider id=${p.id} needs an API key.` });
             }
             if (!p.endpoint.startsWith("https://")) {
-                violations.push({ field: "providers", code: "ENDPOINT_NOT_HTTPS", detail: `Provider id=${p.id} endpoint must be HTTPS.` });
+                violations.push({ field: "docUrl", code: "ENDPOINT_NOT_HTTPS", detail: `Provider id=${p.id} docs URL must be HTTPS.` });
             } else {
                 const ssrf = await validateEndpointUrl(p.endpoint);
                 if (!ssrf.ok) {
-                    violations.push({ field: "providers", code: "SSRF_BLOCKED", detail: `Provider id=${p.id}: ${ssrf.error}` });
+                    violations.push({ field: "docUrl", code: "SSRF_BLOCKED", detail: `Provider id=${p.id}: ${ssrf.error}` });
                 }
             }
             const hasPrice = (p.price_per_call != null && p.price_per_call > 0) || p.cost_per_char != null;

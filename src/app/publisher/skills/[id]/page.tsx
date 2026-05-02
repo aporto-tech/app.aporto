@@ -9,11 +9,7 @@ interface SubmissionDetail {
     id: number; name: string; description: string; status: string;
     reviewNote: string | null; category: string | null; tags: string[];
     paramsSchema: Record<string, unknown>; resultSkillId: number | null;
-    resultProviderId: number | null; createdAt: string;
-}
-interface Provider {
-    id: number; name: string; endpoint: string; price_per_call: number;
-    cost_per_char: number | null; has_secret: boolean;
+    createdAt: string;
 }
 
 const STATUS_COLOR: Record<string, string> = {
@@ -48,14 +44,8 @@ export default function SubmissionDetailPage() {
         publisherFetcher,
         { revalidateOnFocus: false, dedupingInterval: 10000 }
     );
-    const { data: providerData, isLoading: provLoading, mutate: mutateProviders } = useSWR(
-        `/api/publisher/providers?submissionId=${submissionId}`,
-        publisherFetcher,
-        { revalidateOnFocus: false, dedupingInterval: 10000 }
-    );
 
     const submission: SubmissionDetail | null = subData?.submission ?? null;
-    const providers: Provider[] = providerData?.providers ?? [];
 
     const [editing, setEditing] = useState(false);
     const [editData, setEditData] = useState({ name: "", description: "", category: "" });
@@ -63,8 +53,6 @@ export default function SubmissionDetailPage() {
     const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState("");
     const [violations, setViolations] = useState<Array<{ field: string; code: string; detail?: string }>>([]);
-    const [newProvider, setNewProvider] = useState({ name: "", endpoint: "", providerSecret: "", pricePerCall: "0.01" });
-    const [addingProvider, setAddingProvider] = useState(false);
 
     const save = async () => {
         setSaving(true); setError("");
@@ -91,24 +79,7 @@ export default function SubmissionDetailPage() {
         else { setError(d.message ?? "Submission failed."); setViolations(d.violations ?? []); }
     };
 
-    const addProvider = async () => {
-        setAddingProvider(true); setError("");
-        const res = await fetch("/api/publisher/providers", {
-            method: "POST",
-            headers: { "Content-Type": "application/json", Authorization: `Bearer ${getKey()}` },
-            body: JSON.stringify({ submissionId, ...newProvider, pricePerCall: parseFloat(newProvider.pricePerCall) }),
-        });
-        const d = await res.json();
-        setAddingProvider(false);
-        if (d.success) {
-            setNewProvider({ name: "", endpoint: "", providerSecret: "", pricePerCall: "0.01" });
-            mutateProviders();
-        } else {
-            setError(d.message ?? "Failed to add provider.");
-        }
-    };
-
-    const isLoading = subLoading || provLoading;
+    const isLoading = subLoading;
 
     if (isLoading) return (
         <div>
@@ -156,7 +127,7 @@ export default function SubmissionDetailPage() {
 
             {submission.status === "merged" && submission.resultSkillId && (
                 <div style={{ marginBottom: 20, padding: "12px 16px", background: "#0a1e0f", border: "1px solid #15523f", borderRadius: 8, color: "#86efac", fontSize: 14 }}>
-                    Your endpoint was merged as a provider to existing skill <strong>#{submission.resultSkillId}</strong>. You earn revenue on every call routed to your provider.
+                    Your skill has been approved and is now live as <strong>#{submission.resultSkillId}</strong>. You earn revenue on calls routed to your API.
                 </div>
             )}
 
@@ -203,38 +174,6 @@ export default function SubmissionDetailPage() {
                 )}
             </div>
 
-            {/* Providers */}
-            <div style={{ background: "#0f172a", border: "1px solid #1e293b", borderRadius: 8, padding: 20, marginBottom: 20 }}>
-                <h3 style={{ margin: "0 0 12px", fontSize: 15 }}>Providers ({providers.length})</h3>
-                {providers.map(p => (
-                    <div key={p.id} style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: "1px solid #0f172a", fontSize: 13 }}>
-                        <div>
-                            <span style={{ fontWeight: 500 }}>{p.name}</span>
-                            <span style={{ color: "#64748b", marginLeft: 8 }}>{p.endpoint}</span>
-                        </div>
-                        <div style={{ display: "flex", gap: 12, color: "#64748b" }}>
-                            <span>${p.price_per_call}/call</span>
-                            <span style={{ color: p.has_secret ? "#10b981" : "#ef4444" }}>{p.has_secret ? "✓ secret" : "✗ no secret"}</span>
-                        </div>
-                    </div>
-                ))}
-
-                {canEdit && (
-                    <div style={{ marginTop: 16, paddingTop: 16, borderTop: "1px solid #1e293b" }}>
-                        <div style={{ color: "#64748b", fontSize: 12, marginBottom: 8 }}>Add Provider</div>
-                        <div style={{ display: "grid", gridTemplateColumns: "1fr 2fr", gap: 8 }}>
-                            <input placeholder="Name" value={newProvider.name} onChange={e => setNewProvider(p => ({ ...p, name: e.target.value }))} style={inputStyle} />
-                            <input placeholder="https://..." value={newProvider.endpoint} onChange={e => setNewProvider(p => ({ ...p, endpoint: e.target.value }))} style={inputStyle} />
-                            <input placeholder="providerSecret (min 32 chars)" value={newProvider.providerSecret} onChange={e => setNewProvider(p => ({ ...p, providerSecret: e.target.value }))} style={inputStyle} type="password" />
-                            <input placeholder="Price/call ($)" value={newProvider.pricePerCall} onChange={e => setNewProvider(p => ({ ...p, pricePerCall: e.target.value }))} style={inputStyle} />
-                        </div>
-                        <button onClick={addProvider} disabled={addingProvider} style={{ marginTop: 8, padding: "7px 14px", borderRadius: 6, border: "none", background: "#1e293b", color: "#e2e8f0", cursor: "pointer", fontSize: 13 }}>
-                            {addingProvider ? "Adding..." : "+ Add Provider"}
-                        </button>
-                    </div>
-                )}
-            </div>
-
             {/* Submit for review */}
             {canSubmit && (
                 <div style={{ display: "flex", justifyContent: "flex-end" }}>
@@ -246,7 +185,7 @@ export default function SubmissionDetailPage() {
 
             {submission.status === "pending" && (
                 <div style={{ padding: "12px 16px", background: "#1e1a0a", border: "1px solid #4a3800", borderRadius: 8, color: "#fbbf24", fontSize: 14 }}>
-                    Under review. You'll receive an email once your submission has been reviewed.
+                    Under review. You will receive an email once your submission has been reviewed.
                 </div>
             )}
 

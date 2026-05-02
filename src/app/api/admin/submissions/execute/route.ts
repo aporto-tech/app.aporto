@@ -151,7 +151,7 @@ export async function POST(req: NextRequest) {
             `UPDATE "SkillSubmission" SET status = 'merged', "resultSkillId" = $1, "resultProviderId" = $2,
              "reviewNote" = $3 WHERE id = $4`,
             mergeTargetId, firstProviderId,
-            reason ?? `Merged as provider to "${targetRows[0].name}"`, id,
+            reason ?? `Approved under existing skill "${targetRows[0].name}"`, id,
         );
 
         // Also set publisherId on skill if not already set
@@ -204,10 +204,10 @@ async function sendMergeEmail(email: string, name: string, submissionName: strin
         await resend.emails.send({
             from: "Aporto <noreply@aporto.tech>",
             to: email,
-            subject: `Your submission "${submissionName}" — added as provider`,
+            subject: `Your skill "${submissionName}" is now live on Aporto`,
             html: `<p>Hi ${name},</p>
-<p>Your submission <strong>"${submissionName}"</strong> has been reviewed. We found a matching skill <strong>"${targetName}"</strong> already on the marketplace.</p>
-<p>Your endpoint has been added as a provider to the existing skill. You'll earn revenue for every call routed to your provider.</p>
+<p>Your skill <strong>"${submissionName}"</strong> has been reviewed and is now live on the Aporto marketplace.</p>
+<p>Agents can discover it under <strong>"${targetName}"</strong>. You'll earn revenue for calls routed to your API.</p>
 <p>View in <a href="https://app.aporto.tech/publisher/skills">publisher portal</a>.</p>`,
         });
     } catch (e) { console.error("[submissions/execute] merge email failed:", String(e)); }

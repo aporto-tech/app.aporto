@@ -8,8 +8,30 @@ import { NextRequest, NextResponse } from "next/server";
 import { validatePublisherKey } from "@/lib/publisherAuth";
 import { pubAuthError, pubError } from "@/lib/pubErrors";
 import { prisma } from "@/lib/prisma";
+import { validateEndpointUrl } from "@/lib/ssrfGuard";
 
 export const dynamic = "force-dynamic";
+
+function inferSubmissionName(description: string, docUrl?: string) {
+    const words = description
+        .replace(/[^\w\s-]/g, " ")
+        .split(/\s+/)
+        .filter(Boolean)
+        .slice(0, 5);
+
+    if (words.length >= 2) return words.join(" ");
+
+    if (docUrl) {
+        try {
+            const host = new URL(docUrl).hostname.replace(/^www\./, "");
+            return `${host} API`;
+        } catch {
+            // Fall through to generic fallback.
+        }
+    }
+
+    return "API submission";
+}
 
 export async function GET(req: NextRequest) {
     const authResult = await validatePublisherKey(req);
@@ -89,7 +111,9 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { name, description, paramsSchema, tags, category } = body;
+    const { description, paramsSchema, tags, category, docUrl, apiKey } = body;
+    const name = body.name ?? inferSubmissionName(String(description ?? ""), String(docUrl ?? ""));
+    const submitImmediately = Boolean(docUrl || apiKey);
 
     if (!name || typeof name !== "string" || name.trim().length < 3) {
         return pubError("VALIDATION_FAILED", "name is required (minimum 3 characters).", 400, [
@@ -97,17 +121,76 @@ export async function POST(req: NextRequest) {
         ]);
     }
 
-    const rows = await prisma.$queryRawUnsafe<{ id: number }[]>(
-        `INSERT INTO "SkillSubmission" (name, description, "paramsSchema", tags, category, status, "publisherId", "lastEditedAt", "createdAt")
-         VALUES ($1, $2, $3, $4, $5, 'draft', $6, NOW(), NOW())
-         RETURNING id`,
-        name.trim(),
-        description ?? "",
-        paramsSchema ? JSON.stringify(paramsSchema) : null,
-        tags ? JSON.stringify(tags) : null,
-        category ?? null,
-        publisherId,
-    );
+    if (!description || typeof description !== "string" || description.trim().length < 10) {
+        return pubError("VALIDATION_FAILED", "description is required (minimum 10 characters).", 400, [
+            { field: "description", code: "TOO_SHORT", detail: "Minimum 10 characters" },
+        ]);
+    }
 
-    return NextResponse.json({ success: true, id: rows[0].id, status: "draft" }, { status: 201 });
+    if (submitImmediately) {
+        if (!docUrl || typeof docUrl !== "string") {
+            return pubError("VALIDATION_FAILED", "docUrl is required.", 400, [
+                { field: "docUrl", code: "REQUIRED" },
+            ]);
+        }
+        if (!docUrl.startsWith("https://")) {
+            return pubError("VALIDATION_FAILED", "Documentation URL must use HTTPS.", 400, [
+                { field: "docUrl", code: "DOC_URL_NOT_HTTPS" },
+            ]);
+        }
+
+        const ssrf = await validateEndpointUrl(docUrl);
+        if (!ssrf.ok) {
+            return pubError("VALIDATION_FAILED", ssrf.error!, 400, [
+                { field: "docUrl", code: "SSRF_BLOCKED", detail: ssrf.error },
+            ]);
+        }
+
+        if (!apiKey || typeof apiKey !== "string" || apiKey.trim().length < 1) {
+            return pubError("VALIDATION_FAILED", "apiKey is required.", 400, [
+                { field: "apiKey", code: "REQUIRED" },
+            ]);
+        }
+
+        const pendingRows = await prisma.$queryRawUnsafe<{ cnt: number }[]>(
+            `SELECT COUNT(*)::int AS cnt FROM "SkillSubmission" WHERE "publisherId" = $1 AND status = 'pending'`,
+            publisherId,
+        );
+        if ((pendingRows[0]?.cnt ?? 0) >= 10) {
+            return pubError("SUBMISSION_LIMIT_REACHED", "Maximum of 10 concurrent pending submissions.", 429, [
+                { field: "status", code: "SUBMISSION_LIMIT_REACHED", detail: "Wait for admin review on existing submissions before submitting more." },
+            ]);
+        }
+    }
+
+    const rows = await prisma.$transaction(async (tx) => {
+        const submissionRows = await tx.$queryRawUnsafe<{ id: number }[]>(
+            `INSERT INTO "SkillSubmission" (name, description, "paramsSchema", tags, category, status, "publisherId", "lastEditedAt", "createdAt")
+             VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW())
+             RETURNING id`,
+            name.trim(),
+            description.trim(),
+            paramsSchema ? JSON.stringify(paramsSchema) : null,
+            tags ? JSON.stringify(tags) : null,
+            category ?? null,
+            submitImmediately ? "pending" : "draft",
+            publisherId,
+        );
+
+        if (submitImmediately) {
+            await tx.$executeRawUnsafe(
+                `INSERT INTO "SubmissionProvider" ("submissionId", name, endpoint, "providerSecret", "pricePerCall", "costPerChar")
+                 VALUES ($1, $2, $3, $4, $5, NULL)`,
+                submissionRows[0].id,
+                name.trim(),
+                docUrl.trim(),
+                apiKey.trim(),
+                0.01,
+            );
+        }
+
+        return submissionRows;
+    });
+
+    return NextResponse.json({ success: true, id: rows[0].id, status: submitImmediately ? "pending" : "draft" }, { status: 201 });
 }
