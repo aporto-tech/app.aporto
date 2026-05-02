@@ -1,7 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useRouter, useParams } from "next/navigation";
+import useSWR from "swr";
+import { Skeleton } from "@/app/components/Skeleton";
 
 interface SkillDetail {
     id: number; name: string; description: string; status: string;
@@ -25,14 +27,42 @@ const STATUS_COLOR: Record<string, string> = {
 const inputStyle: React.CSSProperties = { width: "100%", padding: "8px 12px", borderRadius: 6, border: "1px solid #334155", background: "#1e293b", color: "#e2e8f0", fontSize: 14, boxSizing: "border-box" };
 const labelStyle: React.CSSProperties = { display: "block", fontSize: 12, color: "#94a3b8", marginBottom: 4, marginTop: 12 };
 
+const getKey = () => localStorage.getItem("publisher_api_key") ?? "";
+
+const publisherFetcher = async (url: string) => {
+    const key = getKey();
+    if (!key) throw new Error("No key");
+    const res = await fetch(url, { headers: { Authorization: `Bearer ${key}` } });
+    const data = await res.json();
+    if (!data.success) throw new Error(data.message ?? "Failed");
+    return data;
+};
+
 export default function SkillDetailPage() {
     const params = useParams();
     const router = useRouter();
     const skillId = Number(params.id);
-    const [skill, setSkill] = useState<SkillDetail | null>(null);
-    const [providers, setProviders] = useState<Provider[]>([]);
-    const [analytics, setAnalytics] = useState<Analytics | null>(null);
-    const [loading, setLoading] = useState(true);
+
+    const { data: skillData, isLoading: skillLoading, mutate: mutateSkill } = useSWR(
+        `/api/publisher/skills/${skillId}`,
+        publisherFetcher,
+        { revalidateOnFocus: false, dedupingInterval: 10000 }
+    );
+    const { data: providerData, isLoading: provLoading, mutate: mutateProviders } = useSWR(
+        `/api/publisher/providers?skillId=${skillId}`,
+        publisherFetcher,
+        { revalidateOnFocus: false, dedupingInterval: 10000 }
+    );
+    const { data: analyticsData } = useSWR(
+        `/api/publisher/analytics?skillId=${skillId}&period=7`,
+        publisherFetcher,
+        { revalidateOnFocus: false, dedupingInterval: 30000 }
+    );
+
+    const skill: SkillDetail | null = skillData?.skill ?? null;
+    const providers: Provider[] = providerData?.providers ?? [];
+    const analytics: Analytics | null = analyticsData?.success ? analyticsData : null;
+
     const [editing, setEditing] = useState(false);
     const [editData, setEditData] = useState({ name: "", description: "", category: "" });
     const [saving, setSaving] = useState(false);
@@ -41,34 +71,6 @@ export default function SkillDetailPage() {
     const [violations, setViolations] = useState<Array<{ field: string; code: string; detail?: string }>>([]);
     const [newProvider, setNewProvider] = useState({ name: "", endpoint: "", providerSecret: "", pricePerCall: "0.01" });
     const [addingProvider, setAddingProvider] = useState(false);
-
-    const getKey = () => localStorage.getItem("publisher_api_key") ?? "";
-
-    const load = async () => {
-        const key = getKey();
-        if (!key) { setLoading(false); return; }
-
-        const [skillsRes, providersRes, analyticsRes] = await Promise.all([
-            fetch("/api/publisher/skills", { headers: { Authorization: `Bearer ${key}` } }),
-            fetch(`/api/publisher/providers?skillId=${skillId}`, { headers: { Authorization: `Bearer ${key}` } }),
-            fetch(`/api/publisher/analytics?skillId=${skillId}&period=7`, { headers: { Authorization: `Bearer ${key}` } }),
-        ]);
-
-        const [sd, pd, ad] = await Promise.all([skillsRes.json(), providersRes.json(), analyticsRes.json()]);
-
-        if (sd.success) {
-            const found = (sd.skills ?? []).find((s: SkillDetail) => s.id === skillId);
-            if (found) {
-                setSkill(found);
-                setEditData({ name: found.name, description: found.description, category: found.category ?? "" });
-            }
-        }
-        if (pd.success) setProviders(pd.providers ?? []);
-        if (ad.success) setAnalytics(ad);
-        setLoading(false);
-    };
-
-    useEffect(() => { load(); }, [skillId]);
 
     const save = async () => {
         setSaving(true); setError("");
@@ -79,7 +81,7 @@ export default function SkillDetailPage() {
         });
         const d = await res.json();
         setSaving(false);
-        if (d.success) { setEditing(false); load(); }
+        if (d.success) { setEditing(false); mutateSkill(); }
         else setError(d.message ?? "Failed to save.");
     };
 
@@ -91,7 +93,7 @@ export default function SkillDetailPage() {
         });
         const d = await res.json();
         setSubmitting(false);
-        if (d.success) { load(); }
+        if (d.success) { mutateSkill(); }
         else { setError(d.message ?? "Submission failed."); setViolations(d.violations ?? []); }
     };
 
@@ -106,22 +108,56 @@ export default function SkillDetailPage() {
         setAddingProvider(false);
         if (d.success) {
             setNewProvider({ name: "", endpoint: "", providerSecret: "", pricePerCall: "0.01" });
-            load();
+            mutateProviders();
         } else {
             setError(d.message ?? "Failed to add provider.");
         }
     };
 
-    if (loading) return <div style={{ color: "#64748b" }}>Loading...</div>;
+    const isLoading = skillLoading || provLoading;
+
+    if (isLoading) return (
+        <div>
+            <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 24 }}>
+                <Skeleton width={60} height={14} />
+                <Skeleton width={70} height={20} style={{ borderRadius: 4 }} />
+            </div>
+            <div style={{ background: "#0f172a", border: "1px solid #1e293b", borderRadius: 8, padding: 20, marginBottom: 20 }}>
+                <Skeleton width="50%" height={20} />
+                <Skeleton width="20%" height={12} style={{ marginTop: 10 }} />
+                <Skeleton width="80%" height={14} style={{ marginTop: 12 }} />
+                <Skeleton width="60%" height={14} style={{ marginTop: 6 }} />
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, marginBottom: 20 }}>
+                {[1, 2, 3, 4].map(i => (
+                    <div key={i} style={{ background: "#0f172a", border: "1px solid #1e293b", borderRadius: 6, padding: 12 }}>
+                        <Skeleton width="60%" height={11} />
+                        <Skeleton width="40%" height={20} style={{ marginTop: 6 }} />
+                    </div>
+                ))}
+            </div>
+            <div style={{ background: "#0f172a", border: "1px solid #1e293b", borderRadius: 8, padding: 20 }}>
+                <Skeleton width={100} height={15} />
+                <Skeleton width="100%" height={13} style={{ marginTop: 12 }} />
+                <Skeleton width="100%" height={13} style={{ marginTop: 8 }} />
+            </div>
+        </div>
+    );
+
     if (!skill) return <div style={{ color: "#ef4444" }}>Skill not found.</div>;
 
     const canEdit = skill.status === "draft" || skill.status === "rejected";
     const canSubmit = skill.status === "draft" || skill.status === "rejected";
 
+    const startEditing = () => {
+        setEditData({ name: skill.name, description: skill.description, category: skill.category ?? "" });
+        setEditing(true);
+    };
+
     return (
         <div>
             <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 24 }}>
-                <button onClick={() => router.push("/publisher/skills")} style={{ background: "none", border: "none", color: "#64748b", cursor: "pointer", fontSize: 14 }}>← Skills</button>
+                <button onClick={() => router.push("/publisher/skills")} style={{ background: "none", border: "none", color: "#64748b", cursor: "pointer", fontSize: 14 }}>&larr; Skills</button>
                 <span style={{ color: STATUS_COLOR[skill.status] ?? "#64748b", fontWeight: 600, fontSize: 12, padding: "2px 8px", border: `1px solid ${STATUS_COLOR[skill.status] ?? "#64748b"}`, borderRadius: 4 }}>
                     {skill.status.replace("_", " ").toUpperCase()}
                 </span>
@@ -145,7 +181,7 @@ export default function SkillDetailPage() {
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
                     <h2 style={{ margin: 0, fontSize: 18 }}>{skill.name}</h2>
                     {canEdit && !editing && (
-                        <button onClick={() => setEditing(true)} style={{ padding: "5px 12px", borderRadius: 6, border: "1px solid #334155", background: "transparent", color: "#94a3b8", cursor: "pointer", fontSize: 13 }}>Edit</button>
+                        <button onClick={startEditing} style={{ padding: "5px 12px", borderRadius: 6, border: "1px solid #334155", background: "transparent", color: "#94a3b8", cursor: "pointer", fontSize: 13 }}>Edit</button>
                     )}
                 </div>
 

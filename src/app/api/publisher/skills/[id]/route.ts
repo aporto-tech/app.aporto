@@ -24,6 +24,50 @@ async function getOwnedSkill(publisherId: string, skillId: number) {
     return rows[0] ?? null;
 }
 
+export async function GET(req: NextRequest, { params }: Params) {
+    const authResult = await validatePublisherKey(req);
+    if (!authResult.ok || !authResult.auth) return pubAuthError(authResult.errorCode, authResult.message);
+    const { publisherId } = authResult.auth;
+
+    const { id } = await params;
+    const skillId = Number(id);
+    if (!skillId) return pubError("INVALID_ID", "Invalid skill id.", 400);
+
+    const rows = await prisma.$queryRawUnsafe<{
+        id: number; name: string; description: string; status: string;
+        review_note: string | null; category: string | null; tags: string | null;
+        params_schema: string | null; call_count: number; created_at: string;
+    }[]>(
+        `SELECT s.id, s.name, s.description, s.status, s."reviewNote" AS review_note,
+                s.category, s.tags, s."paramsSchema" AS params_schema,
+                s."createdAt" AS created_at,
+                (SELECT COUNT(*)::int FROM "SkillCall" c WHERE c."skillId" = s.id) AS call_count
+         FROM "Skill" s
+         WHERE s.id = $1 AND s."publisherId" = $2`,
+        skillId,
+        publisherId,
+    );
+
+    if (rows.length === 0) return pubError("NOT_FOUND", "Skill not found.", 404);
+
+    const s = rows[0];
+    return NextResponse.json({
+        success: true,
+        skill: {
+            id: s.id,
+            name: s.name,
+            description: s.description,
+            status: s.status,
+            reviewNote: s.review_note,
+            category: s.category,
+            tags: s.tags ? JSON.parse(s.tags) : [],
+            paramsSchema: s.params_schema ? JSON.parse(s.params_schema) : {},
+            callCount: s.call_count,
+            createdAt: s.created_at,
+        },
+    });
+}
+
 export async function PATCH(req: NextRequest, { params }: Params) {
     const authResult = await validatePublisherKey(req);
     if (!authResult.ok || !authResult.auth) return pubAuthError(authResult.errorCode, authResult.message);
