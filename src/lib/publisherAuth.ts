@@ -114,10 +114,6 @@ async function validatePublisherKeyOnly(req: NextRequest): Promise<AuthResult> {
         return { ok: false, errorCode: "KEY_REVOKED", message: "This API key has been revoked." };
     }
 
-    if (row.pStatus === "pending") {
-        return { ok: false, errorCode: "PUBLISHER_PENDING", message: "Your publisher account is pending approval." };
-    }
-
     if (row.pStatus === "suspended") {
         return { ok: false, errorCode: "PUBLISHER_SUSPENDED", message: "Your publisher account has been suspended." };
     }
@@ -210,6 +206,13 @@ export async function validatePublisherKeyOrSession(req: NextRequest): Promise<A
             userId,
             userName,
         );
+    } else if (pubRows[0].status === "pending") {
+        // Auto-approve legacy pending publishers (no manual approval needed anymore)
+        await prisma.$executeRawUnsafe(
+            `UPDATE "Publisher" SET status = 'approved', "approvedAt" = NOW() WHERE id = $1`,
+            pubRows[0].id,
+        );
+        pubRows[0].status = "approved";
     }
 
     const pub = pubRows[0];
