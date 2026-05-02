@@ -149,6 +149,7 @@ model Publisher {
   apiKeys         PublisherApiKey[]
   skills          Skill[]
   revenue         SkillRevenue[]
+  submissions     SkillSubmission[]
 
   @@index([status])
 }
@@ -166,6 +167,41 @@ model PublisherApiKey {
   publisher   Publisher @relation(fields: [publisherId], references: [id])
 
   @@index([publisherId])
+}
+
+model SkillSubmission {
+  id               Int                  @id @default(autoincrement())
+  publisherId      String
+  name             String
+  description      String
+  paramsSchema     String?
+  tags             String?
+  category         String?
+  status           String               @default("draft")
+  reviewNote       String?
+  aiRecommendation String?
+  lastEditedAt     DateTime?
+  createdAt        DateTime             @default(now())
+  resultSkillId    Int?
+  resultProviderId Int?
+  publisher        Publisher             @relation(fields: [publisherId], references: [id])
+  providers        SubmissionProvider[]
+
+  @@index([status])
+  @@index([publisherId])
+}
+
+model SubmissionProvider {
+  id             Int             @id @default(autoincrement())
+  submissionId   Int
+  name           String
+  endpoint       String
+  pricePerCall   Float
+  providerSecret String?
+  costPerChar    Float?
+  submission     SkillSubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+
+  @@index([submissionId])
 }
 
 model Skill {

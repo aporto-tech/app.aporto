@@ -5,23 +5,23 @@ import { useRouter, useParams } from "next/navigation";
 import useSWR from "swr";
 import { Skeleton } from "@/app/components/Skeleton";
 
-interface SkillDetail {
+interface SubmissionDetail {
     id: number; name: string; description: string; status: string;
     reviewNote: string | null; category: string | null; tags: string[];
-    paramsSchema: Record<string, unknown>; callCount: number; createdAt: string;
+    paramsSchema: Record<string, unknown>; resultSkillId: number | null;
+    resultProviderId: number | null; createdAt: string;
 }
 interface Provider {
     id: number; name: string; endpoint: string; price_per_call: number;
-    cost_per_char: number | null; has_secret: boolean; is_active: boolean;
-}
-interface Analytics {
-    calls: number; successRate: number; avgLatencyMs: number;
-    revenue: { grossUSD: number; earnedUSD: number };
-    errorBreakdown: Record<string, number>;
+    cost_per_char: number | null; has_secret: boolean;
 }
 
 const STATUS_COLOR: Record<string, string> = {
-    draft: "#64748b", pending_review: "#f59e0b", live: "#10b981", rejected: "#ef4444", archived: "#334155",
+    draft: "#64748b", pending: "#f59e0b", reviewing: "#818cf8", approved: "#10b981", rejected: "#ef4444", merged: "#6366f1",
+};
+
+const STATUS_LABEL: Record<string, string> = {
+    draft: "DRAFT", pending: "PENDING REVIEW", reviewing: "AI REVIEWING", approved: "APPROVED", rejected: "REJECTED", merged: "MERGED",
 };
 
 const inputStyle: React.CSSProperties = { width: "100%", padding: "8px 12px", borderRadius: 6, border: "1px solid #334155", background: "#1e293b", color: "#e2e8f0", fontSize: 14, boxSizing: "border-box" };
@@ -38,30 +38,24 @@ const publisherFetcher = async (url: string) => {
     return data;
 };
 
-export default function SkillDetailPage() {
+export default function SubmissionDetailPage() {
     const params = useParams();
     const router = useRouter();
-    const skillId = Number(params.id);
+    const submissionId = Number(params.id);
 
-    const { data: skillData, isLoading: skillLoading, mutate: mutateSkill } = useSWR(
-        `/api/publisher/skills/${skillId}`,
+    const { data: subData, isLoading: subLoading, mutate: mutateSubmission } = useSWR(
+        `/api/publisher/skills/${submissionId}`,
         publisherFetcher,
         { revalidateOnFocus: false, dedupingInterval: 10000 }
     );
     const { data: providerData, isLoading: provLoading, mutate: mutateProviders } = useSWR(
-        `/api/publisher/providers?skillId=${skillId}`,
+        `/api/publisher/providers?submissionId=${submissionId}`,
         publisherFetcher,
         { revalidateOnFocus: false, dedupingInterval: 10000 }
     );
-    const { data: analyticsData } = useSWR(
-        `/api/publisher/analytics?skillId=${skillId}&period=7`,
-        publisherFetcher,
-        { revalidateOnFocus: false, dedupingInterval: 30000 }
-    );
 
-    const skill: SkillDetail | null = skillData?.skill ?? null;
+    const submission: SubmissionDetail | null = subData?.submission ?? null;
     const providers: Provider[] = providerData?.providers ?? [];
-    const analytics: Analytics | null = analyticsData?.success ? analyticsData : null;
 
     const [editing, setEditing] = useState(false);
     const [editData, setEditData] = useState({ name: "", description: "", category: "" });
@@ -74,26 +68,26 @@ export default function SkillDetailPage() {
 
     const save = async () => {
         setSaving(true); setError("");
-        const res = await fetch(`/api/publisher/skills/${skillId}`, {
+        const res = await fetch(`/api/publisher/skills/${submissionId}`, {
             method: "PATCH",
             headers: { "Content-Type": "application/json", Authorization: `Bearer ${getKey()}` },
             body: JSON.stringify(editData),
         });
         const d = await res.json();
         setSaving(false);
-        if (d.success) { setEditing(false); mutateSkill(); }
+        if (d.success) { setEditing(false); mutateSubmission(); }
         else setError(d.message ?? "Failed to save.");
     };
 
     const submit = async () => {
         setSubmitting(true); setError(""); setViolations([]);
-        const res = await fetch(`/api/publisher/skills/${skillId}/submit`, {
+        const res = await fetch(`/api/publisher/skills/${submissionId}/submit`, {
             method: "POST",
             headers: { Authorization: `Bearer ${getKey()}` },
         });
         const d = await res.json();
         setSubmitting(false);
-        if (d.success) { mutateSkill(); }
+        if (d.success) { mutateSubmission(); }
         else { setError(d.message ?? "Submission failed."); setViolations(d.violations ?? []); }
     };
 
@@ -102,7 +96,7 @@ export default function SkillDetailPage() {
         const res = await fetch("/api/publisher/providers", {
             method: "POST",
             headers: { "Content-Type": "application/json", Authorization: `Bearer ${getKey()}` },
-            body: JSON.stringify({ skillId, ...newProvider, pricePerCall: parseFloat(newProvider.pricePerCall) }),
+            body: JSON.stringify({ submissionId, ...newProvider, pricePerCall: parseFloat(newProvider.pricePerCall) }),
         });
         const d = await res.json();
         setAddingProvider(false);
@@ -114,7 +108,7 @@ export default function SkillDetailPage() {
         }
     };
 
-    const isLoading = skillLoading || provLoading;
+    const isLoading = subLoading || provLoading;
 
     if (isLoading) return (
         <div>
@@ -128,29 +122,20 @@ export default function SkillDetailPage() {
                 <Skeleton width="80%" height={14} style={{ marginTop: 12 }} />
                 <Skeleton width="60%" height={14} style={{ marginTop: 6 }} />
             </div>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, marginBottom: 20 }}>
-                {[1, 2, 3, 4].map(i => (
-                    <div key={i} style={{ background: "#0f172a", border: "1px solid #1e293b", borderRadius: 6, padding: 12 }}>
-                        <Skeleton width="60%" height={11} />
-                        <Skeleton width="40%" height={20} style={{ marginTop: 6 }} />
-                    </div>
-                ))}
-            </div>
             <div style={{ background: "#0f172a", border: "1px solid #1e293b", borderRadius: 8, padding: 20 }}>
                 <Skeleton width={100} height={15} />
                 <Skeleton width="100%" height={13} style={{ marginTop: 12 }} />
-                <Skeleton width="100%" height={13} style={{ marginTop: 8 }} />
             </div>
         </div>
     );
 
-    if (!skill) return <div style={{ color: "#ef4444" }}>Skill not found.</div>;
+    if (!submission) return <div style={{ color: "#ef4444" }}>Submission not found.</div>;
 
-    const canEdit = skill.status === "draft" || skill.status === "rejected";
-    const canSubmit = skill.status === "draft" || skill.status === "rejected";
+    const canEdit = submission.status === "draft" || submission.status === "rejected";
+    const canSubmit = submission.status === "draft" || submission.status === "rejected";
 
     const startEditing = () => {
-        setEditData({ name: skill.name, description: skill.description, category: skill.category ?? "" });
+        setEditData({ name: submission.name, description: submission.description, category: submission.category ?? "" });
         setEditing(true);
     };
 
@@ -158,14 +143,26 @@ export default function SkillDetailPage() {
         <div>
             <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 24 }}>
                 <button onClick={() => router.push("/publisher/skills")} style={{ background: "none", border: "none", color: "#64748b", cursor: "pointer", fontSize: 14 }}>&larr; Skills</button>
-                <span style={{ color: STATUS_COLOR[skill.status] ?? "#64748b", fontWeight: 600, fontSize: 12, padding: "2px 8px", border: `1px solid ${STATUS_COLOR[skill.status] ?? "#64748b"}`, borderRadius: 4 }}>
-                    {skill.status.replace("_", " ").toUpperCase()}
+                <span style={{ color: STATUS_COLOR[submission.status] ?? "#64748b", fontWeight: 600, fontSize: 12, padding: "2px 8px", border: `1px solid ${STATUS_COLOR[submission.status] ?? "#64748b"}`, borderRadius: 4 }}>
+                    {STATUS_LABEL[submission.status] ?? submission.status.toUpperCase()}
                 </span>
             </div>
 
-            {skill.status === "rejected" && skill.reviewNote && (
+            {submission.status === "rejected" && submission.reviewNote && (
                 <div style={{ marginBottom: 20, padding: "12px 16px", background: "#1e0a0a", border: "1px solid #3f1515", borderRadius: 8, color: "#fca5a5", fontSize: 14 }}>
-                    <strong>Rejected:</strong> {skill.reviewNote}
+                    <strong>Rejected:</strong> {submission.reviewNote}
+                </div>
+            )}
+
+            {submission.status === "merged" && submission.resultSkillId && (
+                <div style={{ marginBottom: 20, padding: "12px 16px", background: "#0a1e0f", border: "1px solid #15523f", borderRadius: 8, color: "#86efac", fontSize: 14 }}>
+                    Your endpoint was merged as a provider to existing skill <strong>#{submission.resultSkillId}</strong>. You earn revenue on every call routed to your provider.
+                </div>
+            )}
+
+            {submission.status === "approved" && submission.resultSkillId && (
+                <div style={{ marginBottom: 20, padding: "12px 16px", background: "#0a1e0f", border: "1px solid #15523f", borderRadius: 8, color: "#86efac", fontSize: 14 }}>
+                    Skill created successfully! Your skill is now live as <strong>#{submission.resultSkillId}</strong>.
                 </div>
             )}
 
@@ -176,10 +173,10 @@ export default function SkillDetailPage() {
                 </div>
             ))}
 
-            {/* Skill Details */}
+            {/* Submission Details */}
             <div style={{ background: "#0f172a", border: "1px solid #1e293b", borderRadius: 8, padding: 20, marginBottom: 20 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-                    <h2 style={{ margin: 0, fontSize: 18 }}>{skill.name}</h2>
+                    <h2 style={{ margin: 0, fontSize: 18 }}>{submission.name}</h2>
                     {canEdit && !editing && (
                         <button onClick={startEditing} style={{ padding: "5px 12px", borderRadius: 6, border: "1px solid #334155", background: "transparent", color: "#94a3b8", cursor: "pointer", fontSize: 13 }}>Edit</button>
                     )}
@@ -200,28 +197,11 @@ export default function SkillDetailPage() {
                     </div>
                 ) : (
                     <div>
-                        <div style={{ color: "#64748b", fontSize: 12, marginBottom: 8 }}>{skill.category ?? "uncategorized"}</div>
-                        <p style={{ color: "#94a3b8", fontSize: 14, margin: 0, lineHeight: 1.6 }}>{skill.description || <em style={{ color: "#475569" }}>No description</em>}</p>
+                        <div style={{ color: "#64748b", fontSize: 12, marginBottom: 8 }}>{submission.category ?? "uncategorized"}</div>
+                        <p style={{ color: "#94a3b8", fontSize: 14, margin: 0, lineHeight: 1.6 }}>{submission.description || <em style={{ color: "#475569" }}>No description</em>}</p>
                     </div>
                 )}
             </div>
-
-            {/* Analytics */}
-            {analytics && (
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, marginBottom: 20 }}>
-                    {[
-                        { label: "Calls (7d)", value: analytics.calls },
-                        { label: "Success Rate", value: `${(analytics.successRate * 100).toFixed(1)}%` },
-                        { label: "Avg Latency", value: `${analytics.avgLatencyMs}ms` },
-                        { label: "Earned (7d)", value: `$${analytics.revenue.earnedUSD.toFixed(4)}` },
-                    ].map(c => (
-                        <div key={c.label} style={{ background: "#0f172a", border: "1px solid #1e293b", borderRadius: 6, padding: 12 }}>
-                            <div style={{ color: "#64748b", fontSize: 11 }}>{c.label}</div>
-                            <div style={{ fontWeight: 700, fontSize: 18, marginTop: 2 }}>{c.value}</div>
-                        </div>
-                    ))}
-                </div>
-            )}
 
             {/* Providers */}
             <div style={{ background: "#0f172a", border: "1px solid #1e293b", borderRadius: 8, padding: 20, marginBottom: 20 }}>
@@ -264,9 +244,15 @@ export default function SkillDetailPage() {
                 </div>
             )}
 
-            {skill.status === "pending_review" && (
+            {submission.status === "pending" && (
                 <div style={{ padding: "12px 16px", background: "#1e1a0a", border: "1px solid #4a3800", borderRadius: 8, color: "#fbbf24", fontSize: 14 }}>
-                    Under review. You'll receive an email once the admin has reviewed your skill.
+                    Under review. You'll receive an email once your submission has been reviewed.
+                </div>
+            )}
+
+            {submission.status === "reviewing" && (
+                <div style={{ padding: "12px 16px", background: "#1a1a2e", border: "1px solid #312e81", borderRadius: 8, color: "#a5b4fc", fontSize: 14 }}>
+                    AI is currently reviewing your submission. This usually takes a few seconds.
                 </div>
             )}
         </div>

@@ -4,21 +4,31 @@ import Link from "next/link";
 import useSWR from "swr";
 import { Skeleton } from "@/app/components/Skeleton";
 
-interface Skill {
+interface Submission {
     id: number; name: string; description: string; status: string;
     reviewNote: string | null; category: string | null; providerCount: number;
+    resultSkillId: number | null; createdAt: string;
+}
+
+interface LiveSkill {
+    id: number; name: string; description: string; category: string | null;
     callCount: number; createdAt: string;
 }
 
 interface SkillsResponse {
     success: boolean;
-    skills: Skill[];
+    submissions: Submission[];
+    liveSkills: LiveSkill[];
     submissionsUsed: number;
     submissionsRemaining: number;
 }
 
 const STATUS_COLOR: Record<string, string> = {
-    draft: "#64748b", pending_review: "#f59e0b", live: "#10b981", rejected: "#ef4444", archived: "#334155",
+    draft: "#64748b", pending: "#f59e0b", reviewing: "#818cf8", approved: "#10b981", rejected: "#ef4444", merged: "#6366f1",
+};
+
+const STATUS_LABEL: Record<string, string> = {
+    draft: "DRAFT", pending: "PENDING", reviewing: "AI REVIEWING", approved: "APPROVED", rejected: "REJECTED", merged: "MERGED",
 };
 
 const fetcher = async (url: string): Promise<SkillsResponse> => {
@@ -36,7 +46,8 @@ export default function SkillsPage() {
         dedupingInterval: 10000,
     });
 
-    const skills = data?.skills ?? [];
+    const submissions = data?.submissions ?? [];
+    const liveSkills = data?.liveSkills ?? [];
     const submissionsUsed = data?.submissionsUsed ?? 0;
 
     if (isLoading) return (
@@ -65,14 +76,77 @@ export default function SkillsPage() {
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 24 }}>
                 <h1 style={{ fontWeight: 700, fontSize: 24, margin: 0 }}>Skills</h1>
                 <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                    <span style={{ color: "#64748b", fontSize: 13 }}>{submissionsUsed}/10 pending reviews</span>
+                    <span style={{ color: "#64748b", fontSize: 13 }}>{submissionsUsed}/10 pending</span>
                     <Link href="/publisher/skills/new" style={{ padding: "8px 16px", borderRadius: 6, background: "#6366f1", color: "#fff", textDecoration: "none", fontSize: 14, fontWeight: 500 }}>
                         + New Skill
                     </Link>
                 </div>
             </div>
 
-            {skills.length === 0 && (
+            {/* Live Skills */}
+            {liveSkills.length > 0 && (
+                <div style={{ marginBottom: 24 }}>
+                    <div style={{ color: "#10b981", fontSize: 12, fontWeight: 600, marginBottom: 8, textTransform: "uppercase" }}>Live Skills</div>
+                    {liveSkills.map(s => (
+                        <div key={`live-${s.id}`} style={{ border: "1px solid #1e293b", borderRadius: 8, padding: 16, marginBottom: 10, background: "#0f172a" }}>
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                                <div>
+                                    <div style={{ fontWeight: 600, fontSize: 15 }}>{s.name}</div>
+                                    <div style={{ color: "#94a3b8", fontSize: 12, marginTop: 2 }}>{s.category ?? "uncategorized"} · {s.callCount} calls</div>
+                                </div>
+                                <span style={{ color: "#10b981", fontWeight: 600, fontSize: 12, padding: "2px 8px", border: "1px solid #10b981", borderRadius: 4 }}>LIVE</span>
+                            </div>
+                            <p style={{ color: "#64748b", fontSize: 13, margin: "8px 0 0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                {s.description || <em>No description</em>}
+                            </p>
+                        </div>
+                    ))}
+                </div>
+            )}
+
+            {/* Submissions */}
+            {submissions.length > 0 && (
+                <div>
+                    <div style={{ color: "#64748b", fontSize: 12, fontWeight: 600, marginBottom: 8, textTransform: "uppercase" }}>Submissions</div>
+                    {submissions.map(s => (
+                        <Link key={s.id} href={`/publisher/skills/${s.id}`} style={{ display: "block", textDecoration: "none", color: "inherit" }}>
+                            <div style={{ border: "1px solid #1e293b", borderRadius: 8, padding: 16, marginBottom: 10, background: "#0f172a", cursor: "pointer" }}
+                                onMouseEnter={e => (e.currentTarget.style.borderColor = "#334155")}
+                                onMouseLeave={e => (e.currentTarget.style.borderColor = "#1e293b")}>
+                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                                    <div>
+                                        <div style={{ fontWeight: 600, fontSize: 15 }}>{s.name}</div>
+                                        <div style={{ color: "#94a3b8", fontSize: 12, marginTop: 2 }}>{s.category ?? "uncategorized"} · {s.providerCount} provider(s)</div>
+                                    </div>
+                                    <span style={{ color: STATUS_COLOR[s.status] ?? "#64748b", fontWeight: 600, fontSize: 12, padding: "2px 8px", border: `1px solid ${STATUS_COLOR[s.status] ?? "#64748b"}`, borderRadius: 4 }}>
+                                        {STATUS_LABEL[s.status] ?? s.status.toUpperCase()}
+                                    </span>
+                                </div>
+                                <p style={{ color: "#64748b", fontSize: 13, margin: "8px 0 0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                    {s.description || <em>No description</em>}
+                                </p>
+                                {s.status === "rejected" && s.reviewNote && (
+                                    <div style={{ marginTop: 8, padding: "8px 12px", background: "#1e0a0a", border: "1px solid #3f1515", borderRadius: 6, fontSize: 12, color: "#fca5a5" }}>
+                                        Rejected: {s.reviewNote}
+                                    </div>
+                                )}
+                                {s.status === "merged" && s.resultSkillId && (
+                                    <div style={{ marginTop: 8, padding: "8px 12px", background: "#0a1e0f", border: "1px solid #15523f", borderRadius: 6, fontSize: 12, color: "#86efac" }}>
+                                        Merged as provider to skill #{s.resultSkillId}
+                                    </div>
+                                )}
+                                {s.status === "approved" && s.resultSkillId && (
+                                    <div style={{ marginTop: 8, padding: "8px 12px", background: "#0a1e0f", border: "1px solid #15523f", borderRadius: 6, fontSize: 12, color: "#86efac" }}>
+                                        Skill created: #{s.resultSkillId}
+                                    </div>
+                                )}
+                            </div>
+                        </Link>
+                    ))}
+                </div>
+            )}
+
+            {submissions.length === 0 && liveSkills.length === 0 && (
                 <div style={{ textAlign: "center", padding: "60px 0", color: "#475569" }}>
                     <div style={{ fontSize: 40, marginBottom: 12 }}>🔧</div>
                     <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 8 }}>No skills yet</div>
@@ -82,32 +156,6 @@ export default function SkillsPage() {
                     </Link>
                 </div>
             )}
-
-            {skills.map(s => (
-                <Link key={s.id} href={`/publisher/skills/${s.id}`} style={{ display: "block", textDecoration: "none", color: "inherit" }}>
-                    <div style={{ border: "1px solid #1e293b", borderRadius: 8, padding: 16, marginBottom: 10, background: "#0f172a", cursor: "pointer" }}
-                        onMouseEnter={e => (e.currentTarget.style.borderColor = "#334155")}
-                        onMouseLeave={e => (e.currentTarget.style.borderColor = "#1e293b")}>
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-                            <div>
-                                <div style={{ fontWeight: 600, fontSize: 15 }}>{s.name}</div>
-                                <div style={{ color: "#94a3b8", fontSize: 12, marginTop: 2 }}>{s.category ?? "uncategorized"} · {s.providerCount} provider(s) · {s.callCount} calls</div>
-                            </div>
-                            <span style={{ color: STATUS_COLOR[s.status] ?? "#64748b", fontWeight: 600, fontSize: 12, padding: "2px 8px", border: `1px solid ${STATUS_COLOR[s.status] ?? "#64748b"}`, borderRadius: 4 }}>
-                                {s.status.replace("_", " ").toUpperCase()}
-                            </span>
-                        </div>
-                        <p style={{ color: "#64748b", fontSize: 13, margin: "8px 0 0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                            {s.description || <em>No description</em>}
-                        </p>
-                        {s.status === "rejected" && s.reviewNote && (
-                            <div style={{ marginTop: 8, padding: "8px 12px", background: "#1e0a0a", border: "1px solid #3f1515", borderRadius: 6, fontSize: 12, color: "#fca5a5" }}>
-                                Rejected: {s.reviewNote}
-                            </div>
-                        )}
-                    </div>
-                </Link>
-            ))}
         </div>
     );
 }

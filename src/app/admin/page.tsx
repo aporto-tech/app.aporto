@@ -1208,102 +1208,185 @@ function StatsTab() {
 
 // ── PendingReviewTab ──────────────────────────────────────────────────────────
 
-interface PendingSkill {
+interface PendingSubmission {
     id: number; name: string; description: string; category: string | null;
-    review_note: string | null; created_at: string;
+    status: string; review_note: string | null; ai_recommendation: string | null;
+    created_at: string;
     publisher_id: string; publisher_name: string; publisher_email: string;
     publisher_revenue_share: number; provider_count: number;
 }
 
+interface AiRecommendation {
+    action: "create_skill" | "add_provider" | "reject";
+    reason: string;
+    duplicateSkillId?: number;
+    duplicateSkillName?: string;
+    suggestedName?: string;
+    issues?: string[];
+}
+
 function PendingReviewTab() {
-    const [skills, setSkills] = useState<PendingSkill[]>([]);
+    const [submissions, setSubmissions] = useState<PendingSubmission[]>([]);
     const [loading, setLoading] = useState(true);
     const [rejectId, setRejectId] = useState<number | null>(null);
     const [rejectReason, setRejectReason] = useState("");
-    const [working, setWorking] = useState(false);
+    const [working, setWorking] = useState<number | null>(null);
+    const [reviewResults, setReviewResults] = useState<Record<number, { recommendation: AiRecommendation; similarSkills: Array<{ id: number; name: string; similarity: number }> }>>({});
 
     const load = () => {
         setLoading(true);
         fetch("/api/admin/pending")
             .then(r => r.json())
-            .then(d => { if (d.success) setSkills(d.skills ?? []); })
+            .then(d => { if (d.success) setSubmissions(d.submissions ?? []); })
             .finally(() => setLoading(false));
     };
 
     useEffect(() => { load(); }, []);
 
-    const approve = async (id: number) => {
-        setWorking(true);
-        await fetch(`/api/admin/skills/approve?id=${id}`, { method: "POST" });
-        setWorking(false);
-        load();
+    const reviewWithAi = async (id: number) => {
+        setWorking(id);
+        try {
+            const res = await fetch(`/api/admin/submissions/review?id=${id}`, { method: "POST" });
+            const data = await res.json();
+            if (data.success) {
+                setReviewResults(prev => ({ ...prev, [id]: { recommendation: data.recommendation, similarSkills: data.similarSkills } }));
+            } else {
+                alert(data.error || "Review failed");
+            }
+        } finally { setWorking(null); load(); }
     };
 
-    const reject = async (id: number) => {
-        if (!rejectReason.trim() || rejectReason.trim().length < 10) {
-            alert("Please provide a rejection reason (min 10 chars).");
-            return;
+    const execute = async (id: number, action: "approve" | "reject" | "merge", reason?: string, targetSkillId?: number) => {
+        setWorking(id);
+        try {
+            const res = await fetch(`/api/admin/submissions/execute?id=${id}`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ action, reason, targetSkillId }),
+            });
+            const data = await res.json();
+            if (!data.success) alert(data.error || "Execute failed");
+        } finally {
+            setWorking(null);
+            setRejectId(null);
+            setRejectReason("");
+            setReviewResults(prev => { const n = { ...prev }; delete n[id]; return n; });
+            load();
         }
-        setWorking(true);
-        await fetch(`/api/admin/skills/reject?id=${id}`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ reason: rejectReason }),
-        });
-        setWorking(false);
-        setRejectId(null);
-        setRejectReason("");
-        load();
     };
 
     if (loading) return <div style={{ color: "#64748b", padding: "24px 0" }}>Loading...</div>;
 
+    const actionColor = (a: string) => a === "create_skill" ? "#10b981" : a === "add_provider" ? "#6366f1" : "#ef4444";
+    const actionLabel = (a: string) => a === "create_skill" ? "Create Skill" : a === "add_provider" ? "Add as Provider" : "Reject";
+
     return (
         <div>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
-                <h2 style={{ margin: 0, fontSize: 18 }}>Pending Review ({skills.length})</h2>
+                <h2 style={{ margin: 0, fontSize: 18 }}>Pending Submissions ({submissions.length})</h2>
                 <button onClick={load} style={{ padding: "6px 12px", borderRadius: 6, border: "1px solid #334155", background: "transparent", color: "#cbd5e1", cursor: "pointer" }}>Refresh</button>
             </div>
-            {skills.length === 0 && <div style={{ color: "#64748b" }}>No skills pending review.</div>}
-            {skills.map(s => (
-                <div key={s.id} style={{ border: "1px solid #1e293b", borderRadius: 8, padding: 16, marginBottom: 16, background: "#0f172a" }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-                        <div>
-                            <div style={{ fontWeight: 600, fontSize: 15 }}>{s.name} <span style={{ color: "#64748b", fontWeight: 400, fontSize: 13 }}>#{s.id}</span></div>
-                            <div style={{ color: "#94a3b8", fontSize: 12, marginTop: 2 }}>{s.category ?? "uncategorized"} · {s.provider_count} provider(s)</div>
-                            <div style={{ color: "#475569", fontSize: 11, marginTop: 2 }}>by {s.publisher_name} ({s.publisher_email}) · {Math.round(s.publisher_revenue_share * 100)}% rev share</div>
-                        </div>
-                        <div style={{ display: "flex", gap: 8 }}>
-                            <button
-                                disabled={working}
-                                onClick={() => approve(s.id)}
-                                style={{ padding: "6px 14px", borderRadius: 6, border: "none", background: "#10b981", color: "#fff", cursor: "pointer", fontWeight: 600 }}
-                            >Approve</button>
-                            <button
-                                disabled={working}
-                                onClick={() => setRejectId(s.id)}
-                                style={{ padding: "6px 14px", borderRadius: 6, border: "1px solid #ef4444", background: "transparent", color: "#ef4444", cursor: "pointer" }}
-                            >Reject</button>
-                        </div>
-                    </div>
-                    <p style={{ color: "#94a3b8", fontSize: 13, margin: "12px 0 0" }}>{s.description}</p>
-
-                    {rejectId === s.id && (
-                        <div style={{ marginTop: 12 }}>
-                            <textarea
-                                value={rejectReason}
-                                onChange={e => setRejectReason(e.target.value)}
-                                placeholder="Rejection reason (min 10 chars)..."
-                                style={{ width: "100%", padding: 8, borderRadius: 6, border: "1px solid #334155", background: "#1e293b", color: "#e2e8f0", fontSize: 13, resize: "vertical", minHeight: 80 }}
-                            />
-                            <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-                                <button onClick={() => reject(s.id)} disabled={working} style={{ padding: "6px 12px", borderRadius: 6, border: "none", background: "#ef4444", color: "#fff", cursor: "pointer" }}>Send Rejection</button>
-                                <button onClick={() => { setRejectId(null); setRejectReason(""); }} style={{ padding: "6px 12px", borderRadius: 6, border: "1px solid #334155", background: "transparent", color: "#94a3b8", cursor: "pointer" }}>Cancel</button>
+            {submissions.length === 0 && <div style={{ color: "#64748b" }}>No submissions pending review.</div>}
+            {submissions.map(s => {
+                const review = reviewResults[s.id] || (s.ai_recommendation ? { recommendation: JSON.parse(s.ai_recommendation) as AiRecommendation, similarSkills: [] } : null);
+                return (
+                    <div key={s.id} style={{ border: "1px solid #1e293b", borderRadius: 8, padding: 16, marginBottom: 16, background: "#0f172a" }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                            <div>
+                                <div style={{ fontWeight: 600, fontSize: 15 }}>
+                                    {s.name} <span style={{ color: "#64748b", fontWeight: 400, fontSize: 13 }}>#{s.id}</span>
+                                    {s.status === "reviewing" && <span style={{ marginLeft: 8, color: "#f59e0b", fontSize: 11, fontWeight: 500 }}>REVIEWING</span>}
+                                </div>
+                                <div style={{ color: "#94a3b8", fontSize: 12, marginTop: 2 }}>{s.category ?? "uncategorized"} · {s.provider_count} provider(s)</div>
+                                <div style={{ color: "#475569", fontSize: 11, marginTop: 2 }}>by {s.publisher_name} ({s.publisher_email}) · {Math.round(s.publisher_revenue_share * 100)}% rev share</div>
+                            </div>
+                            <div style={{ display: "flex", gap: 8 }}>
+                                {!review && (
+                                    <button
+                                        disabled={working === s.id}
+                                        onClick={() => reviewWithAi(s.id)}
+                                        style={{ padding: "6px 14px", borderRadius: 6, border: "none", background: "#6366f1", color: "#fff", cursor: "pointer", fontWeight: 600 }}
+                                    >{working === s.id ? "Reviewing..." : "Review with AI"}</button>
+                                )}
                             </div>
                         </div>
-                    )}
-                </div>
-            ))}
+                        <p style={{ color: "#94a3b8", fontSize: 13, margin: "12px 0 0" }}>{s.description}</p>
+
+                        {/* AI Recommendation */}
+                        {review && (
+                            <div style={{ marginTop: 12, padding: 12, background: "#1e293b", borderRadius: 6, border: `1px solid ${actionColor(review.recommendation.action)}33` }}>
+                                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                                    <span style={{ color: actionColor(review.recommendation.action), fontWeight: 700, fontSize: 12 }}>
+                                        AI: {actionLabel(review.recommendation.action).toUpperCase()}
+                                    </span>
+                                    {review.recommendation.duplicateSkillName && (
+                                        <span style={{ color: "#94a3b8", fontSize: 12 }}>→ "{review.recommendation.duplicateSkillName}" (ID: {review.recommendation.duplicateSkillId})</span>
+                                    )}
+                                </div>
+                                <div style={{ color: "#cbd5e1", fontSize: 12, lineHeight: 1.5 }}>{review.recommendation.reason}</div>
+                                {review.recommendation.issues && review.recommendation.issues.length > 0 && (
+                                    <ul style={{ color: "#fbbf24", fontSize: 12, margin: "8px 0 0", paddingLeft: 16 }}>
+                                        {review.recommendation.issues.map((issue, i) => <li key={i}>{issue}</li>)}
+                                    </ul>
+                                )}
+
+                                {/* Action buttons */}
+                                <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+                                    {review.recommendation.action === "create_skill" && (
+                                        <button disabled={working === s.id} onClick={() => execute(s.id, "approve", "AI approved: " + review.recommendation.reason)}
+                                            style={{ padding: "6px 14px", borderRadius: 6, border: "none", background: "#10b981", color: "#fff", cursor: "pointer", fontWeight: 600, fontSize: 12 }}>
+                                            {working === s.id ? "..." : "Create Skill"}
+                                        </button>
+                                    )}
+                                    {review.recommendation.action === "add_provider" && (
+                                        <button disabled={working === s.id} onClick={() => execute(s.id, "merge", "Merged: " + review.recommendation.reason, review.recommendation.duplicateSkillId)}
+                                            style={{ padding: "6px 14px", borderRadius: 6, border: "none", background: "#6366f1", color: "#fff", cursor: "pointer", fontWeight: 600, fontSize: 12 }}>
+                                            {working === s.id ? "..." : "Merge as Provider"}
+                                        </button>
+                                    )}
+                                    {review.recommendation.action === "reject" && (
+                                        <button disabled={working === s.id} onClick={() => execute(s.id, "reject", review.recommendation.reason)}
+                                            style={{ padding: "6px 14px", borderRadius: 6, border: "none", background: "#ef4444", color: "#fff", cursor: "pointer", fontWeight: 600, fontSize: 12 }}>
+                                            {working === s.id ? "..." : "Reject"}
+                                        </button>
+                                    )}
+                                    {/* Override buttons */}
+                                    {review.recommendation.action !== "create_skill" && (
+                                        <button disabled={working === s.id} onClick={() => execute(s.id, "approve", "Admin override: approved")}
+                                            style={{ padding: "6px 14px", borderRadius: 6, border: "1px solid #10b981", background: "transparent", color: "#10b981", cursor: "pointer", fontSize: 12 }}>
+                                            Override: Approve
+                                        </button>
+                                    )}
+                                    {review.recommendation.action !== "reject" && (
+                                        <button disabled={working === s.id} onClick={() => setRejectId(s.id)}
+                                            style={{ padding: "6px 14px", borderRadius: 6, border: "1px solid #ef4444", background: "transparent", color: "#ef4444", cursor: "pointer", fontSize: 12 }}>
+                                            Override: Reject
+                                        </button>
+                                    )}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Reject modal */}
+                        {rejectId === s.id && (
+                            <div style={{ marginTop: 12 }}>
+                                <textarea
+                                    value={rejectReason}
+                                    onChange={e => setRejectReason(e.target.value)}
+                                    placeholder="Rejection reason (min 10 chars)..."
+                                    style={{ width: "100%", padding: 8, borderRadius: 6, border: "1px solid #334155", background: "#1e293b", color: "#e2e8f0", fontSize: 13, resize: "vertical", minHeight: 80 }}
+                                />
+                                <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+                                    <button onClick={() => execute(s.id, "reject", rejectReason)} disabled={working === s.id || rejectReason.trim().length < 10}
+                                        style={{ padding: "6px 12px", borderRadius: 6, border: "none", background: "#ef4444", color: "#fff", cursor: "pointer" }}>Send Rejection</button>
+                                    <button onClick={() => { setRejectId(null); setRejectReason(""); }}
+                                        style={{ padding: "6px 12px", borderRadius: 6, border: "1px solid #334155", background: "transparent", color: "#94a3b8", cursor: "pointer" }}>Cancel</button>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                );
+            })}
         </div>
     );
 }

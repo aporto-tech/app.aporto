@@ -1,6 +1,6 @@
 /**
  * POST /api/publisher/skills/[id]/submit
- * Move a draft (or edited-after-rejection) skill to pending_review.
+ * Move a draft (or edited-after-rejection) submission to pending.
  * Validates all submission requirements before transitioning.
  */
 import { NextRequest, NextResponse } from "next/server";
@@ -19,37 +19,37 @@ export async function POST(req: NextRequest, { params }: Params) {
     const { publisherId } = authResult.auth;
 
     const { id } = await params;
-    const skillId = Number(id);
-    if (!skillId) return pubError("INVALID_ID", "Invalid skill id.", 400);
+    const submissionId = Number(id);
+    if (!submissionId) return pubError("INVALID_ID", "Invalid submission id.", 400);
 
-    // Fetch skill
-    const skillRows = await prisma.$queryRawUnsafe<{
-        id: number; name: string; description: string; status: string; params_schema: string | null;
-        last_edited_at: string | null;
+    // Fetch submission
+    const rows = await prisma.$queryRawUnsafe<{
+        id: number; name: string; description: string; status: string;
+        params_schema: string | null; last_edited_at: string | null;
     }[]>(
         `SELECT id, name, description, status, "paramsSchema" AS params_schema, "lastEditedAt" AS last_edited_at
-         FROM "Skill" WHERE id = $1 AND "publisherId" = $2 LIMIT 1`,
-        skillId, publisherId,
+         FROM "SkillSubmission" WHERE id = $1 AND "publisherId" = $2 LIMIT 1`,
+        submissionId, publisherId,
     );
-    if (skillRows.length === 0) return pubError("NOT_FOUND", "Skill not found.", 404);
-    const skill = skillRows[0];
+    if (rows.length === 0) return pubError("NOT_FOUND", "Submission not found.", 404);
+    const submission = rows[0];
 
-    if (skill.status !== "draft" && skill.status !== "rejected") {
-        return pubError("INVALID_STATUS", `Cannot submit a skill with status '${skill.status}'.`, 400);
+    if (submission.status !== "draft" && submission.status !== "rejected") {
+        return pubError("INVALID_STATUS", `Cannot submit with status '${submission.status}'.`, 400);
     }
 
     // Re-submission after rejection requires at least one edit
-    if (skill.status === "rejected" && !skill.last_edited_at) {
-        return pubError("NO_EDITS_AFTER_REJECTION", "You must edit the skill before resubmitting after rejection.", 400);
+    if (submission.status === "rejected" && !submission.last_edited_at) {
+        return pubError("NO_EDITS_AFTER_REJECTION", "You must edit the submission before resubmitting after rejection.", 400);
     }
 
     // Check pending submission cap (max 10 per publisher)
     const pendingRows = await prisma.$queryRawUnsafe<{ cnt: number }[]>(
-        `SELECT COUNT(*)::int AS cnt FROM "Skill" WHERE "publisherId" = $1 AND status = 'pending_review'`,
+        `SELECT COUNT(*)::int AS cnt FROM "SkillSubmission" WHERE "publisherId" = $1 AND status = 'pending'`,
         publisherId,
     );
     if ((pendingRows[0]?.cnt ?? 0) >= 10) {
-        return pubError("SUBMISSION_LIMIT_REACHED", "Maximum of 10 concurrent pending review submissions.", 429, [
+        return pubError("SUBMISSION_LIMIT_REACHED", "Maximum of 10 concurrent pending submissions.", 429, [
             { field: "status", code: "SUBMISSION_LIMIT_REACHED", detail: "Wait for admin review on existing submissions before submitting more." },
         ]);
     }
@@ -57,33 +57,32 @@ export async function POST(req: NextRequest, { params }: Params) {
     // Validate submission requirements
     const violations: Array<{ field: string; code: string; detail?: string }> = [];
 
-    if (!skill.description || skill.description.length < 50) {
-        violations.push({ field: "description", code: "TOO_SHORT", detail: `Minimum 50 characters. Current: ${skill.description?.length ?? 0}` });
+    if (!submission.description || submission.description.length < 50) {
+        violations.push({ field: "description", code: "TOO_SHORT", detail: `Minimum 50 characters. Current: ${submission.description?.length ?? 0}` });
     }
 
-    // paramsSchema must be valid JSON if present
-    if (skill.params_schema) {
-        try { JSON.parse(skill.params_schema); }
+    if (submission.params_schema) {
+        try { JSON.parse(submission.params_schema); }
         catch { violations.push({ field: "paramsSchema", code: "INVALID_JSON", detail: "paramsSchema must be valid JSON." }); }
     }
 
-    // Must have at least one active provider with HTTPS endpoint and providerSecret
+    // Must have at least one provider with HTTPS endpoint and providerSecret
     const providers = await prisma.$queryRawUnsafe<{
         id: number; endpoint: string; provider_secret: string | null;
         price_per_call: number; cost_per_char: number | null;
     }[]>(
         `SELECT id, endpoint, "providerSecret" AS provider_secret,
                 "pricePerCall" AS price_per_call, "costPerChar" AS cost_per_char
-         FROM "Provider" WHERE "skillId" = $1 AND "isActive" = true`,
-        skillId,
+         FROM "SubmissionProvider" WHERE "submissionId" = $1`,
+        submissionId,
     );
 
     if (providers.length === 0) {
-        violations.push({ field: "providers", code: "NO_PROVIDERS", detail: "At least one active provider is required." });
+        violations.push({ field: "providers", code: "NO_PROVIDERS", detail: "At least one provider is required." });
     } else {
         for (const p of providers) {
-            if (!p.provider_secret) {
-                violations.push({ field: "providers", code: "MISSING_PROVIDER_SECRET", detail: `Provider id=${p.id} is missing a providerSecret. Required for third-party providers.` });
+            if (!p.provider_secret || p.provider_secret.length < 32) {
+                violations.push({ field: "providers", code: "MISSING_PROVIDER_SECRET", detail: `Provider id=${p.id} needs providerSecret (min 32 chars).` });
             }
             if (!p.endpoint.startsWith("https://")) {
                 violations.push({ field: "providers", code: "ENDPOINT_NOT_HTTPS", detail: `Provider id=${p.id} endpoint must be HTTPS.` });
@@ -101,13 +100,13 @@ export async function POST(req: NextRequest, { params }: Params) {
     }
 
     if (violations.length > 0) {
-        return pubError("VALIDATION_FAILED", "Skill does not meet submission requirements.", 400, violations);
+        return pubError("VALIDATION_FAILED", "Submission does not meet requirements.", 400, violations);
     }
 
     await prisma.$executeRawUnsafe(
-        `UPDATE "Skill" SET status = 'pending_review' WHERE id = $1`,
-        skillId,
+        `UPDATE "SkillSubmission" SET status = 'pending' WHERE id = $1`,
+        submissionId,
     );
 
-    return NextResponse.json({ success: true, status: "pending_review" });
+    return NextResponse.json({ success: true, status: "pending" });
 }
