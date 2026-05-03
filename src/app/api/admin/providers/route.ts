@@ -81,6 +81,18 @@ export async function PATCH(req: NextRequest) {
 
     const body = await req.json();
 
+    if (body.resetStats === true) {
+        await prisma.provider.update({
+            where: { id },
+            data: {
+                avgLatencyMs: 500,
+                retryRate: 0,
+                timeoutRate: 0,
+            },
+        });
+        return NextResponse.json({ success: true });
+    }
+
     if ("endpoint" in body && body.endpoint) {
         try {
             const url = new URL(body.endpoint);
@@ -98,6 +110,7 @@ export async function PATCH(req: NextRequest) {
     if ("pricePerCall" in body) data.pricePerCall = Number(body.pricePerCall);
     if ("avgLatencyMs" in body) data.avgLatencyMs = Number(body.avgLatencyMs);
     if ("retryRate" in body) data.retryRate = Number(body.retryRate);
+    if ("timeoutRate" in body) data.timeoutRate = Number(body.timeoutRate);
     if ("isActive" in body) data.isActive = Boolean(body.isActive);
     // Allow clearing providerSecret by passing null or "" explicitly
     if ("providerSecret" in body) data.providerSecret = body.providerSecret ? String(body.providerSecret) : null;

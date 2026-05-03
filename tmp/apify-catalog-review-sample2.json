@@ -1,0 +1,2222 @@
+{
+  "generatedAt": "2026-05-02T18:10:22.484Z",
+  "totalAvailable": 11243,
+  "scanned": 200,
+  "minConfidence": 0.82,
+  "autoGroups": [
+    {
+      "skillName": "YouTube Video Extractor",
+      "category": "scraping/social",
+      "providers": 14,
+      "topProviders": [
+        {
+          "providerName": "Apify - streamers/youtube-scraper",
+          "title": "YouTube Scraper",
+          "url": "https://apify.com/streamers/youtube-scraper",
+          "runs30d": 1526024,
+          "confidence": 0.9166666666666667,
+          "pricePerCall": 0.004
+        },
+        {
+          "providerName": "Apify - streamers/youtube-channel-scraper",
+          "title": "Fast YouTube Channel Scraper",
+          "url": "https://apify.com/streamers/youtube-channel-scraper",
+          "runs30d": 937959,
+          "confidence": 0.9166666666666667,
+          "pricePerCall": 0.0013
+        },
+        {
+          "providerName": "Apify - pintostudio/youtube-transcript-scraper",
+          "title": "Youtube Transcript Scraper",
+          "url": "https://apify.com/pintostudio/youtube-transcript-scraper",
+          "runs30d": 555739,
+          "confidence": 0.9166666666666667,
+          "pricePerCall": 0.01
+        },
+        {
+          "providerName": "Apify - starvibe/youtube-video-transcript",
+          "title": "YouTube Video Transcript",
+          "url": "https://apify.com/starvibe/youtube-video-transcript",
+          "runs30d": 293133,
+          "confidence": 0.8200000000000002,
+          "pricePerCall": 0.005
+        },
+        {
+          "providerName": "Apify - grow_media/youtube-channel-scraper",
+          "title": "Youtube Channel Scraper",
+          "url": "https://apify.com/grow_media/youtube-channel-scraper",
+          "runs30d": 94564,
+          "confidence": 0.9166666666666667,
+          "pricePerCall": 0.001
+        },
+        {
+          "providerName": "Apify - streamers/youtube-shorts-scraper",
+          "title": "YouTube Shorts Scraper",
+          "url": "https://apify.com/streamers/youtube-shorts-scraper",
+          "runs30d": 65041,
+          "confidence": 0.8366666666666668,
+          "pricePerCall": 0.004
+        },
+        {
+          "providerName": "Apify - scrape-creators/best-youtube-transcripts-scraper",
+          "title": "Best Youtube Transcripts Scraper",
+          "url": "https://apify.com/scrape-creators/best-youtube-transcripts-scraper",
+          "runs30d": 59399,
+          "confidence": 0.9166666666666667,
+          "pricePerCall": 0.001
+        },
+        {
+          "providerName": "Apify - karamelo/youtube-transcripts",
+          "title": "Youtube Transcripts",
+          "url": "https://apify.com/karamelo/youtube-transcripts",
+          "runs30d": 52859,
+          "confidence": 0.9166666666666667,
+          "pricePerCall": 0.007
+        },
+        {
+          "providerName": "Apify - grow_media/youtube-search-api",
+          "title": "Youtube Search Api",
+          "url": "https://apify.com/grow_media/youtube-search-api",
+          "runs30d": 40224,
+          "confidence": 0.9166666666666667,
+          "pricePerCall": 0.001
+        },
+        {
+          "providerName": "Apify - topaz_sharingan/Youtube-Transcript-Scraper-1",
+          "title": "YouTube Transcript Ninja ⚡️🥷⚡",
+          "url": "https://apify.com/topaz_sharingan/youtube-transcript-scraper-1",
+          "runs30d": 39390,
+          "confidence": 0.9166666666666667,
+          "pricePerCall": 0.01
+        }
+      ]
+    },
+    {
+      "skillName": "Instagram Post Extractor",
+      "category": "scraping/social",
+      "providers": 12,
+      "topProviders": [
+        {
+          "providerName": "Apify - apify/instagram-scraper",
+          "title": "Instagram Scraper",
+          "url": "https://apify.com/apify/instagram-scraper",
+          "runs30d": 12373937,
+          "confidence": 0.9500000000000002,
+          "pricePerCall": 0.0027
+        },
+        {
+          "providerName": "Apify - apify/instagram-post-scraper",
+          "title": "Instagram Post Scraper",
+          "url": "https://apify.com/apify/instagram-post-scraper",
+          "runs30d": 3430454,
+          "confidence": 0.8366666666666668,
+          "pricePerCall": 0.0017
+        },
+        {
+          "providerName": "Apify - apify/instagram-api-scraper",
+          "title": "Instagram API Scraper",
+          "url": "https://apify.com/apify/instagram-api-scraper",
+          "runs30d": 494329,
+          "confidence": 0.9500000000000002,
+          "pricePerCall": 0.0023
+        },
+        {
+          "providerName": "Apify - apify/instagram-hashtag-scraper",
+          "title": "Instagram Hashtag Scraper",
+          "url": "https://apify.com/apify/instagram-hashtag-scraper",
+          "runs30d": 361812,
+          "confidence": 0.9500000000000002,
+          "pricePerCall": 0.0026
+        },
+        {
+          "providerName": "Apify - apify/instagram-search-scraper",
+          "title": "Instagram Search Scraper",
+          "url": "https://apify.com/apify/instagram-search-scraper",
+          "runs30d": 86549,
+          "confidence": 0.9500000000000002,
+          "pricePerCall": 0.0027
+        },
+        {
+          "providerName": "Apify - apify/instagram-followers-count-scraper",
+          "title": "Instagram Followers Count Scraper",
+          "url": "https://apify.com/apify/instagram-followers-count-scraper",
+          "runs30d": 86281,
+          "confidence": 0.9500000000000002,
+          "pricePerCall": 0.0026
+        },
+        {
+          "providerName": "Apify - louisdeconinck/instagram-story-details-scraper",
+          "title": "Instagram Story Details Scraper",
+          "url": "https://apify.com/louisdeconinck/instagram-story-details-scraper",
+          "runs30d": 49478,
+          "confidence": 0.9500000000000002,
+          "pricePerCall": 0.005
+        },
+        {
+          "providerName": "Apify - scraping_solutions/instagram-scraper-followers-following-no-cookies",
+          "title": "Instagram Scraper Followers / Following ✅ No cookies ✅",
+          "url": "https://apify.com/scraping_solutions/instagram-scraper-followers-following-no-cookies",
+          "runs30d": 43104,
+          "confidence": 0.9500000000000002,
+          "pricePerCall": 0.00085
+        },
+        {
+          "providerName": "Apify - apify/instagram-hashtag-analytics-scraper",
+          "title": "Instagram Hashtag Analytics Scraper",
+          "url": "https://apify.com/apify/instagram-hashtag-analytics-scraper",
+          "runs30d": 21887,
+          "confidence": 0.9500000000000002,
+          "pricePerCall": 0.0023
+        },
+        {
+          "providerName": "Apify - sian.agency/instagram-ai-transcript-extractor",
+          "title": "Instagram AI Transcript Extractor",
+          "url": "https://apify.com/sian.agency/instagram-ai-transcript-extractor",
+          "runs30d": 20443,
+          "confidence": 0.9500000000000002,
+          "pricePerCall": 0.005
+        }
+      ]
+    },
+    {
+      "skillName": "LinkedIn Post Extractor",
+      "category": "scraping/social",
+      "providers": 12,
+      "topProviders": [
+        {
+          "providerName": "Apify - supreme_coder/linkedin-post",
+          "title": "Linkedin Post Scraper ✅ No cookies · $1 per 1k",
+          "url": "https://apify.com/supreme_coder/linkedin-post",
+          "runs30d": 1448629,
+          "confidence": 0.9333333333333333,
+          "pricePerCall": 0.001
+        },
+        {
+          "providerName": "Apify - apimaestro/linkedin-profile-posts",
+          "title": "Profile Posts Scraper for LinkedIn [No Cookies]",
+          "url": "https://apify.com/apimaestro/linkedin-profile-posts",
+          "runs30d": 831777,
+          "confidence": 0.9333333333333333,
+          "pricePerCall": 0.005
+        },
+        {
+          "providerName": "Apify - harvestapi/linkedin-profile-posts",
+          "title": "LinkedIn Profile Posts Scraper (No Cookies)",
+          "url": "https://apify.com/harvestapi/linkedin-profile-posts",
+          "runs30d": 804919,
+          "confidence": 0.9333333333333333,
+          "pricePerCall": 0.002
+        },
+        {
+          "providerName": "Apify - harvestapi/linkedin-post-search",
+          "title": "Linkedin Post Search Scraper (No Cookies)",
+          "url": "https://apify.com/harvestapi/linkedin-post-search",
+          "runs30d": 412007,
+          "confidence": 0.9333333333333333,
+          "pricePerCall": 0.002
+        },
+        {
+          "providerName": "Apify - apimaestro/linkedin-profile-reactions",
+          "title": "Profile Reactions Scraper for LinkedIn [No Cookies]",
+          "url": "https://apify.com/apimaestro/linkedin-profile-reactions",
+          "runs30d": 391878,
+          "confidence": 0.9333333333333333,
+          "pricePerCall": 0.005
+        },
+        {
+          "providerName": "Apify - apimaestro/linkedin-posts-search-scraper-no-cookies",
+          "title": "Posts Search Scraper for LinkedIn | No Cookies",
+          "url": "https://apify.com/apimaestro/linkedin-posts-search-scraper-no-cookies",
+          "runs30d": 391419,
+          "confidence": 0.9333333333333333,
+          "pricePerCall": 0.005
+        },
+        {
+          "providerName": "Apify - apimaestro/linkedin-company-posts",
+          "title": "Company Posts Scraper for LinkedIn – No Cookies",
+          "url": "https://apify.com/apimaestro/linkedin-company-posts",
+          "runs30d": 321679,
+          "confidence": 0.9333333333333333,
+          "pricePerCall": 0.005
+        },
+        {
+          "providerName": "Apify - harvestapi/linkedin-company-posts",
+          "title": "LinkedIn Company Posts Scraper (No Cookies)",
+          "url": "https://apify.com/harvestapi/linkedin-company-posts",
+          "runs30d": 216691,
+          "confidence": 0.9333333333333333,
+          "pricePerCall": 0.002
+        },
+        {
+          "providerName": "Apify - apimaestro/linkedin-batch-profile-posts-scraper",
+          "title": "Mass Profile Posts Scraper for LinkedIn | No Cookies",
+          "url": "https://apify.com/apimaestro/linkedin-batch-profile-posts-scraper",
+          "runs30d": 68708,
+          "confidence": 0.9333333333333333,
+          "pricePerCall": 0.005
+        },
+        {
+          "providerName": "Apify - harvestapi/linkedin-post-reactions",
+          "title": "LinkedIn Post Reactions Scraper (No Cookies) ✅ (No Cookies)",
+          "url": "https://apify.com/harvestapi/linkedin-post-reactions",
+          "runs30d": 46171,
+          "confidence": 0.9333333333333333,
+          "pricePerCall": 0.002
+        }
+      ]
+    },
+    {
+      "skillName": "TikTok Video Extractor",
+      "category": "scraping/social",
+      "providers": 8,
+      "topProviders": [
+        {
+          "providerName": "Apify - clockworks/tiktok-scraper",
+          "title": "TikTok Scraper",
+          "url": "https://apify.com/clockworks/tiktok-scraper",
+          "runs30d": 5437296,
+          "confidence": 0.9000000000000001,
+          "pricePerCall": 0.0037
+        },
+        {
+          "providerName": "Apify - clockworks/free-tiktok-scraper",
+          "title": "TikTok Data Extractor",
+          "url": "https://apify.com/clockworks/free-tiktok-scraper",
+          "runs30d": 2000955,
+          "confidence": 0.9000000000000001,
+          "pricePerCall": 0.005
+        },
+        {
+          "providerName": "Apify - scraptik/tiktok-api",
+          "title": "Full TikTok API Scraper",
+          "url": "https://apify.com/scraptik/tiktok-api",
+          "runs30d": 1026877,
+          "confidence": 0.9000000000000001,
+          "pricePerCall": 0.002
+        },
+        {
+          "providerName": "Apify - clockworks/tiktok-hashtag-scraper",
+          "title": "TikTok Hashtag Scraper",
+          "url": "https://apify.com/clockworks/tiktok-hashtag-scraper",
+          "runs30d": 47766,
+          "confidence": 0.9000000000000001,
+          "pricePerCall": 0.005
+        },
+        {
+          "providerName": "Apify - pratikdani/tiktok-shop-scraper",
+          "title": "Tiktok Shop Scraper",
+          "url": "https://apify.com/pratikdani/tiktok-shop-scraper",
+          "runs30d": 36464,
+          "confidence": 0.9000000000000001,
+          "pricePerCall": 0.025
+        },
+        {
+          "providerName": "Apify - scrape-creators/best-tiktok-transcripts-scraper",
+          "title": "Best Tiktok Transcripts Scraper",
+          "url": "https://apify.com/scrape-creators/best-tiktok-transcripts-scraper",
+          "runs30d": 32960,
+          "confidence": 0.9000000000000001,
+          "pricePerCall": 0.001
+        },
+        {
+          "providerName": "Apify - clockworks/tiktok-trends-scraper",
+          "title": "TikTok Trends Scraper",
+          "url": "https://apify.com/clockworks/tiktok-trends-scraper",
+          "runs30d": 11814,
+          "confidence": 0.9000000000000001,
+          "pricePerCall": 0.0037
+        },
+        {
+          "providerName": "Apify - clockworks/tiktok-sound-scraper",
+          "title": "TikTok Sound Scraper",
+          "url": "https://apify.com/clockworks/tiktok-sound-scraper",
+          "runs30d": 6067,
+          "confidence": 0.9000000000000001,
+          "pricePerCall": 0.005
+        }
+      ]
+    },
+    {
+      "skillName": "Facebook Post Extractor",
+      "category": "scraping/social",
+      "providers": 8,
+      "topProviders": [
+        {
+          "providerName": "Apify - apify/facebook-posts-scraper",
+          "title": "Facebook Posts Scraper",
+          "url": "https://apify.com/apify/facebook-posts-scraper",
+          "runs30d": 2108883,
+          "confidence": 0.8366666666666668,
+          "pricePerCall": 0.005
+        },
+        {
+          "providerName": "Apify - apify/facebook-groups-scraper",
+          "title": "Facebook Groups Scraper",
+          "url": "https://apify.com/apify/facebook-groups-scraper",
+          "runs30d": 425284,
+          "confidence": 0.9333333333333333,
+          "pricePerCall": 0.005
+        },
+        {
+          "providerName": "Apify - scraper_one/facebook-posts-search",
+          "title": "Facebook Posts Search",
+          "url": "https://apify.com/scraper_one/facebook-posts-search",
+          "runs30d": 216077,
+          "confidence": 0.8366666666666668,
+          "pricePerCall": 0.002
+        },
+        {
+          "providerName": "Apify - apify/facebook-marketplace-scraper",
+          "title": "Facebook Marketplace Scraper",
+          "url": "https://apify.com/apify/facebook-marketplace-scraper",
+          "runs30d": 134423,
+          "confidence": 0.9333333333333333,
+          "pricePerCall": 0.0062
+        },
+        {
+          "providerName": "Apify - apify/facebook-photos-scraper",
+          "title": "Facebook Photos Scraper",
+          "url": "https://apify.com/apify/facebook-photos-scraper",
+          "runs30d": 28816,
+          "confidence": 0.9333333333333333,
+          "pricePerCall": 0.003
+        },
+        {
+          "providerName": "Apify - apify/facebook-search-scraper",
+          "title": "Facebook Search Scraper",
+          "url": "https://apify.com/apify/facebook-search-scraper",
+          "runs30d": 26910,
+          "confidence": 0.9333333333333333,
+          "pricePerCall": 0.012
+        },
+        {
+          "providerName": "Apify - apify/facebook-likes-scraper",
+          "title": "Facebook Likes and Reactions Scraper",
+          "url": "https://apify.com/apify/facebook-likes-scraper",
+          "runs30d": 4817,
+          "confidence": 0.9333333333333333,
+          "pricePerCall": 0.0062
+        },
+        {
+          "providerName": "Apify - apify/facebook-followers-following-scraper",
+          "title": "Facebook Followers & Following Scraper",
+          "url": "https://apify.com/apify/facebook-followers-following-scraper",
+          "runs30d": 3913,
+          "confidence": 0.9333333333333333,
+          "pricePerCall": 0.0082
+        }
+      ]
+    },
+    {
+      "skillName": "LinkedIn Person Profile Extractor",
+      "category": "scraping/social",
+      "providers": 8,
+      "topProviders": [
+        {
+          "providerName": "Apify - apimaestro/linkedin-profile-detail",
+          "title": "Profile Details Scraper for LinkedIn + EMAIL (No Cookies)",
+          "url": "https://apify.com/apimaestro/linkedin-profile-detail",
+          "runs30d": 6085055,
+          "confidence": 0.9333333333333333,
+          "pricePerCall": 0.005
+        },
+        {
+          "providerName": "Apify - harvestapi/linkedin-profile-scraper",
+          "title": "LinkedIn Profile Scraper + Email ✅ No Cookies",
+          "url": "https://apify.com/harvestapi/linkedin-profile-scraper",
+          "runs30d": 1965276,
+          "confidence": 0.9333333333333333,
+          "pricePerCall": 0.004
+        },
+        {
+          "providerName": "Apify - apimaestro/linkedin-profile-batch-scraper-no-cookies-required",
+          "title": "Profile Details Batch Scraper for LinkedIn + EMAIL (No Cookies)",
+          "url": "https://apify.com/apimaestro/linkedin-profile-batch-scraper-no-cookies-required",
+          "runs30d": 578658,
+          "confidence": 0.9333333333333333,
+          "pricePerCall": 0.005
+        },
+        {
+          "providerName": "Apify - harvestapi/linkedin-profile-search-by-name",
+          "title": "Linkedin Profile Search By Name scraper ✅ No Cookies",
+          "url": "https://apify.com/harvestapi/linkedin-profile-search-by-name",
+          "runs30d": 297803,
+          "confidence": 0.9333333333333333,
+          "pricePerCall": 0.004
+        },
+        {
+          "providerName": "Apify - apimaestro/linkedin-profile-full-sections-scraper",
+          "title": "Profile Full Sections Scraper for LinkedIn + EMAIL | No Cookies",
+          "url": "https://apify.com/apimaestro/linkedin-profile-full-sections-scraper",
+          "runs30d": 203795,
+          "confidence": 0.9333333333333333,
+          "pricePerCall": 0.01
+        },
+        {
+          "providerName": "Apify - pratikdani/linkedin-people-profile-scraper",
+          "title": "LinkedIn People Profile Scraper",
+          "url": "https://apify.com/pratikdani/linkedin-people-profile-scraper",
+          "runs30d": 13822,
+          "confidence": 0.9333333333333333,
+          "pricePerCall": 0.02
+        },
+        {
+          "providerName": "Apify - peakydev/leads-scraper-ppe",
+          "title": "Leads Scraper ✅ $1/1k with EMAILS ✅ Apollo | LinkedIn Profile",
+          "url": "https://apify.com/peakydev/leads-scraper-ppe",
+          "runs30d": 6353,
+          "confidence": 0.9333333333333333,
+          "pricePerCall": 0.1
+        },
+        {
+          "providerName": "Apify - powerai/linkedin-peoples-search-scraper",
+          "title": "LinkedIn People Search Scraper",
+          "url": "https://apify.com/powerai/linkedin-peoples-search-scraper",
+          "runs30d": 5025,
+          "confidence": 0.9333333333333333,
+          "pricePerCall": 0.00999
+        }
+      ]
+    },
+    {
+      "skillName": "LinkedIn Job Listing Extractor",
+      "category": "scraping/social",
+      "providers": 7,
+      "topProviders": [
+        {
+          "providerName": "Apify - curious_coder/linkedin-jobs-scraper",
+          "title": "Linkedin Jobs Scraper",
+          "url": "https://apify.com/curious_coder/linkedin-jobs-scraper",
+          "runs30d": 314744,
+          "confidence": 0.9333333333333333,
+          "pricePerCall": 0.001
+        },
+        {
+          "providerName": "Apify - apimaestro/linkedin-job-detail",
+          "title": "Job Details Scraper for LinkedIn (No Cookies)",
+          "url": "https://apify.com/apimaestro/linkedin-job-detail",
+          "runs30d": 82903,
+          "confidence": 0.9333333333333333,
+          "pricePerCall": 0.005
+        },
+        {
+          "providerName": "Apify - apimaestro/linkedin-jobs-scraper-api",
+          "title": "Jobs Scraper for LinkedIn - No Cookies",
+          "url": "https://apify.com/apimaestro/linkedin-jobs-scraper-api",
+          "runs30d": 74782,
+          "confidence": 0.9333333333333333,
+          "pricePerCall": 0.005
+        },
+        {
+          "providerName": "Apify - fantastic-jobs/advanced-linkedin-job-search-api",
+          "title": "Advanced LinkedIn Job Search API",
+          "url": "https://apify.com/fantastic-jobs/advanced-linkedin-job-search-api",
+          "runs30d": 60143,
+          "confidence": 0.9333333333333333,
+          "pricePerCall": 0.005
+        },
+        {
+          "providerName": "Apify - valig/linkedin-jobs-scraper",
+          "title": "🏆 LinkedIn Jobs Scraper",
+          "url": "https://apify.com/valig/linkedin-jobs-scraper",
+          "runs30d": 29071,
+          "confidence": 0.9333333333333333,
+          "pricePerCall": 0.001
+        },
+        {
+          "providerName": "Apify - cheap_scraper/linkedin-job-scraper",
+          "title": "LinkedIn Jobs Scraper | Remove Duplicate Jobs | Pay Per Result",
+          "url": "https://apify.com/cheap_scraper/linkedin-job-scraper",
+          "runs30d": 12163,
+          "confidence": 0.9333333333333333,
+          "pricePerCall": 0.0007
+        },
+        {
+          "providerName": "Apify - ivanvs/linkedin-job-scraper",
+          "title": "LinkedIn Job Scraper",
+          "url": "https://apify.com/ivanvs/linkedin-job-scraper",
+          "runs30d": 1155,
+          "confidence": 0.9333333333333333,
+          "pricePerCall": 0.005
+        }
+      ]
+    },
+    {
+      "skillName": "LinkedIn Company Profile Extractor",
+      "category": "scraping/social",
+      "providers": 7,
+      "topProviders": [
+        {
+          "providerName": "Apify - harvestapi/linkedin-company",
+          "title": "Linkedin Company Details Scraper (No Cookies) ✅ Bulk",
+          "url": "https://apify.com/harvestapi/linkedin-company",
+          "runs30d": 892846,
+          "confidence": 0.9333333333333333,
+          "pricePerCall": 0.004
+        },
+        {
+          "providerName": "Apify - apimaestro/linkedin-company-detail",
+          "title": "Company Detail Scraper for LinkedIn (No Cookies)",
+          "url": "https://apify.com/apimaestro/linkedin-company-detail",
+          "runs30d": 179758,
+          "confidence": 0.9333333333333333,
+          "pricePerCall": 0.005
+        },
+        {
+          "providerName": "Apify - apimaestro/linkedin-company-employees-scraper-no-cookies",
+          "title": "Company Employees Scraper for LinkedIn | No Cookies",
+          "url": "https://apify.com/apimaestro/linkedin-company-employees-scraper-no-cookies",
+          "runs30d": 71922,
+          "confidence": 0.9333333333333333,
+          "pricePerCall": 0.01
+        },
+        {
+          "providerName": "Apify - apimaestro/linkedin-companies-search-scraper",
+          "title": "Companies Search Scraper for LinkedIn | No Cookies",
+          "url": "https://apify.com/apimaestro/linkedin-companies-search-scraper",
+          "runs30d": 62224,
+          "confidence": 0.9333333333333333,
+          "pricePerCall": 0.005
+        },
+        {
+          "providerName": "Apify - harvestapi/linkedin-company-search",
+          "title": "LinkedIn Company Search Scraper ✅ No Cookies",
+          "url": "https://apify.com/harvestapi/linkedin-company-search",
+          "runs30d": 46757,
+          "confidence": 0.9333333333333333,
+          "pricePerCall": 0.002
+        },
+        {
+          "providerName": "Apify - s-r/free-linkedin-company-finder---linkedin-address-from-any-site",
+          "title": "Free Linkedin Company Finder - LinkedIn address From Any Site",
+          "url": "https://apify.com/s-r/free-linkedin-company-finder---linkedin-address-from-any-site",
+          "runs30d": 31468,
+          "confidence": 0.9333333333333333,
+          "pricePerCall": 0.005
+        },
+        {
+          "providerName": "Apify - pratikdani/linkedin-company-profile-scraper",
+          "title": "LinkedIn Company Profile Scraper",
+          "url": "https://apify.com/pratikdani/linkedin-company-profile-scraper",
+          "runs30d": 21791,
+          "confidence": 0.9333333333333333,
+          "pricePerCall": 0.005
+        }
+      ]
+    },
+    {
+      "skillName": "Google Maps Business Listing Extractor",
+      "category": "scraping/maps",
+      "providers": 5,
+      "topProviders": [
+        {
+          "providerName": "Apify - compass/crawler-google-places",
+          "title": "Google Maps Scraper",
+          "url": "https://apify.com/compass/crawler-google-places",
+          "runs30d": 2619177,
+          "confidence": 0.98,
+          "pricePerCall": 0.004
+        },
+        {
+          "providerName": "Apify - compass/google-maps-extractor",
+          "title": "Google Maps Extractor",
+          "url": "https://apify.com/compass/google-maps-extractor",
+          "runs30d": 120413,
+          "confidence": 0.98,
+          "pricePerCall": 0.005
+        },
+        {
+          "providerName": "Apify - lukaskrivka/google-maps-with-contact-details",
+          "title": "📩📍 Google Maps Email Extractor",
+          "url": "https://apify.com/lukaskrivka/google-maps-with-contact-details",
+          "runs30d": 101462,
+          "confidence": 0.98,
+          "pricePerCall": 0.005
+        },
+        {
+          "providerName": "Apify - xmiso_scrapers/millions-us-businesses-leads-with-emails-from-google-maps",
+          "title": "10+ Million Business Leads With Emails (From Google Maps)",
+          "url": "https://apify.com/xmiso_scrapers/millions-us-businesses-leads-with-emails-from-google-maps",
+          "runs30d": 1795,
+          "confidence": 0.98,
+          "pricePerCall": 0.0019
+        },
+        {
+          "providerName": "Apify - microworlds/crawler-google-places",
+          "title": "Google Maps Scraper $1.5/1k places 📍 with emails 📧",
+          "url": "https://apify.com/microworlds/crawler-google-places",
+          "runs30d": 1156,
+          "confidence": 0.98,
+          "pricePerCall": 0.0035
+        }
+      ]
+    },
+    {
+      "skillName": "Reddit Post Extractor",
+      "category": "scraping/social",
+      "providers": 5,
+      "topProviders": [
+        {
+          "providerName": "Apify - trudax/reddit-scraper-lite",
+          "title": "Reddit Scraper Lite",
+          "url": "https://apify.com/trudax/reddit-scraper-lite",
+          "runs30d": 172935,
+          "confidence": 0.9000000000000001,
+          "pricePerCall": 0.004
+        },
+        {
+          "providerName": "Apify - harshmaur/reddit-scraper",
+          "title": "Reddit Scraper - MCP, AI, PPR",
+          "url": "https://apify.com/harshmaur/reddit-scraper",
+          "runs30d": 24953,
+          "confidence": 0.9000000000000001,
+          "pricePerCall": 0.002
+        },
+        {
+          "providerName": "Apify - crawlerbros/reddit-scraper",
+          "title": "Reddit Scraper",
+          "url": "https://apify.com/crawlerbros/reddit-scraper",
+          "runs30d": 2681,
+          "confidence": 0.9000000000000001,
+          "pricePerCall": 0.01
+        },
+        {
+          "providerName": "Apify - crawlerbros/reddit-keywords",
+          "title": "Reddit Keywords",
+          "url": "https://apify.com/crawlerbros/reddit-keywords",
+          "runs30d": 101,
+          "confidence": 0.9000000000000001,
+          "pricePerCall": 0.01
+        },
+        {
+          "providerName": "Apify - crawlerbros/reddit-mcp-scraper",
+          "title": "Reddit MCP Scraper",
+          "url": "https://apify.com/crawlerbros/reddit-mcp-scraper",
+          "runs30d": 1,
+          "confidence": 0.9000000000000001,
+          "pricePerCall": 0.01
+        }
+      ]
+    },
+    {
+      "skillName": "X Post Extractor",
+      "category": "scraping/social",
+      "providers": 5,
+      "topProviders": [
+        {
+          "providerName": "Apify - kaitoeasyapi/twitter-x-data-tweet-scraper-pay-per-result-cheapest",
+          "title": "Tweet Scraper|$0.25/1K Tweets | Pay-Per Result | No Rate Limits",
+          "url": "https://apify.com/kaitoeasyapi/twitter-x-data-tweet-scraper-pay-per-result-cheapest",
+          "runs30d": 1905801,
+          "confidence": 0.8366666666666668,
+          "pricePerCall": 0.00025
+        },
+        {
+          "providerName": "Apify - scrape.badger/twitter-tweets-scraper",
+          "title": "Twitter/X Tweets Scraper: Tweets,  Retweets, Lists & More!",
+          "url": "https://apify.com/scrape.badger/twitter-tweets-scraper",
+          "runs30d": 215184,
+          "confidence": 0.8366666666666668,
+          "pricePerCall": 0.0002
+        },
+        {
+          "providerName": "Apify - api-ninja/x-twitter-advanced-search",
+          "title": "X (Twitter) Advanced Search Scraper 𝕏",
+          "url": "https://apify.com/api-ninja/x-twitter-advanced-search",
+          "runs30d": 36767,
+          "confidence": 0.9166666666666667,
+          "pricePerCall": 0.015
+        },
+        {
+          "providerName": "Apify - xtdata/twitter-x-scraper",
+          "title": "X.com Twitter API Scraper",
+          "url": "https://apify.com/xtdata/twitter-x-scraper",
+          "runs30d": 27268,
+          "confidence": 0.9166666666666667,
+          "pricePerCall": 0.005
+        },
+        {
+          "providerName": "Apify - karamelo/twitter-trends-scraper",
+          "title": "Twitter Trends Scraper",
+          "url": "https://apify.com/karamelo/twitter-trends-scraper",
+          "runs30d": 26931,
+          "confidence": 0.9166666666666667,
+          "pricePerCall": 0.00039
+        }
+      ]
+    },
+    {
+      "skillName": "Amazon Product Extractor",
+      "category": "scraping/ecommerce",
+      "providers": 4,
+      "topProviders": [
+        {
+          "providerName": "Apify - junglee/Amazon-crawler",
+          "title": "Amazon Product Scraper",
+          "url": "https://apify.com/junglee/amazon-crawler",
+          "runs30d": 195993,
+          "confidence": 0.8366666666666668,
+          "pricePerCall": 0.005
+        },
+        {
+          "providerName": "Apify - junglee/free-amazon-product-scraper",
+          "title": "Amazon Scraper",
+          "url": "https://apify.com/junglee/free-amazon-product-scraper",
+          "runs30d": 60781,
+          "confidence": 0.8366666666666668,
+          "pricePerCall": 0.012
+        },
+        {
+          "providerName": "Apify - delicious_zebu/amazon-product-details-scraper",
+          "title": "Amazon Product Details Scraper",
+          "url": "https://apify.com/delicious_zebu/amazon-product-details-scraper",
+          "runs30d": 5121,
+          "confidence": 0.8366666666666668,
+          "pricePerCall": 0.0015
+        },
+        {
+          "providerName": "Apify - delicious_zebu/amazon-product-data-scraper",
+          "title": "Amazon Product Data Scraper",
+          "url": "https://apify.com/delicious_zebu/amazon-product-data-scraper",
+          "runs30d": 240,
+          "confidence": 0.8366666666666668,
+          "pricePerCall": 0.0015
+        }
+      ]
+    },
+    {
+      "skillName": "Instagram Video Extractor",
+      "category": "scraping/social",
+      "providers": 3,
+      "topProviders": [
+        {
+          "providerName": "Apify - apify/instagram-reel-scraper",
+          "title": "Instagram Reel Scraper",
+          "url": "https://apify.com/apify/instagram-reel-scraper",
+          "runs30d": 948918,
+          "confidence": 0.8366666666666668,
+          "pricePerCall": 0.0026
+        },
+        {
+          "providerName": "Apify - pratikdani/instagram-reels-scraper",
+          "title": "Instagram Reels Scraper",
+          "url": "https://apify.com/pratikdani/instagram-reels-scraper",
+          "runs30d": 13466,
+          "confidence": 0.8533333333333335,
+          "pricePerCall": 0.0033
+        },
+        {
+          "providerName": "Apify - tictechid/anoxvanzi-Transcriber",
+          "title": "TikTok | Instagram | Facebook | YouTube Shorts Transcriber",
+          "url": "https://apify.com/tictechid/anoxvanzi-transcriber",
+          "runs30d": 8613,
+          "confidence": 0.8700000000000001,
+          "pricePerCall": 0.0022
+        }
+      ]
+    },
+    {
+      "skillName": "Instagram Profile Extractor",
+      "category": "scraping/social",
+      "providers": 3,
+      "topProviders": [
+        {
+          "providerName": "Apify - apify/instagram-profile-scraper",
+          "title": "Instagram Profile Scraper",
+          "url": "https://apify.com/apify/instagram-profile-scraper",
+          "runs30d": 7152728,
+          "confidence": 0.8866666666666668,
+          "pricePerCall": 0.0026
+        },
+        {
+          "providerName": "Apify - coderx/instagram-profile-scraper-bio-posts",
+          "title": "Instagram Profile Scraper (Bio & Posts)",
+          "url": "https://apify.com/coderx/instagram-profile-scraper-bio-posts",
+          "runs30d": 104824,
+          "confidence": 0.8866666666666668,
+          "pricePerCall": 0.0011
+        },
+        {
+          "providerName": "Apify - afanasenko/instagram-profile-scraper",
+          "title": "Instagram Profile Scraper",
+          "url": "https://apify.com/afanasenko/instagram-profile-scraper",
+          "runs30d": 1028,
+          "confidence": 0.8866666666666668,
+          "pricePerCall": 0.01
+        }
+      ]
+    },
+    {
+      "skillName": "Website Business Email Finder",
+      "category": "scraping/web",
+      "providers": 3,
+      "topProviders": [
+        {
+          "providerName": "Apify - vdrmota/contact-info-scraper",
+          "title": "Contact Details Scraper",
+          "url": "https://apify.com/vdrmota/contact-info-scraper",
+          "runs30d": 203949,
+          "confidence": 0.98,
+          "pricePerCall": 0.002
+        },
+        {
+          "providerName": "Apify - apify/facebook-page-contact-information",
+          "title": "Facebook page contact info Scraper",
+          "url": "https://apify.com/apify/facebook-page-contact-information",
+          "runs30d": 59352,
+          "confidence": 0.98,
+          "pricePerCall": 0.013
+        },
+        {
+          "providerName": "Apify - delicious_zebu/contact-info-scraper",
+          "title": "Contact Info Scraper",
+          "url": "https://apify.com/delicious_zebu/contact-info-scraper",
+          "runs30d": 444,
+          "confidence": 0.98,
+          "pricePerCall": 0.01
+        }
+      ]
+    },
+    {
+      "skillName": "Facebook Ad Extractor",
+      "category": "scraping/social",
+      "providers": 3,
+      "topProviders": [
+        {
+          "providerName": "Apify - curious_coder/facebook-ads-library-scraper",
+          "title": "Facebook Ad Library Scraper",
+          "url": "https://apify.com/curious_coder/facebook-ads-library-scraper",
+          "runs30d": 1045311,
+          "confidence": 0.92,
+          "pricePerCall": 0.00075
+        },
+        {
+          "providerName": "Apify - whoareyouanas/meta-ad-scraper",
+          "title": "Meta (Facebook) Ad Library Scraper - Fast & Reliable",
+          "url": "https://apify.com/whoareyouanas/meta-ad-scraper",
+          "runs30d": 13176,
+          "confidence": 0.92,
+          "pricePerCall": 0.01
+        },
+        {
+          "providerName": "Apify - scrapeio/meta-facebook-ad-scrapper-using-ad-library-url-premium",
+          "title": "Meta (Facebook) Ad Scrapper (Using Ad Library URL) (Premium)",
+          "url": "https://apify.com/scrapeio/meta-facebook-ad-scrapper-using-ad-library-url-premium",
+          "runs30d": 1715,
+          "confidence": 0.92,
+          "pricePerCall": 0.0075
+        }
+      ]
+    },
+    {
+      "skillName": "Google Maps Review Extractor",
+      "category": "scraping/maps",
+      "providers": 3,
+      "topProviders": [
+        {
+          "providerName": "Apify - compass/Google-Maps-Reviews-Scraper",
+          "title": "Google Maps Reviews Scraper",
+          "url": "https://apify.com/compass/google-maps-reviews-scraper",
+          "runs30d": 12469072,
+          "confidence": 0.98,
+          "pricePerCall": 0.0006
+        },
+        {
+          "providerName": "Apify - api-ninja/google-maps-reviews-scraper",
+          "title": "Google Maps Reviews Scraper",
+          "url": "https://apify.com/api-ninja/google-maps-reviews-scraper",
+          "runs30d": 652,
+          "confidence": 0.98,
+          "pricePerCall": 0.005
+        },
+        {
+          "providerName": "Apify - delicious_zebu/google-maps-store-review-scraper",
+          "title": "Google Maps Store Review Scraper",
+          "url": "https://apify.com/delicious_zebu/google-maps-store-review-scraper",
+          "runs30d": 184,
+          "confidence": 0.98,
+          "pricePerCall": 0.0004
+        }
+      ]
+    },
+    {
+      "skillName": "Indeed Job Listing Extractor",
+      "category": "scraping/jobs",
+      "providers": 3,
+      "topProviders": [
+        {
+          "providerName": "Apify - misceres/indeed-scraper",
+          "title": "Indeed Scraper",
+          "url": "https://apify.com/misceres/indeed-scraper",
+          "runs30d": 172978,
+          "confidence": 0.9000000000000001,
+          "pricePerCall": 0.006
+        },
+        {
+          "providerName": "Apify - valig/indeed-jobs-scraper",
+          "title": "💡 Indeed Jobs Scraper",
+          "url": "https://apify.com/valig/indeed-jobs-scraper",
+          "runs30d": 110927,
+          "confidence": 0.9000000000000001,
+          "pricePerCall": 0.001
+        },
+        {
+          "providerName": "Apify - borderline/indeed-scraper",
+          "title": "🚀 Indeed jobs scraper [PPR]",
+          "url": "https://apify.com/borderline/indeed-scraper",
+          "runs30d": 107478,
+          "confidence": 0.9000000000000001,
+          "pricePerCall": 0.005
+        }
+      ]
+    },
+    {
+      "skillName": "Zillow Real Estate Listing Extractor",
+      "category": "scraping/real-estate",
+      "providers": 3,
+      "topProviders": [
+        {
+          "providerName": "Apify - maxcopell/zillow-detail-scraper",
+          "title": "Zillow Detail Scraper",
+          "url": "https://apify.com/maxcopell/zillow-detail-scraper",
+          "runs30d": 252352,
+          "confidence": 0.8200000000000001,
+          "pricePerCall": 0.0036
+        },
+        {
+          "providerName": "Apify - maxcopell/zillow-scraper",
+          "title": "Zillow Search Scraper",
+          "url": "https://apify.com/maxcopell/zillow-scraper",
+          "runs30d": 32426,
+          "confidence": 0.8200000000000001,
+          "pricePerCall": 0.0023
+        },
+        {
+          "providerName": "Apify - maxcopell/zillow-zip-search",
+          "title": "Zillow ZIP Code Search Scraper",
+          "url": "https://apify.com/maxcopell/zillow-zip-search",
+          "runs30d": 7975,
+          "confidence": 0.8200000000000001,
+          "pricePerCall": 0.0024
+        }
+      ]
+    },
+    {
+      "skillName": "LinkedIn Comment Extractor",
+      "category": "scraping/social",
+      "providers": 3,
+      "topProviders": [
+        {
+          "providerName": "Apify - harvestapi/linkedin-post-comments",
+          "title": "LinkedIn Post Comments Scraper (No Cookies) ✅ (No Cookies)",
+          "url": "https://apify.com/harvestapi/linkedin-post-comments",
+          "runs30d": 162122,
+          "confidence": 0.9333333333333333,
+          "pricePerCall": 0.002
+        },
+        {
+          "providerName": "Apify - apimaestro/linkedin-post-comments-replies-engagements-scraper-no-cookies",
+          "title": "Post Comments & Engagements Scraper for LinkedIn | No Cookies",
+          "url": "https://apify.com/apimaestro/linkedin-post-comments-replies-engagements-scraper-no-cookies",
+          "runs30d": 87319,
+          "confidence": 0.9333333333333333,
+          "pricePerCall": 0.005
+        },
+        {
+          "providerName": "Apify - apimaestro/linkedin-profile-comments",
+          "title": "Profile Comments Scraper for LinkedIn [No Cookies]",
+          "url": "https://apify.com/apimaestro/linkedin-profile-comments",
+          "runs30d": 77326,
+          "confidence": 0.9333333333333333,
+          "pricePerCall": 0.005
+        }
+      ]
+    },
+    {
+      "skillName": "Google Search Result Extractor",
+      "category": "search/web",
+      "providers": 2,
+      "topProviders": [
+        {
+          "providerName": "Apify - apify/google-search-scraper",
+          "title": "Google Search Results Scraper",
+          "url": "https://apify.com/apify/google-search-scraper",
+          "runs30d": 8628205,
+          "confidence": 0.98,
+          "pricePerCall": 0.0045
+        },
+        {
+          "providerName": "Apify - scraperlink/google-search-results-serp-scraper",
+          "title": "Google Search Results (~$0.05/1K Results)",
+          "url": "https://apify.com/scraperlink/google-search-results-serp-scraper",
+          "runs30d": 3340168,
+          "confidence": 0.98,
+          "pricePerCall": 0.0005
+        }
+      ]
+    },
+    {
+      "skillName": "TikTok Profile Extractor",
+      "category": "scraping/social",
+      "providers": 2,
+      "topProviders": [
+        {
+          "providerName": "Apify - clockworks/tiktok-profile-scraper",
+          "title": "TikTok Profile Scraper",
+          "url": "https://apify.com/clockworks/tiktok-profile-scraper",
+          "runs30d": 745104,
+          "confidence": 0.8366666666666668,
+          "pricePerCall": 0.004
+        },
+        {
+          "providerName": "Apify - abe/tiktok-profile-scraper",
+          "title": "TikTok Profile Scraper (Private & Public)",
+          "url": "https://apify.com/abe/tiktok-profile-scraper",
+          "runs30d": 27433,
+          "confidence": 0.8366666666666668,
+          "pricePerCall": 0.005
+        }
+      ]
+    },
+    {
+      "skillName": "Facebook Page Extractor",
+      "category": "scraping/social",
+      "providers": 2,
+      "topProviders": [
+        {
+          "providerName": "Apify - apify/facebook-pages-scraper",
+          "title": "Facebook Pages Scraper",
+          "url": "https://apify.com/apify/facebook-pages-scraper",
+          "runs30d": 2108693,
+          "confidence": 0.8366666666666668,
+          "pricePerCall": 0.012
+        },
+        {
+          "providerName": "Apify - cleansyntax/facebook-pages-scraper",
+          "title": "Facebook Pages Scraper",
+          "url": "https://apify.com/cleansyntax/facebook-pages-scraper",
+          "runs30d": 25672,
+          "confidence": 0.8366666666666668,
+          "pricePerCall": 0.006
+        }
+      ]
+    },
+    {
+      "skillName": "Instagram Comment Extractor",
+      "category": "scraping/social",
+      "providers": 2,
+      "topProviders": [
+        {
+          "providerName": "Apify - apify/instagram-comment-scraper",
+          "title": "Instagram Comments Scraper",
+          "url": "https://apify.com/apify/instagram-comment-scraper",
+          "runs30d": 857803,
+          "confidence": 0.9033333333333334,
+          "pricePerCall": 0.0026
+        },
+        {
+          "providerName": "Apify - louisdeconinck/instagram-comments-scraper",
+          "title": "💬 Instagram Comments Scraper (No Login)",
+          "url": "https://apify.com/louisdeconinck/instagram-comments-scraper",
+          "runs30d": 112463,
+          "confidence": 0.9033333333333334,
+          "pricePerCall": 0.001
+        }
+      ]
+    },
+    {
+      "skillName": "Website Page Extractor",
+      "category": "scraping/web",
+      "providers": 2,
+      "topProviders": [
+        {
+          "providerName": "Apify - 6sigmag/fast-website-content-crawler",
+          "title": "Fast Website Content Crawler",
+          "url": "https://apify.com/6sigmag/fast-website-content-crawler",
+          "runs30d": 77952,
+          "confidence": 0.8533333333333335,
+          "pricePerCall": 0.003
+        },
+        {
+          "providerName": "Apify - apify/ai-web-scraper",
+          "title": "AI Web Scraper",
+          "url": "https://apify.com/apify/ai-web-scraper",
+          "runs30d": 7705,
+          "confidence": 0.8666666666666667,
+          "pricePerCall": 0.035
+        }
+      ]
+    },
+    {
+      "skillName": "LinkedIn Lead Extractor",
+      "category": "scraping/social",
+      "providers": 2,
+      "topProviders": [
+        {
+          "providerName": "Apify - braveleads/leads-finder-linkedin-apollo-leads-generator",
+          "title": "Leads ✅ Finder | Similar to Apollo LinkedIn Leads Generator",
+          "url": "https://apify.com/braveleads/leads-finder-linkedin-apollo-leads-generator",
+          "runs30d": 3325,
+          "confidence": 0.8366666666666668,
+          "pricePerCall": 0.002
+        },
+        {
+          "providerName": "Apify - olympus/b2b-leads-finder",
+          "title": "🟢 Leads Finder -$1/1k leads [like apollo, linkedIn",
+          "url": "https://apify.com/olympus/b2b-leads-finder",
+          "runs30d": 983,
+          "confidence": 0.8366666666666668,
+          "pricePerCall": 0.0018
+        }
+      ]
+    },
+    {
+      "skillName": "Facebook Ads Library Ad Extractor",
+      "category": "scraping/social",
+      "providers": 1,
+      "topProviders": [
+        {
+          "providerName": "Apify - apify/facebook-ads-scraper",
+          "title": "Facebook Ads Library Scraper",
+          "url": "https://apify.com/apify/facebook-ads-scraper",
+          "runs30d": 1575792,
+          "confidence": 0.98,
+          "pricePerCall": 0.0058
+        }
+      ]
+    },
+    {
+      "skillName": "Facebook Comment Extractor",
+      "category": "scraping/social",
+      "providers": 1,
+      "topProviders": [
+        {
+          "providerName": "Apify - apify/facebook-comments-scraper",
+          "title": "Facebook Comments Scraper",
+          "url": "https://apify.com/apify/facebook-comments-scraper",
+          "runs30d": 784384,
+          "confidence": 0.8866666666666667,
+          "pricePerCall": 0.0025
+        }
+      ]
+    },
+    {
+      "skillName": "TikTok Comment Extractor",
+      "category": "scraping/social",
+      "providers": 1,
+      "topProviders": [
+        {
+          "providerName": "Apify - clockworks/tiktok-comments-scraper",
+          "title": "TikTok Comments Scraper",
+          "url": "https://apify.com/clockworks/tiktok-comments-scraper",
+          "runs30d": 1108242,
+          "confidence": 0.8533333333333334,
+          "pricePerCall": 0.00125
+        }
+      ]
+    },
+    {
+      "skillName": "YouTube Comment Extractor",
+      "category": "scraping/social",
+      "providers": 1,
+      "topProviders": [
+        {
+          "providerName": "Apify - streamers/youtube-comments-scraper",
+          "title": "YouTube Comments Scraper",
+          "url": "https://apify.com/streamers/youtube-comments-scraper",
+          "runs30d": 73122,
+          "confidence": 0.8700000000000001,
+          "pricePerCall": 0.002
+        }
+      ]
+    },
+    {
+      "skillName": "X Email Finder",
+      "category": "scraping/social",
+      "providers": 1,
+      "topProviders": [
+        {
+          "providerName": "Apify - kaitoeasyapi/premium-x-follower-scraper-following-data",
+          "title": "Twitter (X) Follower Scraper | $0.1 / 1K | Email| No Rate Limit",
+          "url": "https://apify.com/kaitoeasyapi/premium-x-follower-scraper-following-data",
+          "runs30d": 65436,
+          "confidence": 0.8200000000000002,
+          "pricePerCall": 0.00015
+        }
+      ]
+    },
+    {
+      "skillName": "LinkedIn Ad Extractor",
+      "category": "scraping/social",
+      "providers": 1,
+      "topProviders": [
+        {
+          "providerName": "Apify - silva95gustavo/linkedin-ad-library-scraper",
+          "title": "LinkedIn Ads Scraper",
+          "url": "https://apify.com/silva95gustavo/linkedin-ad-library-scraper",
+          "runs30d": 94707,
+          "confidence": 0.8200000000000001,
+          "pricePerCall": 0.002
+        }
+      ]
+    },
+    {
+      "skillName": "YouTube Business Listing Extractor",
+      "category": "scraping/social",
+      "providers": 1,
+      "topProviders": [
+        {
+          "providerName": "Apify - dataovercoffee/Youtube-Channel-Business-Email-Scraper",
+          "title": "Youtube Channel Email Scraper",
+          "url": "https://apify.com/dataovercoffee/youtube-channel-business-email-scraper",
+          "runs30d": 83182,
+          "confidence": 0.8700000000000001,
+          "pricePerCall": 0.12
+        }
+      ]
+    },
+    {
+      "skillName": "Facebook Event Extractor",
+      "category": "scraping/social",
+      "providers": 1,
+      "topProviders": [
+        {
+          "providerName": "Apify - apify/facebook-events-scraper",
+          "title": "Facebook Events Scraper",
+          "url": "https://apify.com/apify/facebook-events-scraper",
+          "runs30d": 96281,
+          "confidence": 0.8533333333333334,
+          "pricePerCall": 0.013
+        }
+      ]
+    },
+    {
+      "skillName": "Facebook Review Extractor",
+      "category": "scraping/social",
+      "providers": 1,
+      "topProviders": [
+        {
+          "providerName": "Apify - apify/facebook-reviews-scraper",
+          "title": "Facebook Reviews Scraper",
+          "url": "https://apify.com/apify/facebook-reviews-scraper",
+          "runs30d": 432610,
+          "confidence": 0.8700000000000001,
+          "pricePerCall": 0.0025
+        }
+      ]
+    },
+    {
+      "skillName": "Facebook Video Extractor",
+      "category": "scraping/social",
+      "providers": 1,
+      "topProviders": [
+        {
+          "providerName": "Apify - apify/facebook-reels-scraper",
+          "title": "Facebook Reels Scraper",
+          "url": "https://apify.com/apify/facebook-reels-scraper",
+          "runs30d": 126518,
+          "confidence": 0.8366666666666668,
+          "pricePerCall": 0.005
+        }
+      ]
+    },
+    {
+      "skillName": "Amazon Review Extractor",
+      "category": "scraping/ecommerce",
+      "providers": 1,
+      "topProviders": [
+        {
+          "providerName": "Apify - web_wanderer/amazon-reviews-extractor",
+          "title": "Amazon Reviews Scraper",
+          "url": "https://apify.com/web_wanderer/amazon-reviews-extractor",
+          "runs30d": 82554,
+          "confidence": 0.8366666666666668,
+          "pricePerCall": 0.001
+        }
+      ]
+    },
+    {
+      "skillName": "Google News Article Extractor",
+      "category": "search/news",
+      "providers": 1,
+      "topProviders": [
+        {
+          "providerName": "Apify - easyapi/google-news-scraper",
+          "title": "Google News Scraper",
+          "url": "https://apify.com/easyapi/google-news-scraper",
+          "runs30d": 45207,
+          "confidence": 0.8666666666666667,
+          "pricePerCall": 0.005
+        }
+      ]
+    },
+    {
+      "skillName": "Shopify Email Finder",
+      "category": "scraping/ecommerce",
+      "providers": 1,
+      "topProviders": [
+        {
+          "providerName": "Apify - xmiso_scrapers/shopify-shops-email-leads-scraper",
+          "title": "Shopify Lead Scraper with 1M+ Email Database",
+          "url": "https://apify.com/xmiso_scrapers/shopify-shops-email-leads-scraper",
+          "runs30d": 517,
+          "confidence": 0.8200000000000002,
+          "pricePerCall": 0.0012
+        }
+      ]
+    },
+    {
+      "skillName": "Yelp Business Listing Extractor",
+      "category": "scraping/maps",
+      "providers": 1,
+      "topProviders": [
+        {
+          "providerName": "Apify - delicious_zebu/yelp-advanced-business-scraper-pay-per-result",
+          "title": "Yelp Advanced Business Scraper: Pay Per Result",
+          "url": "https://apify.com/delicious_zebu/yelp-advanced-business-scraper-pay-per-result",
+          "runs30d": 146,
+          "confidence": 0.8200000000000001,
+          "pricePerCall": 0.01
+        }
+      ]
+    },
+    {
+      "skillName": "Google News Event Extractor",
+      "category": "search/news",
+      "providers": 1,
+      "topProviders": [
+        {
+          "providerName": "Apify - data_xplorer/google-news-scraper-fast",
+          "title": "Google News Scraper (Pay Per Event)",
+          "url": "https://apify.com/data_xplorer/google-news-scraper-fast",
+          "runs30d": 24250,
+          "confidence": 0.8833333333333334,
+          "pricePerCall": 0.004
+        }
+      ]
+    },
+    {
+      "skillName": "LinkedIn Email Finder",
+      "category": "scraping/social",
+      "providers": 1,
+      "topProviders": [
+        {
+          "providerName": "Apify - snipercoder/bulk-linkedin-email-finder",
+          "title": "Bulk Linkedin Email Finder⚡ $0.8/1K Emails, Super Cheap.",
+          "url": "https://apify.com/snipercoder/bulk-linkedin-email-finder",
+          "runs30d": 14732,
+          "confidence": 0.8533333333333334,
+          "pricePerCall": 0.001
+        }
+      ]
+    }
+  ],
+  "review": [
+    {
+      "actorId": "apify~e-commerce-scraping-tool",
+      "providerName": "Apify - apify/e-commerce-scraping-tool",
+      "title": "E-commerce Scraping Tool",
+      "url": "https://apify.com/apify/e-commerce-scraping-tool",
+      "runs30d": 294766,
+      "categories": [
+        "ECOMMERCE"
+      ],
+      "confidence": 0.35,
+      "reason": "unknown-platform",
+      "proposedSkill": null,
+      "platform": null,
+      "dataType": null
+    },
+    {
+      "actorId": "maxcopell~tripadvisor",
+      "providerName": "Apify - maxcopell/tripadvisor",
+      "title": "Tripadvisor Scraper",
+      "url": "https://apify.com/maxcopell/tripadvisor",
+      "runs30d": 135650,
+      "categories": [
+        "TRAVEL"
+      ],
+      "confidence": 0.58,
+      "reason": "unknown-data-type",
+      "proposedSkill": null,
+      "platform": "Tripadvisor",
+      "dataType": null
+    },
+    {
+      "actorId": "clockworks~tiktok-video-scraper",
+      "providerName": "Apify - clockworks/tiktok-video-scraper",
+      "title": "TikTok Video Scraper",
+      "url": "https://apify.com/clockworks/tiktok-video-scraper",
+      "runs30d": 276873,
+      "categories": [
+        "SOCIAL_MEDIA",
+        "VIDEOS"
+      ],
+      "confidence": 0.8033333333333335,
+      "reason": "classified",
+      "proposedSkill": "TikTok Video Extractor",
+      "platform": "TikTok",
+      "dataType": "Video"
+    },
+    {
+      "actorId": "peterasorensen~snacci",
+      "providerName": "Apify - peterasorensen/snacci",
+      "title": "Deep Email, Phone, & Social Media Scraper Search",
+      "url": "https://apify.com/peterasorensen/snacci",
+      "runs30d": 35002,
+      "categories": [
+        "AUTOMATION",
+        "LEAD_GENERATION",
+        "DEVELOPER_TOOLS"
+      ],
+      "confidence": 0.35,
+      "reason": "unknown-platform",
+      "proposedSkill": null,
+      "platform": null,
+      "dataType": null
+    },
+    {
+      "actorId": "tri_angle~airbnb-scraper",
+      "providerName": "Apify - tri_angle/airbnb-scraper",
+      "title": "Airbnb Scraper",
+      "url": "https://apify.com/tri_angle/airbnb-scraper",
+      "runs30d": 10550,
+      "categories": [
+        "TRAVEL",
+        "REAL_ESTATE"
+      ],
+      "confidence": 0.58,
+      "reason": "unknown-data-type",
+      "proposedSkill": null,
+      "platform": "Airbnb",
+      "dataType": null
+    },
+    {
+      "actorId": "michael.g~y-combinator-scraper",
+      "providerName": "Apify - michael.g/y-combinator-scraper",
+      "title": "Y Combinator Scraper",
+      "url": "https://apify.com/michael.g/y-combinator-scraper",
+      "runs30d": 404,
+      "categories": [
+        "LEAD_GENERATION",
+        "JOBS",
+        "AI"
+      ],
+      "confidence": 0.35,
+      "reason": "unknown-platform",
+      "proposedSkill": null,
+      "platform": null,
+      "dataType": null
+    },
+    {
+      "actorId": "voyager~booking-scraper",
+      "providerName": "Apify - voyager/booking-scraper",
+      "title": "Booking Scraper",
+      "url": "https://apify.com/voyager/booking-scraper",
+      "runs30d": 170705,
+      "categories": [
+        "TRAVEL"
+      ],
+      "confidence": 0.35,
+      "reason": "unknown-platform",
+      "proposedSkill": null,
+      "platform": null,
+      "dataType": null
+    },
+    {
+      "actorId": "pipelinelabs~lead-scraper-apollo-zoominfo-lusha-ppe",
+      "providerName": "Apify - pipelinelabs/lead-scraper-apollo-zoominfo-lusha-ppe",
+      "title": "🎉Leads Scraper ✅ $1/1k Leads ✅ 50K/Run With EMAILS✅Like Apollo",
+      "url": "https://apify.com/pipelinelabs/lead-scraper-apollo-zoominfo-lusha-ppe",
+      "runs30d": 183930,
+      "categories": [
+        "LEAD_GENERATION"
+      ],
+      "confidence": 0.35,
+      "reason": "unknown-platform",
+      "proposedSkill": null,
+      "platform": null,
+      "dataType": null
+    },
+    {
+      "actorId": "tri_angle~social-media-finder",
+      "providerName": "Apify - tri_angle/social-media-finder",
+      "title": "Social Media Finder",
+      "url": "https://apify.com/tri_angle/social-media-finder",
+      "runs30d": 69983,
+      "categories": [
+        "SOCIAL_MEDIA"
+      ],
+      "confidence": 0.35,
+      "reason": "unknown-platform",
+      "proposedSkill": null,
+      "platform": null,
+      "dataType": null
+    },
+    {
+      "actorId": "one-api~skip-trace",
+      "providerName": "Apify - one-api/skip-trace",
+      "title": "Skip Trace",
+      "url": "https://apify.com/one-api/skip-trace",
+      "runs30d": 573195,
+      "categories": [
+        "LEAD_GENERATION",
+        "SEO_TOOLS",
+        "REAL_ESTATE"
+      ],
+      "confidence": 0.35,
+      "reason": "unknown-platform",
+      "proposedSkill": null,
+      "platform": null,
+      "dataType": null
+    },
+    {
+      "actorId": "x_guru~Leads-Scraper-apollo-zoominfo",
+      "providerName": "Apify - x_guru/Leads-Scraper-apollo-zoominfo",
+      "title": "💎 Leads Scraper With EMAILS  | $1/1K | 300M base | Like Apollo",
+      "url": "https://apify.com/x_guru/leads-scraper-apollo-zoominfo",
+      "runs30d": 3340,
+      "categories": [
+        "LEAD_GENERATION",
+        "JOBS"
+      ],
+      "confidence": 0.35,
+      "reason": "unknown-platform",
+      "proposedSkill": null,
+      "platform": null,
+      "dataType": null
+    },
+    {
+      "actorId": "daniil.poletaev~backlink-building-agent",
+      "providerName": "Apify - daniil.poletaev/backlink-building-agent",
+      "title": "Backlink Building Agent",
+      "url": "https://apify.com/daniil.poletaev/backlink-building-agent",
+      "runs30d": 1729,
+      "categories": [
+        "AI",
+        "OPEN_SOURCE",
+        "AGENTS"
+      ],
+      "confidence": 0.35,
+      "reason": "unknown-platform",
+      "proposedSkill": null,
+      "platform": null,
+      "dataType": null
+    },
+    {
+      "actorId": "amr-mando~lead-finder",
+      "providerName": "Apify - amr-mando/lead-finder",
+      "title": "⭐ Leads Finder - $1.5/1k leads with Emails ✅ like Apollo",
+      "url": "https://apify.com/amr-mando/lead-finder",
+      "runs30d": 1941,
+      "categories": [
+        "LEAD_GENERATION"
+      ],
+      "confidence": 0.35,
+      "reason": "unknown-platform",
+      "proposedSkill": null,
+      "platform": null,
+      "dataType": null
+    },
+    {
+      "actorId": "voyager~booking-reviews-scraper",
+      "providerName": "Apify - voyager/booking-reviews-scraper",
+      "title": "Booking Reviews Scraper",
+      "url": "https://apify.com/voyager/booking-reviews-scraper",
+      "runs30d": 215161,
+      "categories": [
+        "TRAVEL"
+      ],
+      "confidence": 0.35,
+      "reason": "unknown-platform",
+      "proposedSkill": null,
+      "platform": null,
+      "dataType": null
+    },
+    {
+      "actorId": "junglee~amazon-bestsellers",
+      "providerName": "Apify - junglee/amazon-bestsellers",
+      "title": "Amazon Bestsellers Scraper",
+      "url": "https://apify.com/junglee/amazon-bestsellers",
+      "runs30d": 20496,
+      "categories": [
+        "ECOMMERCE"
+      ],
+      "confidence": 0.58,
+      "reason": "unknown-data-type",
+      "proposedSkill": null,
+      "platform": "Amazon",
+      "dataType": null
+    },
+    {
+      "actorId": "fantastic-jobs~career-site-job-listing-api",
+      "providerName": "Apify - fantastic-jobs/career-site-job-listing-api",
+      "title": "Career Site Job Listing API",
+      "url": "https://apify.com/fantastic-jobs/career-site-job-listing-api",
+      "runs30d": 96134,
+      "categories": [
+        "JOBS",
+        "LEAD_GENERATION",
+        "AUTOMATION"
+      ],
+      "confidence": 0.35,
+      "reason": "unknown-platform",
+      "proposedSkill": null,
+      "platform": null,
+      "dataType": null
+    },
+    {
+      "actorId": "radeance~ahrefs-scraper",
+      "providerName": "Apify - radeance/ahrefs-scraper",
+      "title": "Ahrefs Scraper",
+      "url": "https://apify.com/radeance/ahrefs-scraper",
+      "runs30d": 28410,
+      "categories": [
+        "SEO_TOOLS",
+        "AUTOMATION",
+        "DEVELOPER_TOOLS"
+      ],
+      "confidence": 0.35,
+      "reason": "unknown-platform",
+      "proposedSkill": null,
+      "platform": null,
+      "dataType": null
+    },
+    {
+      "actorId": "tri_angle~social-media-sentiment-analysis-tool",
+      "providerName": "Apify - tri_angle/social-media-sentiment-analysis-tool",
+      "title": "Social Media Sentiment Analysis Tool",
+      "url": "https://apify.com/tri_angle/social-media-sentiment-analysis-tool",
+      "runs30d": 48079,
+      "categories": [
+        "SOCIAL_MEDIA",
+        "AI"
+      ],
+      "confidence": 0.35,
+      "reason": "unknown-platform",
+      "proposedSkill": null,
+      "platform": null,
+      "dataType": null
+    },
+    {
+      "actorId": "hooli~google-images-scraper",
+      "providerName": "Apify - hooli/google-images-scraper",
+      "title": "Google Images Scraper",
+      "url": "https://apify.com/hooli/google-images-scraper",
+      "runs30d": 25113,
+      "categories": [
+        "SEO_TOOLS"
+      ],
+      "confidence": 0.35,
+      "reason": "unknown-platform",
+      "proposedSkill": null,
+      "platform": null,
+      "dataType": null
+    },
+    {
+      "actorId": "apify~social-media-leads-analyzer",
+      "providerName": "Apify - apify/social-media-leads-analyzer",
+      "title": "🧲 Social Media Leads Analyzer",
+      "url": "https://apify.com/apify/social-media-leads-analyzer",
+      "runs30d": 49564,
+      "categories": [
+        "LEAD_GENERATION",
+        "SOCIAL_MEDIA"
+      ],
+      "confidence": 0.35,
+      "reason": "unknown-platform",
+      "proposedSkill": null,
+      "platform": null,
+      "dataType": null
+    },
+    {
+      "actorId": "websift~seek-job-scraper",
+      "providerName": "Apify - websift/seek-job-scraper",
+      "title": "Seek Job Scraper",
+      "url": "https://apify.com/websift/seek-job-scraper",
+      "runs30d": 9368,
+      "categories": [
+        "JOBS",
+        "LEAD_GENERATION",
+        "AUTOMATION"
+      ],
+      "confidence": 0.35,
+      "reason": "unknown-platform",
+      "proposedSkill": null,
+      "platform": null,
+      "dataType": null
+    },
+    {
+      "actorId": "trudax~yellow-pages-us-scraper",
+      "providerName": "Apify - trudax/yellow-pages-us-scraper",
+      "title": "Yellow Pages US Scraper",
+      "url": "https://apify.com/trudax/yellow-pages-us-scraper",
+      "runs30d": 520,
+      "categories": [
+        "LEAD_GENERATION"
+      ],
+      "confidence": 0.35,
+      "reason": "unknown-platform",
+      "proposedSkill": null,
+      "platform": null,
+      "dataType": null
+    },
+    {
+      "actorId": "radeance~semrush-scraper",
+      "providerName": "Apify - radeance/semrush-scraper",
+      "title": "Semrush Scraper",
+      "url": "https://apify.com/radeance/semrush-scraper",
+      "runs30d": 3921,
+      "categories": [
+        "SEO_TOOLS",
+        "AUTOMATION",
+        "DEVELOPER_TOOLS"
+      ],
+      "confidence": 0.35,
+      "reason": "unknown-platform",
+      "proposedSkill": null,
+      "platform": null,
+      "dataType": null
+    },
+    {
+      "actorId": "tri_angle~telegram-scraper",
+      "providerName": "Apify - tri_angle/telegram-scraper",
+      "title": "Telegram Scraper",
+      "url": "https://apify.com/tri_angle/telegram-scraper",
+      "runs30d": 3204,
+      "categories": [
+        "SOCIAL_MEDIA",
+        "LEAD_GENERATION"
+      ],
+      "confidence": 0.58,
+      "reason": "unknown-data-type",
+      "proposedSkill": null,
+      "platform": "Telegram",
+      "dataType": null
+    },
+    {
+      "actorId": "apify~local-lead-generation-agent",
+      "providerName": "Apify - apify/local-lead-generation-agent",
+      "title": "Local Lead Generation Agent",
+      "url": "https://apify.com/apify/local-lead-generation-agent",
+      "runs30d": 181,
+      "categories": [
+        "AI",
+        "AGENTS",
+        "LEAD_GENERATION"
+      ],
+      "confidence": 0.35,
+      "reason": "unknown-platform",
+      "proposedSkill": null,
+      "platform": null,
+      "dataType": null
+    },
+    {
+      "actorId": "xmiso_scrapers~easy-bulk-email-validator---verify-emails-from-1-7-1000-rows",
+      "providerName": "Apify - xmiso_scrapers/easy-bulk-email-validator---verify-emails-from-1-7-1000-rows",
+      "title": "Easy Bulk Email Validator - Verify Emails From $1/1000 Rows",
+      "url": "https://apify.com/xmiso_scrapers/easy-bulk-email-validator---verify-emails-from-1-7-1000-rows",
+      "runs30d": 5761,
+      "categories": [
+        "LEAD_GENERATION",
+        "AUTOMATION"
+      ],
+      "confidence": 0.35,
+      "reason": "unknown-platform",
+      "proposedSkill": null,
+      "platform": null,
+      "dataType": null
+    },
+    {
+      "actorId": "radeance~similarweb-scraper",
+      "providerName": "Apify - radeance/similarweb-scraper",
+      "title": "Similarweb Scraper",
+      "url": "https://apify.com/radeance/similarweb-scraper",
+      "runs30d": 42166,
+      "categories": [
+        "SEO_TOOLS",
+        "AUTOMATION",
+        "DEVELOPER_TOOLS"
+      ],
+      "confidence": 0.35,
+      "reason": "unknown-platform",
+      "proposedSkill": null,
+      "platform": null,
+      "dataType": null
+    },
+    {
+      "actorId": "memo23~skool-members-scraper",
+      "providerName": "Apify - memo23/skool-members-scraper",
+      "title": "SKOOL | Members/Groups | Discovery Search | Scraper (PPE)",
+      "url": "https://apify.com/memo23/skool-members-scraper",
+      "runs30d": 164,
+      "categories": [
+        "LEAD_GENERATION",
+        "SOCIAL_MEDIA"
+      ],
+      "confidence": 0.35,
+      "reason": "unknown-platform",
+      "proposedSkill": null,
+      "platform": null,
+      "dataType": null
+    },
+    {
+      "actorId": "louisdeconinck~n8n-template-scraper",
+      "providerName": "Apify - louisdeconinck/n8n-template-scraper",
+      "title": "n8n Template Scraper",
+      "url": "https://apify.com/louisdeconinck/n8n-template-scraper",
+      "runs30d": 26,
+      "categories": [
+        "AUTOMATION",
+        "DEVELOPER_TOOLS",
+        "INTEGRATIONS"
+      ],
+      "confidence": 0.35,
+      "reason": "unknown-platform",
+      "proposedSkill": null,
+      "platform": null,
+      "dataType": null
+    },
+    {
+      "actorId": "agentx~all-jobs-scraper",
+      "providerName": "Apify - agentx/all-jobs-scraper",
+      "title": "All Jobs Scraper",
+      "url": "https://apify.com/agentx/all-jobs-scraper",
+      "runs30d": 4005,
+      "categories": [
+        "JOBS",
+        "LEAD_GENERATION",
+        "DEVELOPER_TOOLS"
+      ],
+      "confidence": 0.35,
+      "reason": "unknown-platform",
+      "proposedSkill": null,
+      "platform": null,
+      "dataType": null
+    },
+    {
+      "actorId": "snipercoder~decision-maker-email-finder",
+      "providerName": "Apify - snipercoder/decision-maker-email-finder",
+      "title": "Decision makers Email finder📧 $1/1K Emails, Super cheap.",
+      "url": "https://apify.com/snipercoder/decision-maker-email-finder",
+      "runs30d": 100486,
+      "categories": [
+        "LEAD_GENERATION"
+      ],
+      "confidence": 0.35,
+      "reason": "unknown-platform",
+      "proposedSkill": null,
+      "platform": null,
+      "dataType": null
+    },
+    {
+      "actorId": "muhammetakkurtt~truth-social-scraper",
+      "providerName": "Apify - muhammetakkurtt/truth-social-scraper",
+      "title": "Truth Social Scraper",
+      "url": "https://apify.com/muhammetakkurtt/truth-social-scraper",
+      "runs30d": 49729,
+      "categories": [
+        "SOCIAL_MEDIA",
+        "DEVELOPER_TOOLS",
+        "OTHER"
+      ],
+      "confidence": 0.35,
+      "reason": "unknown-platform",
+      "proposedSkill": null,
+      "platform": null,
+      "dataType": null
+    },
+    {
+      "actorId": "delicious_zebu~ebay-product-listing-scraper",
+      "providerName": "Apify - delicious_zebu/ebay-product-listing-scraper",
+      "title": "eBay Product Listing Scraper",
+      "url": "https://apify.com/delicious_zebu/ebay-product-listing-scraper",
+      "runs30d": 787,
+      "categories": [
+        "ECOMMERCE"
+      ],
+      "confidence": 0.8033333333333335,
+      "reason": "classified",
+      "proposedSkill": "eBay Product Extractor",
+      "platform": "eBay",
+      "dataType": "Product"
+    },
+    {
+      "actorId": "memo23~skool-posts-with-comments-scraper",
+      "providerName": "Apify - memo23/skool-posts-with-comments-scraper",
+      "title": "Skool Community Posts with comments & Classroom Course w/ Media",
+      "url": "https://apify.com/memo23/skool-posts-with-comments-scraper",
+      "runs30d": 913,
+      "categories": [
+        "LEAD_GENERATION",
+        "SOCIAL_MEDIA"
+      ],
+      "confidence": 0.35,
+      "reason": "unknown-platform",
+      "proposedSkill": null,
+      "platform": null,
+      "dataType": null
+    },
+    {
+      "actorId": "orgupdate~google-jobs-scraper",
+      "providerName": "Apify - orgupdate/google-jobs-scraper",
+      "title": "Google Jobs Scraper",
+      "url": "https://apify.com/orgupdate/google-jobs-scraper",
+      "runs30d": 1519,
+      "categories": [
+        "JOBS",
+        "LEAD_GENERATION",
+        "AUTOMATION"
+      ],
+      "confidence": 0.35,
+      "reason": "unknown-platform",
+      "proposedSkill": null,
+      "platform": null,
+      "dataType": null
+    },
+    {
+      "actorId": "junglee~amazon-seller-scraper",
+      "providerName": "Apify - junglee/amazon-seller-scraper",
+      "title": "Amazon Seller Scraper",
+      "url": "https://apify.com/junglee/amazon-seller-scraper",
+      "runs30d": 2501,
+      "categories": [
+        "ECOMMERCE"
+      ],
+      "confidence": 0.58,
+      "reason": "unknown-data-type",
+      "proposedSkill": null,
+      "platform": "Amazon",
+      "dataType": null
+    },
+    {
+      "actorId": "pratikdani~crunchbase-companies-scraper",
+      "providerName": "Apify - pratikdani/crunchbase-companies-scraper",
+      "title": "Crunchbase Companies Scraper",
+      "url": "https://apify.com/pratikdani/crunchbase-companies-scraper",
+      "runs30d": 6607,
+      "categories": [
+        "DEVELOPER_TOOLS",
+        "LEAD_GENERATION",
+        "INTEGRATIONS"
+      ],
+      "confidence": 0.58,
+      "reason": "unknown-data-type",
+      "proposedSkill": null,
+      "platform": "Crunchbase",
+      "dataType": null
+    },
+    {
+      "actorId": "apify~threads-profile-api-scraper",
+      "providerName": "Apify - apify/threads-profile-api-scraper",
+      "title": "Meta Threads Profile Scraper",
+      "url": "https://apify.com/apify/threads-profile-api-scraper",
+      "runs30d": 132208,
+      "categories": [
+        "SOCIAL_MEDIA"
+      ],
+      "confidence": 0.35,
+      "reason": "unknown-platform",
+      "proposedSkill": null,
+      "platform": null,
+      "dataType": null
+    },
+    {
+      "actorId": "api-ninja~x-twitter-community-search-post-scraper",
+      "providerName": "Apify - api-ninja/x-twitter-community-search-post-scraper",
+      "title": "X (Twitter) Community Search Post Scraper  𝕏",
+      "url": "https://apify.com/api-ninja/x-twitter-community-search-post-scraper",
+      "runs30d": 343,
+      "categories": [
+        "SOCIAL_MEDIA",
+        "INTEGRATIONS",
+        "AUTOMATION"
+      ],
+      "confidence": 0.8033333333333335,
+      "reason": "classified",
+      "proposedSkill": "X Post Extractor",
+      "platform": "X",
+      "dataType": "Post"
+    },
+    {
+      "actorId": "muhammetakkurtt~naukri-job-scraper",
+      "providerName": "Apify - muhammetakkurtt/naukri-job-scraper",
+      "title": "Naukri Job Scraper",
+      "url": "https://apify.com/muhammetakkurtt/naukri-job-scraper",
+      "runs30d": 10700,
+      "categories": [
+        "JOBS",
+        "LEAD_GENERATION"
+      ],
+      "confidence": 0.35,
+      "reason": "unknown-platform",
+      "proposedSkill": null,
+      "platform": null,
+      "dataType": null
+    },
+    {
+      "actorId": "tri_angle~fast-similarweb-scraper",
+      "providerName": "Apify - tri_angle/fast-similarweb-scraper",
+      "title": "Similarweb Fast Scraper",
+      "url": "https://apify.com/tri_angle/fast-similarweb-scraper",
+      "runs30d": 1800,
+      "categories": [
+        "SEO_TOOLS"
+      ],
+      "confidence": 0.35,
+      "reason": "unknown-platform",
+      "proposedSkill": null,
+      "platform": null,
+      "dataType": null
+    },
+    {
+      "actorId": "muhammetakkurtt~n8n-scraper",
+      "providerName": "Apify - muhammetakkurtt/n8n-scraper",
+      "title": "n8n Workflow Template Scraper",
+      "url": "https://apify.com/muhammetakkurtt/n8n-scraper",
+      "runs30d": 20,
+      "categories": [
+        "AUTOMATION",
+        "DEVELOPER_TOOLS",
+        "INTEGRATIONS"
+      ],
+      "confidence": 0.35,
+      "reason": "unknown-platform",
+      "proposedSkill": null,
+      "platform": null,
+      "dataType": null
+    },
+    {
+      "actorId": "flash_mage~upwork",
+      "providerName": "Apify - flash_mage/upwork",
+      "title": "Upwork Job Extractor ⚡",
+      "url": "https://apify.com/flash_mage/upwork",
+      "runs30d": 5733,
+      "categories": [
+        "JOBS",
+        "AUTOMATION",
+        "LEAD_GENERATION"
+      ],
+      "confidence": 0.7866666666666667,
+      "reason": "classified",
+      "proposedSkill": "Upwork Job Listing Extractor",
+      "platform": "Upwork",
+      "dataType": "Job Listing"
+    },
+    {
+      "actorId": "junglee~amazon-asins-scraper",
+      "providerName": "Apify - junglee/amazon-asins-scraper",
+      "title": "Amazon ASINs Scraper",
+      "url": "https://apify.com/junglee/amazon-asins-scraper",
+      "runs30d": 55994,
+      "categories": [
+        "ECOMMERCE"
+      ],
+      "confidence": 0.58,
+      "reason": "unknown-data-type",
+      "proposedSkill": null,
+      "platform": "Amazon",
+      "dataType": null
+    },
+    {
+      "actorId": "crypto-scraper~dexscreener-tokens-scraper",
+      "providerName": "Apify - crypto-scraper/dexscreener-tokens-scraper",
+      "title": "Dexscreener Tokens Scraper",
+      "url": "https://apify.com/crypto-scraper/dexscreener-tokens-scraper",
+      "runs30d": 19155,
+      "categories": [
+        "AUTOMATION",
+        "DEVELOPER_TOOLS",
+        "OTHER"
+      ],
+      "confidence": 0.35,
+      "reason": "unknown-platform",
+      "proposedSkill": null,
+      "platform": null,
+      "dataType": null
+    },
+    {
+      "actorId": "gentle_cloud~youtube-user-channel-scraper",
+      "providerName": "Apify - gentle_cloud/youtube-user-channel-scraper",
+      "title": "YouTube Channel Scraper",
+      "url": "https://apify.com/gentle_cloud/youtube-user-channel-scraper",
+      "runs30d": 2826,
+      "categories": [
+        "SOCIAL_MEDIA"
+      ],
+      "confidence": 0.8033333333333335,
+      "reason": "classified",
+      "proposedSkill": "YouTube Profile Extractor",
+      "platform": "YouTube",
+      "dataType": "Profile"
+    },
+    {
+      "actorId": "dz_omar~google-ads-scraper",
+      "providerName": "Apify - dz_omar/google-ads-scraper",
+      "title": "Google Ads Scraper",
+      "url": "https://apify.com/dz_omar/google-ads-scraper",
+      "runs30d": 3067,
+      "categories": [
+        "AUTOMATION",
+        "SEO_TOOLS",
+        "OTHER"
+      ],
+      "confidence": 0.35,
+      "reason": "unknown-platform",
+      "proposedSkill": null,
+      "platform": null,
+      "dataType": null
+    },
+    {
+      "actorId": "muhammetakkurtt~dexscreener-scraper",
+      "providerName": "Apify - muhammetakkurtt/dexscreener-scraper",
+      "title": "DexScreener Scraper",
+      "url": "https://apify.com/muhammetakkurtt/dexscreener-scraper",
+      "runs30d": 3728,
+      "categories": [
+        "AUTOMATION",
+        "DEVELOPER_TOOLS",
+        "OTHER"
+      ],
+      "confidence": 0.35,
+      "reason": "unknown-platform",
+      "proposedSkill": null,
+      "platform": null,
+      "dataType": null
+    },
+    {
+      "actorId": "ivanvs~google-ads-scraper",
+      "providerName": "Apify - ivanvs/google-ads-scraper",
+      "title": "Google Ads Scraper",
+      "url": "https://apify.com/ivanvs/google-ads-scraper",
+      "runs30d": 37479,
+      "categories": [
+        "LEAD_GENERATION",
+        "AUTOMATION",
+        "SEO_TOOLS"
+      ],
+      "confidence": 0.35,
+      "reason": "unknown-platform",
+      "proposedSkill": null,
+      "platform": null,
+      "dataType": null
+    },
+    {
+      "actorId": "johnvc~Google-Flights-Data-Scraper-Flight-and-Price-Search",
+      "providerName": "Apify - johnvc/Google-Flights-Data-Scraper-Flight-and-Price-Search",
+      "title": "Google Flights API",
+      "url": "https://apify.com/johnvc/google-flights-data-scraper-flight-and-price-search",
+      "runs30d": 25314,
+      "categories": [
+        "AUTOMATION",
+        "SEO_TOOLS",
+        "TRAVEL"
+      ],
+      "confidence": 0.35,
+      "reason": "unknown-platform",
+      "proposedSkill": null,
+      "platform": null,
+      "dataType": null
+    }
+  ]
+}

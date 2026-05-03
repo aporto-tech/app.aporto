@@ -315,15 +315,6 @@ model SkillRevenue {
   @@index([publisherId, createdAt(sort: Desc)])
 }
 
-model PublisherWaitlist {
-  id        Int      @id @default(autoincrement())
-  email     String   @unique
-  name      String?
-  useCase   String?
-  createdAt DateTime @default(now())
-  approved  Boolean  @default(false)
-}
-
 model abilities {
   group      String   @db.VarChar(64)
   model      String   @db.VarChar(255)

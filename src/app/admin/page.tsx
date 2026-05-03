@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Fragment, useCallback, useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import styles from "./admin.module.css";
@@ -44,16 +44,9 @@ interface Provider {
     pricePerCall: number;
     avgLatencyMs: number;
     retryRate: number;
+    timeoutRate: number;
     isActive: boolean;
     createdAt: string;
-}
-interface WaitlistEntry {
-    id: number;
-    email: string;
-    name: string | null;
-    useCase: string | null;
-    createdAt: string;
-    approved: boolean;
 }
 
 interface StatsOverview {
@@ -98,7 +91,7 @@ interface StatsData {
     dailyVolume: StatsDayVolume[];
 }
 
-type Tab = "promo" | "skills" | "waitlist" | "stats" | "pending" | "publishers";
+type Tab = "promo" | "skills" | "stats" | "pending" | "publishers";
 
 // ── Main Component ────────────────────────────────────────────────────────────
 
@@ -129,20 +122,19 @@ export default function AdminPage() {
 
             {/* Tab bar */}
             <div className={styles.tabBar}>
-                {(["promo", "skills", "waitlist", "stats", "pending", "publishers"] as Tab[]).map((t) => (
+                {(["promo", "skills", "stats", "pending", "publishers"] as Tab[]).map((t) => (
                     <button
                         key={t}
                         className={`${styles.tabBtn} ${activeTab === t ? styles.tabBtnActive : ""}`}
                         onClick={() => setActiveTab(t)}
                     >
-                        {t === "promo" ? "Promo Codes" : t === "skills" ? "Skills & Providers" : t === "waitlist" ? "Publisher Waitlist" : t === "stats" ? "Stats" : t === "pending" ? "Pending Review" : "Publishers"}
+                        {t === "promo" ? "Promo Codes" : t === "skills" ? "Skills & Providers" : t === "stats" ? "Stats" : t === "pending" ? "Pending Review" : "Publishers"}
                     </button>
                 ))}
             </div>
 
             {activeTab === "promo" && <PromoTab />}
             {activeTab === "skills" && <SkillsTab />}
-            {activeTab === "waitlist" && <WaitlistTab />}
             {activeTab === "stats" && <StatsTab />}
             {activeTab === "pending" && <PendingReviewTab />}
             {activeTab === "publishers" && <PublishersTab />}
@@ -338,8 +330,6 @@ function SkillsTab() {
         fetchSkills();
     }
 
-    const selectedSkill = skills.find(s => s.id === selectedSkillId) ?? null;
-
     if (loading) return <div className={styles.tabLoading}>Loading skills...</div>;
     if (error) return <div className={styles.tabError}>Error loading skills: {error} <button className={styles.retryBtn} onClick={fetchSkills}>Retry</button></div>;
 
@@ -370,48 +360,51 @@ function SkillsTab() {
                             {skills.length === 0
                                 ? <tr className={styles.emptyRow}><td colSpan={6}>No skills yet. Add one to start routing.</td></tr>
                                 : skills.map(s => (
-                                    <tr key={s.id} className={selectedSkillId === s.id ? styles.rowSelected : ""}>
-                                        <td style={{ fontWeight: 500 }}>{s.name}</td>
-                                        <td style={{ color: "#64748b", maxWidth: 280 }}>
-                                            <span style={{ display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                                                {s.description}
-                                            </span>
-                                        </td>
-                                        <td style={{ textAlign: "center" }}>{Number(s.provider_count)}</td>
-                                        <td style={{ textAlign: "center" }}>{Number(s.call_count)}</td>
-                                        <td>
-                                            <button
-                                                className={s.is_active ? styles.toggleOn : styles.toggleOff}
-                                                onClick={() => handleToggleActive(s)}
-                                            >
-                                                {s.is_active ? "Active" : "Inactive"}
-                                            </button>
-                                        </td>
-                                        <td>
-                                            <div style={{ display: "flex", gap: 8 }}>
+                                    <Fragment key={s.id}>
+                                        <tr className={selectedSkillId === s.id ? styles.rowSelected : ""}>
+                                            <td style={{ fontWeight: 500 }}>{s.name}</td>
+                                            <td style={{ color: "#64748b", maxWidth: 280 }}>
+                                                <span style={{ display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                                    {s.description}
+                                                </span>
+                                            </td>
+                                            <td style={{ textAlign: "center" }}>{Number(s.provider_count)}</td>
+                                            <td style={{ textAlign: "center" }}>{Number(s.call_count)}</td>
+                                            <td>
                                                 <button
-                                                    className={styles.actionBtn}
-                                                    onClick={() => setSelectedSkillId(selectedSkillId === s.id ? null : s.id)}
+                                                    className={s.is_active ? styles.toggleOn : styles.toggleOff}
+                                                    onClick={() => handleToggleActive(s)}
                                                 >
-                                                    {selectedSkillId === s.id ? "Hide Providers" : "Manage Providers →"}
+                                                    {s.is_active ? "Active" : "Inactive"}
                                                 </button>
-                                                <button className={styles.actionBtn} onClick={() => setEditingSkill(s)}>Edit</button>
-                                                <button className={styles.deleteBtn} onClick={() => handleDeleteSkill(s)}>Delete</button>
-                                            </div>
-                                        </td>
-                                    </tr>
+                                            </td>
+                                            <td>
+                                                <div style={{ display: "flex", gap: 8 }}>
+                                                    <button
+                                                        className={styles.actionBtn}
+                                                        onClick={() => setSelectedSkillId(selectedSkillId === s.id ? null : s.id)}
+                                                    >
+                                                        {selectedSkillId === s.id ? "Hide Providers" : "Show Providers"}
+                                                    </button>
+                                                    <button className={styles.actionBtn} onClick={() => setEditingSkill(s)}>Edit</button>
+                                                    <button className={styles.deleteBtn} onClick={() => handleDeleteSkill(s)}>Delete</button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                        {selectedSkillId === s.id && (
+                                            <tr className={styles.providersInlineRow}>
+                                                <td colSpan={6}>
+                                                    <ProvidersPanel skill={s} onChanged={fetchSkills} />
+                                                </td>
+                                            </tr>
+                                        )}
+                                    </Fragment>
                                 ))
                             }
                         </tbody>
                     </table>
                 </div>
             </div>
-
-            {selectedSkill && (
-                <div className={styles.section}>
-                    <ProvidersPanel skill={selectedSkill} />
-                </div>
-            )}
 
             {showCreateSkill && (
                 <SkillModal
@@ -774,15 +767,13 @@ function AiOnboardModal({ onClose, onPublished }: { onClose: () => void; onPubli
 
 // ── Providers Panel ───────────────────────────────────────────────────────────
 
-function ProvidersPanel({ skill }: { skill: Skill }) {
+function ProvidersPanel({ skill, onChanged }: { skill: Skill; onChanged?: () => void }) {
     const [providers, setProviders] = useState<Provider[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [showAdd, setShowAdd] = useState(false);
 
-    useEffect(() => { fetchProviders(); }, [skill.id]);
-
-    async function fetchProviders() {
+    const fetchProviders = useCallback(async () => {
         setLoading(true);
         setError(null);
         try {
@@ -795,7 +786,9 @@ function ProvidersPanel({ skill }: { skill: Skill }) {
         } finally {
             setLoading(false);
         }
-    }
+    }, [skill.id]);
+
+    useEffect(() => { fetchProviders(); }, [fetchProviders]);
 
     async function handleToggle(p: Provider) {
         if (!confirm(`${p.isActive ? "Deactivate" : "Activate"} provider "${p.name}"? ${p.isActive ? "Routing will stop using this provider immediately." : ""}`)) return;
@@ -805,18 +798,30 @@ function ProvidersPanel({ skill }: { skill: Skill }) {
             body: JSON.stringify({ isActive: !p.isActive }),
         });
         fetchProviders();
+        onChanged?.();
     }
 
     async function handleDelete(p: Provider) {
         if (!confirm(`Deactivate provider "${p.name}"?`)) return;
         await fetch(`/api/admin/providers?id=${p.id}`, { method: "DELETE" });
         fetchProviders();
+        onChanged?.();
+    }
+
+    async function handleResetStats(p: Provider) {
+        if (!confirm(`Reset routing stats for provider "${p.name}"? This resets latency, retry, and timeout rates; call history stays intact.`)) return;
+        await fetch(`/api/admin/providers?id=${p.id}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ resetStats: true }),
+        });
+        fetchProviders();
     }
 
     return (
         <div className={styles.providersPanel}>
             <div className={styles.providersPanelHeader}>
-                <p className={styles.sectionTitle}>Providers for "{skill.name}"</p>
+                <p className={styles.sectionTitle}>Providers for {skill.name}</p>
                 <button className={styles.generateBtn} style={{ fontSize: 13, padding: "7px 14px" }} onClick={() => setShowAdd(true)}>+ Add Provider</button>
             </div>
 
@@ -833,13 +838,14 @@ function ProvidersPanel({ skill }: { skill: Skill }) {
                                 <th>Price/call</th>
                                 <th>Avg latency</th>
                                 <th>Retry rate</th>
+                                <th>Timeout rate</th>
                                 <th>Active</th>
                                 <th></th>
                             </tr>
                         </thead>
                         <tbody>
                             {providers.length === 0
-                                ? <tr className={styles.emptyRow}><td colSpan={7}>No providers yet.</td></tr>
+                                ? <tr className={styles.emptyRow}><td colSpan={8}>No providers yet.</td></tr>
                                 : providers.map(p => (
                                     <tr key={p.id}>
                                         <td style={{ fontWeight: 500 }}>{p.name}</td>
@@ -847,13 +853,17 @@ function ProvidersPanel({ skill }: { skill: Skill }) {
                                         <td>${Number(p.pricePerCall).toFixed(4)}</td>
                                         <td>{Number(p.avgLatencyMs)}ms</td>
                                         <td>{(Number(p.retryRate) * 100).toFixed(1)}%</td>
+                                        <td>{(Number(p.timeoutRate) * 100).toFixed(1)}%</td>
                                         <td>
                                             <button className={p.isActive ? styles.toggleOn : styles.toggleOff} onClick={() => handleToggle(p)}>
                                                 {p.isActive ? "Active" : "Inactive"}
                                             </button>
                                         </td>
                                         <td>
-                                            <button className={styles.deleteBtn} onClick={() => handleDelete(p)}>Remove</button>
+                                            <div style={{ display: "flex", gap: 8 }}>
+                                                <button className={styles.actionBtn} onClick={() => handleResetStats(p)}>Reset stats</button>
+                                                <button className={styles.deleteBtn} onClick={() => handleDelete(p)}>Remove</button>
+                                            </div>
                                         </td>
                                     </tr>
                                 ))
@@ -867,7 +877,7 @@ function ProvidersPanel({ skill }: { skill: Skill }) {
                 <ProviderModal
                     skillId={skill.id}
                     onClose={() => setShowAdd(false)}
-                    onSaved={() => { setShowAdd(false); fetchProviders(); }}
+                    onSaved={() => { setShowAdd(false); fetchProviders(); onChanged?.(); }}
                 />
             )}
         </div>
@@ -938,108 +948,6 @@ function ProviderModal({ skillId, onClose, onSaved }: { skillId: number; onClose
     );
 }
 
-// ── Publisher Waitlist Tab ────────────────────────────────────────────────────
-
-function WaitlistTab() {
-    const [entries, setEntries] = useState<WaitlistEntry[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
-    const [approvedIds, setApprovedIds] = useState<Set<number>>(new Set());
-
-    useEffect(() => { fetchEntries(); }, []);
-
-    async function fetchEntries() {
-        setLoading(true);
-        setError(null);
-        try {
-            const res = await fetch("/api/admin/waitlist");
-            if (!res.ok) throw new Error(`HTTP ${res.status}`);
-            const data = await res.json();
-            setEntries(data.entries ?? []);
-        } catch (e) {
-            setError(String(e));
-        } finally {
-            setLoading(false);
-        }
-    }
-
-    async function handleApprove(entry: WaitlistEntry) {
-        await fetch(`/api/admin/waitlist?id=${entry.id}`, { method: "PATCH" });
-        setApprovedIds(prev => new Set([...prev, entry.id]));
-    }
-
-    if (loading) return <div className={styles.tabLoading}>Loading waitlist...</div>;
-    if (error) return <div className={styles.tabError}>Error loading waitlist: {error} <button className={styles.retryBtn} onClick={fetchEntries}>Retry</button></div>;
-
-    const pending = entries.filter(e => !e.approved);
-    const approved = entries.filter(e => e.approved);
-
-    return (
-        <>
-            <div className={styles.tabHeader}>
-                <span className={styles.tabCount}>{pending.length} pending, {approved.length} approved</span>
-            </div>
-
-            <div className={styles.section}>
-                <p className={styles.sectionTitle}>Pending</p>
-                <div className={styles.tableWrapper}>
-                    <table className={styles.table}>
-                        <thead>
-                            <tr><th>Email</th><th>Name</th><th>Use Case</th><th>Signed Up</th><th></th></tr>
-                        </thead>
-                        <tbody>
-                            {pending.length === 0
-                                ? <tr className={styles.emptyRow}><td colSpan={5}>No pending entries.</td></tr>
-                                : pending.map(e => (
-                                    <tr key={e.id}>
-                                        <td>{e.email}</td>
-                                        <td>{e.name ?? "—"}</td>
-                                        <td style={{ maxWidth: 260, color: "#94a3b8" }}>
-                                            <span style={{ display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                                                {e.useCase ?? "—"}
-                                            </span>
-                                        </td>
-                                        <td>{new Date(e.createdAt).toLocaleDateString()}</td>
-                                        <td>
-                                            {approvedIds.has(e.id)
-                                                ? <span style={{ color: "#6be195", fontSize: 13 }}>Approved — will be contacted manually</span>
-                                                : <button className={styles.approveBtn} onClick={() => handleApprove(e)}>Approve</button>
-                                            }
-                                        </td>
-                                    </tr>
-                                ))
-                            }
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-
-            {approved.length > 0 && (
-                <div className={styles.section}>
-                    <p className={styles.sectionTitle}>Approved</p>
-                    <div className={styles.tableWrapper}>
-                        <table className={styles.table}>
-                            <thead>
-                                <tr><th>Email</th><th>Name</th><th>Use Case</th><th>Signed Up</th></tr>
-                            </thead>
-                            <tbody>
-                                {approved.map(e => (
-                                    <tr key={e.id}>
-                                        <td>{e.email}</td>
-                                        <td>{e.name ?? "—"}</td>
-                                        <td style={{ color: "#94a3b8" }}>{e.useCase ?? "—"}</td>
-                                        <td>{new Date(e.createdAt).toLocaleDateString()}</td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            )}
-        </>
-    );
-}
-
 // ── Stats Tab ─────────────────────────────────────────────────────────────────
 
 function successColor(rate: number): string {
@@ -1052,21 +960,46 @@ function StatsTab() {
     const [data, setData] = useState<StatsData | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [period, setPeriod] = useState(7);
+    const [resettingProviderId, setResettingProviderId] = useState<number | null>(null);
 
-    useEffect(() => {
+    const fetchStats = useCallback(async () => {
         setLoading(true);
         setError(null);
-        fetch("/api/admin/stats?period=7")
-            .then((r) => {
-                if (!r.ok) throw new Error(`HTTP ${r.status}`);
-                return r.json();
-            })
-            .then((d) => { setData(d); setLoading(false); })
-            .catch((e) => { setError(String(e)); setLoading(false); });
-    }, []);
+        try {
+            const res = await fetch(`/api/admin/stats?period=${period}`);
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            const nextData = await res.json();
+            setData(nextData);
+        } catch (e) {
+            setError(String(e));
+        } finally {
+            setLoading(false);
+        }
+    }, [period]);
+
+    useEffect(() => { fetchStats(); }, [fetchStats]);
+
+    async function resetProviderStats(provider: StatsProvider) {
+        if (!confirm(`Reset routing stats for provider "${provider.name}"? Historical calls stay in the stats tables.`)) return;
+        setResettingProviderId(provider.id);
+        try {
+            const res = await fetch(`/api/admin/providers?id=${provider.id}`, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ resetStats: true }),
+            });
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            await fetchStats();
+        } catch (e) {
+            setError(String(e));
+        } finally {
+            setResettingProviderId(null);
+        }
+    }
 
     if (loading) return <div className={styles.tabLoading}>Loading stats...</div>;
-    if (error || !data) return <div className={styles.tabError}>Error loading stats: {error} <button className={styles.retryBtn} onClick={() => window.location.reload()}>Retry</button></div>;
+    if (error || !data) return <div className={styles.tabError}>Error loading stats: {error} <button className={styles.retryBtn} onClick={fetchStats}>Retry</button></div>;
 
     const { overview, topSkills, providers, dailyVolume } = data;
     const maxCalls = Math.max(...dailyVolume.map((d) => d.calls), 1);
@@ -1074,7 +1007,18 @@ function StatsTab() {
     return (
         <>
             <div className={styles.tabHeader}>
-                <span className={styles.tabCount}>Last 7 days</span>
+                <span className={styles.tabCount}>Last {period} day{period === 1 ? "" : "s"}</span>
+                <div className={styles.periodControl}>
+                    {[1, 7, 30].map((days) => (
+                        <button
+                            key={days}
+                            className={`${styles.periodBtn} ${period === days ? styles.periodBtnActive : ""}`}
+                            onClick={() => setPeriod(days)}
+                        >
+                            {days}d
+                        </button>
+                    ))}
+                </div>
             </div>
 
             {/* Overview cards */}
@@ -1183,6 +1127,7 @@ function StatsTab() {
                                     <th>Avg Latency</th>
                                     <th>Retry Rate</th>
                                     <th>Timeout Rate</th>
+                                    <th></th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -1195,6 +1140,15 @@ function StatsTab() {
                                         <td>{p.avgLatencyMs}ms</td>
                                         <td style={{ color: p.retryRate > 0.1 ? "#f59e0b" : "#cbd5e1" }}>{(p.retryRate * 100).toFixed(1)}%</td>
                                         <td style={{ color: p.timeoutRate > 0.05 ? "#ef4444" : "#cbd5e1" }}>{(p.timeoutRate * 100).toFixed(1)}%</td>
+                                        <td>
+                                            <button
+                                                className={styles.actionBtn}
+                                                disabled={resettingProviderId === p.id}
+                                                onClick={() => resetProviderStats(p)}
+                                            >
+                                                {resettingProviderId === p.id ? "Resetting..." : "Reset stats"}
+                                            </button>
+                                        </td>
                                     </tr>
                                 ))}
                             </tbody>

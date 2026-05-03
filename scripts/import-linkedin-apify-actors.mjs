@@ -17,6 +17,7 @@
 import { PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
+const APIFY_BASE = "https://api.apify.com/v2";
 const APIFY_API_KEY = process.env.APIFY_API_KEY;
 const NEWAPI_URL = process.env.NEWAPI_URL ?? "https://api.aporto.tech";
 const NEWAPI_ADMIN_KEY = process.env.NEWAPI_ADMIN_KEY;
@@ -158,7 +159,7 @@ const LINKEDIN_SKILLS = [
         ],
     },
     {
-        name: "LinkedIn Post Search Scraper",
+        name: "LinkedIn Post Search Result Extractor",
         description: "Search and extract LinkedIn posts by keyword, profile, company, or post URL. Returns post text, author, author URL, post URL, publish date, media, reactions, comments, shares, and optional author enrichment when supported. Use for topic monitoring, market research, lead intent, and content intelligence.",
         category: "scraping/social",
         capabilities: [
@@ -193,7 +194,7 @@ const LINKEDIN_SKILLS = [
         ],
     },
     {
-        name: "LinkedIn Job Listing Scraper",
+        name: "LinkedIn Job Listing Extractor",
         description: "Scrape LinkedIn job listings and job detail pages. Returns job title, company, location, salary range when available, job description, requirements, applicants count, posted date, employment type, and application URL. Use for recruiting intelligence, job market research, salary analysis, and talent pipeline planning.",
         category: "scraping/jobs",
         capabilities: [
@@ -254,6 +255,47 @@ function buildEmbedText(skill) {
     if (skill.outputTypes?.length) parts.push(`output:${skill.outputTypes.join(",")}`);
     parts.push(`${skill.name}: ${skill.description}`);
     return parts.join(" ");
+}
+
+async function getActor(actorId) {
+    const res = await fetch(`${APIFY_BASE}/acts/${actorId}`, {
+        headers: { "Authorization": `Bearer ${APIFY_API_KEY}` },
+    });
+    if (!res.ok) {
+        const txt = await res.text();
+        throw new Error(`Apify actor error ${res.status} for ${actorId}: ${txt.substring(0, 200)}`);
+    }
+    const data = await res.json();
+    return data.data;
+}
+
+function getPrimaryPricing(actor) {
+    const pricingInfo = actor?.currentPricingInfo;
+    if (!pricingInfo || pricingInfo.pricingModel !== "PAY_PER_EVENT") return null;
+
+    const events = pricingInfo.pricingPerEvent?.actorChargeEvents ?? {};
+    const entries = Object.entries(events);
+    if (!entries.length) return null;
+
+    const primary = entries.find(([, event]) => event.isPrimaryEvent) ?? entries[0];
+    const [eventName, eventData] = primary;
+    const explicitPrice = typeof eventData.eventPriceUsd === "number" ? eventData.eventPriceUsd : null;
+    const tierPrice = eventData.eventTieredPricingUsd?.FREE?.tieredEventPriceUsd
+        ?? eventData.eventTieredPricingUsd?.BRONZE?.tieredEventPriceUsd
+        ?? eventData.eventTieredPricingUsd?.SILVER?.tieredEventPriceUsd
+        ?? eventData.eventTieredPricingUsd?.GOLD?.tieredEventPriceUsd
+        ?? eventData.eventTieredPricingUsd?.PLATINUM?.tieredEventPriceUsd
+        ?? eventData.eventTieredPricingUsd?.DIAMOND?.tieredEventPriceUsd
+        ?? null;
+
+    return {
+        pricingModel: pricingInfo.pricingModel,
+        primaryEventName: eventName,
+        primaryEventTitle: eventData.eventTitle,
+        primaryEventPriceUsd: explicitPrice ?? tierPrice,
+        minimalMaxTotalChargeUsd: pricingInfo.minimalMaxTotalChargeUsd ?? null,
+        pricingSnapshot: pricingInfo,
+    };
 }
 
 async function ensureSkill(skill) {
@@ -330,8 +372,38 @@ async function ensureProvider(skillId, skill, provider) {
         name,
         skillId,
     ))[0];
+    const actor = await getActor(actorId);
+    const pricing = getPrimaryPricing(actor);
 
-    const syncConfig = JSON.stringify({ actorId });
+    if (!pricing) {
+        if (existing) {
+            await prisma.$executeRawUnsafe(
+                `UPDATE "Provider"
+                 SET "isActive" = false,
+                     "syncConfig" = $2
+                 WHERE id = $1`,
+                existing.id,
+                JSON.stringify({
+                    actorId,
+                    skippedReason: "not-pay-per-event",
+                    source: "apify-store",
+                    sourceUrl: actor.url,
+                    importedAt: new Date().toISOString(),
+                }),
+            );
+        }
+        return { id: existing?.id ?? null, created: false, skipped: true };
+    }
+
+    const pricePerCall = pricing.primaryEventPriceUsd ?? skill.pricePerCall;
+
+    const syncConfig = JSON.stringify({
+        actorId,
+        pricing,
+        source: "apify-store",
+        sourceUrl: actor.url,
+        importedAt: new Date().toISOString(),
+    });
 
     if (existing) {
         await prisma.$executeRawUnsafe(
@@ -341,11 +413,11 @@ async function ensureProvider(skillId, skill, provider) {
              WHERE id = $1`,
             existing.id,
             PROVIDER_ENDPOINT,
-            skill.pricePerCall,
+            pricePerCall,
             APIFY_API_KEY,
             syncConfig,
         );
-        return { id: existing.id, created: false };
+        return { id: existing.id, created: false, skipped: false };
     }
 
     const rows = await prisma.$queryRawUnsafe(
@@ -355,12 +427,12 @@ async function ensureProvider(skillId, skill, provider) {
         name,
         skillId,
         PROVIDER_ENDPOINT,
-        skill.pricePerCall,
+        pricePerCall,
         APIFY_API_KEY,
         syncConfig,
     );
 
-    return { id: rows[0].id, created: true };
+    return { id: rows[0].id, created: true, skipped: false };
 }
 
 async function main() {
@@ -368,6 +440,7 @@ async function main() {
     let skillsUpdated = 0;
     let providersCreated = 0;
     let providersUpdated = 0;
+    let providersSkipped = 0;
 
     console.log("Starting LinkedIn Apify actor import...\n");
 
@@ -380,6 +453,11 @@ async function main() {
 
         for (const provider of skill.providers) {
             const providerResult = await ensureProvider(skillResult.id, skill, provider);
+            if (providerResult.skipped) {
+                providersSkipped++;
+                console.log(`  - skipped ${provider.username}/${provider.actor} (not PAY_PER_EVENT)`);
+                continue;
+            }
             if (providerResult.created) providersCreated++;
             else providersUpdated++;
 
@@ -393,6 +471,7 @@ Skills created: ${skillsCreated}
 Skills updated: ${skillsUpdated}
 Providers created: ${providersCreated}
 Providers updated: ${providersUpdated}
+Providers skipped: ${providersSkipped}
 `);
 }
 
