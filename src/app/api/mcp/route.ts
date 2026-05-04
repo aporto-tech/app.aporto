@@ -27,7 +27,16 @@ import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/
 import { z } from "zod";
 import { validateApiKeyOrSession, deductUserQuota, logServiceUsage } from "@/lib/serviceProxy";
 import { prisma } from "@/lib/prisma";
-import { discoverSkills, selectProvider, executeSkillViaProvider, updateProviderStats, recordSkillCall } from "@/lib/routing";
+import { logSkillDiscovery } from "@/lib/discoveryLogs";
+import {
+    MAX_PROVIDER_ATTEMPTS,
+    deactivateSkillIfNoActiveProviders,
+    discoverSkills,
+    executeSkillViaProvider,
+    recordSkillCall,
+    selectProvider,
+    updateProviderStats,
+} from "@/lib/routing";
 
 export const dynamic = "force-dynamic";
 
@@ -70,20 +79,53 @@ function buildMcpServer(userId: number, authHeader: string) {
         sessionId: string,
         costUSD?: number,
     ): Promise<{ success: boolean; data: unknown } | null> {
-        const provider = await selectProvider(skillId, sessionId, userId);
-        if (!provider) return null;
+        const attemptedProviderIds: number[] = [];
+        let lastFailure: { provider: string; data: unknown } | null = null;
 
-        const { success, data, latencyMs } = await executeSkillViaProvider(provider, params, authHeader);
+        for (let attempt = 1; attempt <= MAX_PROVIDER_ATTEMPTS; attempt++) {
+            const provider = await selectProvider(skillId, sessionId, userId, undefined, false, attemptedProviderIds);
+            if (!provider) {
+                await deactivateSkillIfNoActiveProviders(skillId);
+                if (!lastFailure) return null;
+                return {
+                    success: false,
+                    data: {
+                        message: "All provider attempts failed; no alternate providers remain.",
+                        attempts: attemptedProviderIds.length,
+                        lastFailure,
+                    },
+                };
+            }
 
-        void recordSkillCall({
-            sessionId, newApiUserId: userId, skillId, providerId: provider.id,
-            latencyMs, success, costUSD,
-        }).catch((e) => console.error("[callSkill] recordSkillCall:", e));
+            attemptedProviderIds.push(provider.id);
 
-        void updateProviderStats(provider.id, latencyMs, success)
-            .catch((e) => console.error("[callSkill] updateProviderStats:", e));
+            const { success, data, latencyMs, errorType } = await executeSkillViaProvider(provider, params, authHeader);
 
-        return { success, data };
+            void recordSkillCall({
+                sessionId, newApiUserId: userId, skillId, providerId: provider.id,
+                isRetry: attempt > 1,
+                retryAttempt: attempt,
+                latencyMs, success, costUSD: success ? costUSD : 0,
+                errorType,
+            }).catch((e) => console.error("[callSkill] recordSkillCall:", e));
+
+            void updateProviderStats(provider.id, latencyMs, success, errorType === "timeout")
+                .catch((e) => console.error("[callSkill] updateProviderStats:", e));
+
+            if (success) return { success, data };
+
+            lastFailure = { provider: provider.name, data };
+            if (errorType === "error_4xx") break;
+        }
+
+        return {
+            success: false,
+            data: {
+                message: "All provider attempts failed.",
+                attempts: attemptedProviderIds.length,
+                lastFailure,
+            },
+        };
     }
 
     // ── aporto_search ─────────────────────────────────────────────────────────
@@ -321,9 +363,21 @@ function buildMcpServer(userId: number, authHeader: string) {
             category:   z.string().optional().describe("Filter by category, e.g. 'media/image', 'search/web', 'llm/chat', 'communication/sms'"),
             capability: z.string().optional().describe("Filter by capability verb, e.g. 'generate', 'search', 'transcribe', 'translate', 'send'"),
         },
-        async ({ query, page = 0, category, capability }) => {
+        async ({ query, sessionId, page = 0, category, capability }) => {
             try {
+                const start = Date.now();
                 const skills = await discoverSkills(query, page, { category, capability });
+                void logSkillDiscovery({
+                    newApiUserId: userId,
+                    source: "mcp",
+                    query,
+                    page,
+                    category,
+                    capability,
+                    sessionId,
+                    skills,
+                    latencyMs: Date.now() - start,
+                });
                 if (skills.length === 0) {
                     return {
                         content: [{ type: "text" as const, text: page > 0
@@ -349,6 +403,16 @@ function buildMcpServer(userId: number, authHeader: string) {
                     content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
                 };
             } catch (err) {
+                void logSkillDiscovery({
+                    newApiUserId: userId,
+                    source: "mcp",
+                    query,
+                    page,
+                    category,
+                    capability,
+                    sessionId,
+                    error: String(err),
+                });
                 return {
                     content: [{ type: "text" as const, text: `Discovery error: ${String(err)}` }],
                     isError: true,

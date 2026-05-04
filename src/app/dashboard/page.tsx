@@ -8,6 +8,7 @@ import DashboardLayout from "../components/DashboardLayout";
 import AddFundsModal from "../components/AddFundsModal";
 import { Skeleton, SkeletonRow } from "../components/Skeleton";
 import styles from "../dashboard.module.css";
+import { claimStoredProviderAttribution } from "@/lib/referralClient";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -109,6 +110,11 @@ export default function DashboardPage() {
             router.push("/login");
         }
     }, [status, router]);
+
+    useEffect(() => {
+        if (status !== "authenticated") return;
+        void claimStoredProviderAttribution().catch(() => false);
+    }, [status]);
 
     // ─── Fetch balance from New-API ──────────────────────────────────────────
     useEffect(() => {

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { newApiCreateUser, newApiGrantWelcomeBonus } from "@/lib/newapi";
 import { sendWelcomeEmail } from "@/lib/emails";
+import { createProviderAttribution } from "@/lib/providerAttribution";
 import crypto from "crypto";
 
 export async function POST(req: NextRequest) {
@@ -38,7 +39,7 @@ export async function POST(req: NextRequest) {
         // Look up user for lead payload and idempotency check.
         const user = await prisma.user.findUnique({
             where: { email },
-            select: { name: true, emailVerified: true },
+            select: { name: true, emailVerified: true, pendingReferralProviderId: true },
         });
 
         if (user?.emailVerified) {
@@ -70,9 +71,17 @@ export async function POST(req: NextRequest) {
         if (newApiUser) {
             await prisma.user.update({
                 where: { email },
-                data: { newApiUserId: newApiUser.id },
+                data: { newApiUserId: newApiUser.id, pendingReferralProviderId: null },
             });
             console.log(`[verify-email] New-API user created: id=${newApiUser.id} for ${email}`);
+
+            if (user?.pendingReferralProviderId) {
+                await createProviderAttribution({
+                    newApiUserId: newApiUser.id,
+                    providerId: user.pendingReferralProviderId,
+                    source: "signup",
+                });
+            }
 
             // Grant $3 welcome bonus (1,500,000 quota units).
             const bonusGranted = await newApiGrantWelcomeBonus(newApiUser.id);

@@ -1,19 +1,25 @@
 "use client";
 
-import React, { useState, Suspense } from "react";
+import React, { useEffect, useState, Suspense } from "react";
 import styles from "./styles.module.css";
 import { signIn } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
+import { captureReferralProviderId, claimStoredProviderAttribution, withReferralProvider } from "@/lib/referralClient";
 
 function LoginForm() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [, setReferralProviderId] = useState<number | null>(null);
   const router = useRouter();
   const searchParams = useSearchParams();
   const registered = searchParams.get("registered");
+
+  useEffect(() => {
+    setReferralProviderId(captureReferralProviderId());
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -30,6 +36,7 @@ function LoginForm() {
       if (result?.error) {
         setError("Invalid email or password");
       } else {
+        await claimStoredProviderAttribution().catch(() => false);
         router.push("/dashboard");
         router.refresh();
       }
@@ -131,7 +138,7 @@ function LoginForm() {
           </button>
 
           <p className={styles.footer}>
-            Don&apos;t have an account? <Link href="/register" className={styles.signUpLink}>Sign up</Link>
+            Don&apos;t have an account? <Link href={withReferralProvider("/register")} className={styles.signUpLink}>Sign up</Link>
           </p>
         </div>
       </div>

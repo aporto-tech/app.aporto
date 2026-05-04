@@ -5,6 +5,7 @@ import styles from "../login/styles.module.css";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { signIn } from "next-auth/react";
+import { captureReferralProviderId, clearReferralProviderId, withReferralProvider } from "@/lib/referralClient";
 
 type Step = "form" | "otp";
 
@@ -19,11 +20,16 @@ export default function RegisterPage() {
     // Countdown in seconds before "Resend code" becomes available again
     const [resendCountdown, setResendCountdown] = useState(0);
     const [promoCode, setPromoCode] = useState("");
+    const [referralProviderId, setReferralProviderId] = useState<number | null>(null);
     const [promoSuccess, setPromoSuccess] = useState("");
     const [showPassword, setShowPassword] = useState(false);
     const router = useRouter();
 
     const isFormReady = !!(formData.name && formData.email && formData.password);
+
+    useEffect(() => {
+        setReferralProviderId(captureReferralProviderId());
+    }, []);
 
     // Tick down the resend cooldown every second
     useEffect(() => {
@@ -42,7 +48,7 @@ export default function RegisterPage() {
             const response = await fetch("/api/auth/register", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(formData),
+                body: JSON.stringify({ ...formData, referralProviderId }),
             });
 
             const data = await response.json();
@@ -94,6 +100,7 @@ export default function RegisterPage() {
             if (res?.error) {
                 throw new Error("Login failed after verification. Please go to login page.");
             }
+            clearReferralProviderId();
 
             const mp = (window as any).mixpanel;
             if (mp) mp.track("user_signed_up", { has_promo_code: !!promoCode.trim() });
@@ -263,7 +270,7 @@ export default function RegisterPage() {
 
                             <p className={styles.footer}>
                                 Already have an account?{" "}
-                                <Link href="/login" className={styles.signUpLink}>Login</Link>
+                                <Link href={withReferralProvider("/login")} className={styles.signUpLink}>Login</Link>
                             </p>
                         </>
                     )}

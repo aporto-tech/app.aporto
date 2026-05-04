@@ -1,7 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createHash } from "crypto";
 import { validateApiKeyOrSession, deductUserQuota, logServiceUsage } from "@/lib/serviceProxy";
-import { selectProvider, executeSkillViaProvider, updateProviderStats, recordSkillCall, createSkillRevenue } from "@/lib/routing";
+import {
+    MAX_PROVIDER_ATTEMPTS,
+    createSkillRevenue,
+    deactivateSkillIfNoActiveProviders,
+    executeSkillViaProvider,
+    recordSkillCall,
+    selectProvider,
+    updateProviderStats,
+} from "@/lib/routing";
 import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
@@ -77,51 +85,74 @@ export async function POST(req: NextRequest) {
     }
 
     try {
-        const provider = await selectProvider(skillId, resolvedSessionId, auth.newApiUserId, paramsHash, isThirdParty);
-        if (!provider) {
-            const msg = isThirdParty
-                ? "No active providers available for this skill. The skill provider may be misconfigured."
-                : "No active providers for this skill";
-            return NextResponse.json({ success: false, message: msg }, { status: 503 });
-        }
+        const attemptedProviderIds: number[] = [];
+        let lastFailure: { provider: string; latencyMs: number; errorType: string; result: unknown } | null = null;
 
-        // For variable-cost providers (e.g. TTS), calculate actual cost from params.text.
-        // Falls back to pricePerCall for fixed-cost providers.
-        const textLen = typeof (params as Record<string, unknown>).text === "string"
-            ? ((params as Record<string, unknown>).text as string).length
-            : 0;
-        const actualCost =
-            provider.costPerChar != null && textLen > 0
-                ? Math.max(0.0001, textLen * provider.costPerChar)
-                : provider.pricePerCall;
-
-        // Deduct balance before calling provider — returns 402 if insufficient
-        const balanceError = await deductUserQuota(auth.newApiUserId, actualCost);
-        if (balanceError) return balanceError;
-
-        const { success, data, latencyMs, errorType } = await executeSkillViaProvider(provider, params, authHeader, isThirdParty);
-
-        // Refund if provider failed
-        if (!success) {
-            void prisma.$executeRawUnsafe(
-                `UPDATE users SET quota = quota + $1, used_quota = used_quota - $1 WHERE id = $2`,
-                Math.ceil(actualCost * QUOTA_PER_DOLLAR),
+        for (let attempt = 1; attempt <= MAX_PROVIDER_ATTEMPTS; attempt++) {
+            const provider = await selectProvider(
+                skillId,
+                resolvedSessionId,
                 auth.newApiUserId,
-            ).catch((e) => console.error("[routing/execute] refund failed:", e));
-        }
+                paramsHash,
+                isThirdParty,
+                attemptedProviderIds,
+            );
 
-        void recordSkillCall({
-            sessionId: resolvedSessionId,
-            newApiUserId: auth.newApiUserId,
-            skillId,
-            providerId: provider.id,
-            isRetry,
-            latencyMs,
-            success,
-            costUSD: success ? actualCost : 0,
-            paramsHash,
-            errorType,
-        }).then((skillCallId) => {
+            if (!provider) {
+                const deactivated = await deactivateSkillIfNoActiveProviders(skillId);
+                const msg = isThirdParty
+                    ? "No active providers available for this skill. The skill provider may be misconfigured."
+                    : "No active providers for this skill";
+                return NextResponse.json({
+                    success: false,
+                    message: lastFailure ? "All provider attempts failed; no alternate providers remain." : msg,
+                    attempts: attemptedProviderIds.length,
+                    deactivated,
+                    lastFailure,
+                }, { status: lastFailure ? 502 : 503 });
+            }
+
+            attemptedProviderIds.push(provider.id);
+
+            // For variable-cost providers (e.g. TTS), calculate actual cost from params.text.
+            // Falls back to pricePerCall for fixed-cost providers.
+            const textLen = typeof (params as Record<string, unknown>).text === "string"
+                ? ((params as Record<string, unknown>).text as string).length
+                : 0;
+            const actualCost =
+                provider.costPerChar != null && textLen > 0
+                    ? Math.max(0.0001, textLen * provider.costPerChar)
+                    : provider.pricePerCall;
+
+            // Deduct balance before calling provider — returns 402 if insufficient
+            const balanceError = await deductUserQuota(auth.newApiUserId, actualCost);
+            if (balanceError) return balanceError;
+
+            const { success, data, latencyMs, errorType } = await executeSkillViaProvider(provider, params, authHeader, isThirdParty);
+
+            // Refund if provider failed
+            if (!success) {
+                void prisma.$executeRawUnsafe(
+                    `UPDATE users SET quota = quota + $1, used_quota = used_quota - $1 WHERE id = $2`,
+                    Math.ceil(actualCost * QUOTA_PER_DOLLAR),
+                    auth.newApiUserId,
+                ).catch((e) => console.error("[routing/execute] refund failed:", e));
+            }
+
+            const skillCallId = await recordSkillCall({
+                sessionId: resolvedSessionId,
+                newApiUserId: auth.newApiUserId,
+                skillId,
+                providerId: provider.id,
+                isRetry: isRetry || attempt > 1,
+                retryAttempt: attempt,
+                latencyMs,
+                success,
+                costUSD: success ? actualCost : 0,
+                paramsHash,
+                errorType,
+            });
+
             // Write revenue record for third-party skill calls
             if (success && isThirdParty && publisherId && revenueShare != null && actualCost > 0) {
                 void createSkillRevenue({
@@ -132,22 +163,39 @@ export async function POST(req: NextRequest) {
                     revenueShare,
                 }).catch(() => {/* error already logged inside createSkillRevenue */});
             }
-        }).catch((e) => console.error("[routing/execute] recordSkillCall:", e));
 
-        void updateProviderStats(provider.id, latencyMs, success, errorType === "timeout")
-            .catch((e) => console.error("[routing/execute] updateProviderStats:", e));
+            void updateProviderStats(provider.id, latencyMs, success, errorType === "timeout")
+                .catch((e) => console.error("[routing/execute] updateProviderStats:", e));
 
-        void logServiceUsage(auth.newApiUserId, "skill", provider.name, success ? actualCost : 0, { skillId, latencyMs, errorType })
-            .catch((e) => console.error("[routing/execute] logServiceUsage:", e));
+            void logServiceUsage(auth.newApiUserId, "skill", provider.name, success ? actualCost : 0, { skillId, latencyMs, errorType, attempt })
+                .catch((e) => console.error("[routing/execute] logServiceUsage:", e));
+
+            if (success) {
+                return NextResponse.json({
+                    success,
+                    provider: provider.name,
+                    latencyMs,
+                    costUSD: actualCost,
+                    errorType,
+                    attempts: attempt,
+                    result: data,
+                }, { status: 200 });
+            }
+
+            lastFailure = { provider: provider.name, latencyMs, errorType, result: data };
+
+            if (errorType === "error_4xx") {
+                break;
+            }
+        }
 
         return NextResponse.json({
-            success,
-            provider: provider.name,
-            latencyMs,
-            costUSD: success ? actualCost : 0,
-            errorType,
-            result: data,
-        }, { status: success ? 200 : 502 });
+            success: false,
+            message: "All provider attempts failed.",
+            attempts: attemptedProviderIds.length,
+            costUSD: 0,
+            lastFailure,
+        }, { status: 502 });
     } catch (err) {
         console.error("[routing/execute] error:", err);
         const isNetworkError =

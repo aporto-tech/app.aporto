@@ -47,6 +47,7 @@ model User {
   stripePaymentMethodBrand       String?
   stripePaymentMethodLast4       String?
   stripePaymentMethodExpiry      String?
+  pendingReferralProviderId      Int?
   lastInsufficientBalanceEmailAt DateTime?         @db.Timestamptz(6)
   accounts                       Account[]
   PromoRedemption                PromoRedemption[]
@@ -131,6 +132,33 @@ model ServiceUsage {
 
   @@index([newApiUserId])
   @@index([service])
+}
+
+model SkillDiscoveryLog {
+  id            String   @id @default(cuid())
+  newApiUserId  Int
+  tokenId       Int?
+  source        String
+  query         String
+  normalized    String
+  page          Int      @default(0)
+  category      String?
+  capability    String?
+  sessionId     String?
+  resultCount   Int      @default(0)
+  topSkillIds   String?
+  topSimilarity Float?
+  noResults     Boolean  @default(false)
+  latencyMs     Int?
+  error         String?
+  userAgent     String?
+  ipHash        String?
+  createdAt     DateTime @default(now())
+
+  @@index([createdAt(sort: Desc)])
+  @@index([newApiUserId, createdAt(sort: Desc)])
+  @@index([noResults, createdAt(sort: Desc)])
+  @@index([normalized])
 }
 
 model Publisher {
@@ -228,6 +256,7 @@ model Skill {
   publisher    Publisher?             @relation(fields: [publisherId], references: [id])
   calls        SkillCall[]
   revenue      SkillRevenue[]
+  attributions ProviderAttribution[]
 
   @@index([status])
   @@index([publisherId])
@@ -253,6 +282,26 @@ model Provider {
   skill          Skill            @relation(fields: [skillId], references: [id])
   options        ProviderOption[]
   calls          SkillCall[]
+  attributions   ProviderAttribution[]
+}
+
+model ProviderAttribution {
+  id               Int      @id @default(autoincrement())
+  newApiUserId     Int
+  skillId          Int
+  providerId       Int
+  source           String   @default("referral")
+  status           String   @default("active")
+  successThreshold Float    @default(0.85)
+  minCalls         Int      @default(20)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  provider         Provider @relation(fields: [providerId], references: [id])
+  skill            Skill    @relation(fields: [skillId], references: [id])
+
+  @@unique([newApiUserId, skillId])
+  @@index([newApiUserId, status])
+  @@index([providerId, status])
 }
 
 model ProviderOption {
@@ -280,6 +329,7 @@ model SkillCall {
   skillId      Int
   providerId   Int
   isRetry      Boolean       @default(false)
+  retryAttempt Int           @default(1)
   latencyMs    Int?
   success      Boolean?
   costUSD      Float?

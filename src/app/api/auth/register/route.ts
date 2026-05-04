@@ -3,10 +3,11 @@ import { prisma } from "@/lib/prisma";
 import bcrypt from "bcrypt";
 import { getResend } from "@/lib/resend";
 import { upsertOtp } from "@/lib/otp";
+import { getActiveProviderSkill } from "@/lib/providerAttribution";
 
 export async function POST(req: NextRequest) {
     try {
-        const { email, password, name } = await req.json();
+        const { email, password, name, providerId, referralProviderId } = await req.json();
 
         if (!email || !password) {
             return NextResponse.json(
@@ -32,6 +33,10 @@ export async function POST(req: NextRequest) {
         }
 
         const hashedPassword = await bcrypt.hash(password, 10);
+        const pendingReferralProviderId = Number(providerId ?? referralProviderId) || null;
+        const validReferral = pendingReferralProviderId
+            ? await getActiveProviderSkill(pendingReferralProviderId)
+            : null;
 
         // Create user with emailVerified: null — they must complete OTP before logging in.
         // New-API user creation is deferred to verify-email so newApiUserId is set
@@ -42,6 +47,7 @@ export async function POST(req: NextRequest) {
                 password: hashedPassword,
                 name,
                 emailVerified: null,
+                pendingReferralProviderId: validReferral ? pendingReferralProviderId : null,
             },
         });
 

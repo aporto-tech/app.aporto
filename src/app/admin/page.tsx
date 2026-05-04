@@ -89,6 +89,27 @@ interface StatsData {
     topSkills: StatsSkill[];
     providers: StatsProvider[];
     dailyVolume: StatsDayVolume[];
+    discovery: {
+        totalQueries: number;
+        noResultQueries: number;
+        noResultRate: number;
+        errorQueries: number;
+        avgLatencyMs: number;
+        topNoResultQueries: Array<{
+            query: string;
+            normalized: string;
+            count: number;
+            lastSeen: string;
+        }>;
+        recentNoResultQueries: Array<{
+            id: string;
+            query: string;
+            source: string;
+            category: string | null;
+            capability: string | null;
+            createdAt: string;
+        }>;
+    };
 }
 
 type Tab = "promo" | "skills" | "stats" | "pending" | "publishers";
@@ -1001,7 +1022,7 @@ function StatsTab() {
     if (loading) return <div className={styles.tabLoading}>Loading stats...</div>;
     if (error || !data) return <div className={styles.tabError}>Error loading stats: {error} <button className={styles.retryBtn} onClick={fetchStats}>Retry</button></div>;
 
-    const { overview, topSkills, providers, dailyVolume } = data;
+    const { overview, topSkills, providers, dailyVolume, discovery } = data;
     const maxCalls = Math.max(...dailyVolume.map((d) => d.calls), 1);
 
     return (
@@ -1044,6 +1065,77 @@ function StatsTab() {
                     </div>
                 </div>
             </div>
+
+            {/* Discovery demand */}
+            <div className={styles.statsGrid}>
+                <div className={styles.statsCard}>
+                    <div className={styles.statsCardLabel}>Discovery Queries</div>
+                    <div className={styles.statsCardValue}>{discovery.totalQueries.toLocaleString()}</div>
+                </div>
+                <div className={styles.statsCard}>
+                    <div className={styles.statsCardLabel}>No Skill Found</div>
+                    <div className={styles.statsCardValue} style={{ color: discovery.noResultRate > 0.2 ? "#ef4444" : "#f59e0b" }}>
+                        {discovery.noResultQueries.toLocaleString()}
+                    </div>
+                </div>
+                <div className={styles.statsCard}>
+                    <div className={styles.statsCardLabel}>No-result Rate</div>
+                    <div className={styles.statsCardValue} style={{ color: discovery.noResultRate > 0.2 ? "#ef4444" : "#cbd5e1" }}>
+                        {(discovery.noResultRate * 100).toFixed(1)}%
+                    </div>
+                </div>
+                <div className={styles.statsCard}>
+                    <div className={styles.statsCardLabel}>Discovery Latency</div>
+                    <div className={styles.statsCardValue}>{discovery.avgLatencyMs}ms</div>
+                </div>
+            </div>
+
+            {discovery.topNoResultQueries.length > 0 && (
+                <div className={styles.section}>
+                    <p className={styles.sectionTitle}>Missing Skill Demand</p>
+                    <div className={styles.tableWrapper}>
+                        <table className={styles.table}>
+                            <thead>
+                                <tr><th>Query</th><th>Count</th><th>Last Seen</th></tr>
+                            </thead>
+                            <tbody>
+                                {discovery.topNoResultQueries.map((q) => (
+                                    <tr key={q.normalized}>
+                                        <td style={{ fontWeight: 500 }}>{q.query}</td>
+                                        <td>{q.count}</td>
+                                        <td style={{ color: "#64748b" }}>{new Date(q.lastSeen).toLocaleString()}</td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            )}
+
+            {discovery.recentNoResultQueries.length > 0 && (
+                <div className={styles.section}>
+                    <p className={styles.sectionTitle}>Recent No-result Discovery Requests</p>
+                    <div className={styles.tableWrapper}>
+                        <table className={styles.table}>
+                            <thead>
+                                <tr><th>Query</th><th>Source</th><th>Filters</th><th>Created</th></tr>
+                            </thead>
+                            <tbody>
+                                {discovery.recentNoResultQueries.map((q) => (
+                                    <tr key={q.id}>
+                                        <td style={{ fontWeight: 500 }}>{q.query}</td>
+                                        <td>{q.source}</td>
+                                        <td style={{ color: "#64748b" }}>
+                                            {[q.category, q.capability].filter(Boolean).join(" / ") || "none"}
+                                        </td>
+                                        <td style={{ color: "#64748b" }}>{new Date(q.createdAt).toLocaleString()}</td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            )}
 
             {/* Error breakdown */}
             <div className={styles.section}>

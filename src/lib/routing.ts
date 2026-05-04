@@ -15,6 +15,10 @@ import { prisma } from "@/lib/prisma";
 import { embedQuery } from "@/lib/embeddings";
 
 const PAGE_SIZE = 5;
+export const MAX_PROVIDER_ATTEMPTS = Math.min(
+    Math.max(Number(process.env.SKILL_MAX_PROVIDER_ATTEMPTS ?? 3) || 3, 1),
+    5,
+);
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -48,6 +52,33 @@ export interface ScoredProvider {
 }
 
 type ErrorType = "success" | "timeout" | "network_error" | "error_5xx" | "error_4xx";
+type ProviderRow = {
+    id: number;
+    name: string;
+    endpoint: string;
+    price_per_call: number;
+    cost_per_char: number | null;
+    avg_latency_ms: number;
+    retry_rate: number;
+    timeout_rate: number;
+    secret: string | null;
+    sync_config: string | null;
+};
+
+function toScoredProvider(row: ProviderRow): ScoredProvider {
+    return {
+        id: row.id,
+        name: row.name,
+        endpoint: row.endpoint,
+        pricePerCall: Number(row.price_per_call),
+        costPerChar: row.cost_per_char != null ? Number(row.cost_per_char) : null,
+        avgLatencyMs: Number(row.avg_latency_ms),
+        retryRate: Number(row.retry_rate),
+        timeoutRate: Number(row.timeout_rate),
+        secret: row.secret ?? null,
+        syncConfig: row.sync_config ? JSON.parse(row.sync_config) : null,
+    };
+}
 
 // ── discoverSkills ────────────────────────────────────────────────────────────
 
@@ -60,7 +91,17 @@ export async function discoverSkills(
     const vectorLiteral = `[${embedding.join(",")}]`;
     const offset = page * PAGE_SIZE;
 
-    const conditions: string[] = [`"isActive" = true`, `embedding IS NOT NULL`, `status = 'live'`];
+    const conditions: string[] = [
+        `"isActive" = true`,
+        `embedding IS NOT NULL`,
+        `status = 'live'`,
+        `EXISTS (
+            SELECT 1
+            FROM "Provider" p
+            WHERE p."skillId" = "Skill".id
+              AND p."isActive" = true
+        )`,
+    ];
     const args: unknown[] = [vectorLiteral, PAGE_SIZE, offset];
     let argIdx = 4;
 
@@ -114,11 +155,20 @@ export async function selectProvider(
     newApiUserId: number,
     paramsHash?: string,
     isThirdParty = false,
+    excludeProviderIds: number[] = [],
 ): Promise<ScoredProvider | null> {
     // Unified CTE: exclude providers used in this session (24h) OR same paramsHash (2 min)
     // For third-party skills: also exclude providers without a providerSecret (T1 guard)
+    const exclusions = Array.from(new Set(excludeProviderIds.filter((id) => Number.isInteger(id) && id > 0)));
+    const exclusionClause = exclusions.length
+        ? `AND p.id NOT IN (${exclusions.map((_, idx) => `$${idx + 6}`).join(", ")})`
+        : "";
+
+    const preferred = await selectAttributedProvider(skillId, newApiUserId, isThirdParty, exclusions);
+    if (preferred) return preferred;
+
     const rows = await prisma.$queryRawUnsafe<
-        { id: number; name: string; endpoint: string; price_per_call: number; cost_per_char: number | null; avg_latency_ms: number; retry_rate: number; timeout_rate: number; secret: string | null; sync_config: string | null }[]
+        ProviderRow[]
     >(
         `WITH used AS (
             SELECT DISTINCT "providerId"
@@ -152,12 +202,14 @@ export async function selectProvider(
           AND p."isActive" = true
           AND p.id NOT IN (SELECT "providerId" FROM used)
           AND ($5 = false OR p."providerSecret" IS NOT NULL)
+          ${exclusionClause}
         ORDER BY p.id`,
         sessionId,
         newApiUserId,
         skillId,
         paramsHash ?? null,
         isThirdParty,
+        ...exclusions,
     );
 
     if (rows.length === 0) return null;
@@ -188,18 +240,119 @@ export async function selectProvider(
     // Primary sort: score desc; tiebreaker: id asc (stable, deterministic)
     scored.sort((a, b) => b.score - a.score || a.id - b.id);
     const best = scored[0];
-    return {
-        id: best.id,
-        name: best.name,
-        endpoint: best.endpoint,
-        pricePerCall: Number(best.price_per_call),
-        costPerChar: best.cost_per_char != null ? Number(best.cost_per_char) : null,
-        avgLatencyMs: Number(best.avg_latency_ms),
-        retryRate: Number(best.retry_rate),
-        timeoutRate: Number(best.timeout_rate),
-        secret: best.secret ?? null,
-        syncConfig: best.sync_config ? JSON.parse(best.sync_config) : null,
-    };
+    return toScoredProvider(best);
+}
+
+async function selectAttributedProvider(
+    skillId: number,
+    newApiUserId: number,
+    isThirdParty: boolean,
+    excludeProviderIds: number[],
+): Promise<ScoredProvider | null> {
+    const exclusions = Array.from(new Set(excludeProviderIds.filter((id) => Number.isInteger(id) && id > 0)));
+    const exclusionClause = exclusions.length
+        ? `AND p.id NOT IN (${exclusions.map((_, idx) => `$${idx + 4}`).join(", ")})`
+        : "";
+
+    const rows = await prisma.$queryRawUnsafe<(ProviderRow & {
+        attribution_id: number;
+        success_threshold: number;
+        min_calls: number;
+        recent_calls: number;
+        recent_successes: number;
+    })[]>(
+        `WITH recent AS (
+            SELECT success
+            FROM "SkillCall"
+            WHERE "providerId" = (
+                SELECT "providerId"
+                FROM "ProviderAttribution"
+                WHERE "newApiUserId" = $2
+                  AND "skillId" = $1
+                  AND status = 'active'
+                LIMIT 1
+            )
+            ORDER BY "createdAt" DESC
+            LIMIT 100
+        )
+        SELECT
+            p.id,
+            p.name,
+            p.endpoint,
+            p."pricePerCall"    AS price_per_call,
+            p."costPerChar"     AS cost_per_char,
+            p."avgLatencyMs"    AS avg_latency_ms,
+            p."retryRate"       AS retry_rate,
+            p."timeoutRate"     AS timeout_rate,
+            p."providerSecret"  AS secret,
+            p."syncConfig"      AS sync_config,
+            a.id                AS attribution_id,
+            a."successThreshold" AS success_threshold,
+            a."minCalls"        AS min_calls,
+            COUNT(recent.success)::int AS recent_calls,
+            COUNT(recent.success) FILTER (WHERE recent.success = true)::int AS recent_successes
+        FROM "ProviderAttribution" a
+        JOIN "Provider" p ON p.id = a."providerId"
+        LEFT JOIN recent ON true
+        WHERE a."newApiUserId" = $2
+          AND a."skillId" = $1
+          AND a.status = 'active'
+          AND p."skillId" = $1
+          AND p."isActive" = true
+          AND ($3 = false OR p."providerSecret" IS NOT NULL)
+          ${exclusionClause}
+        GROUP BY p.id, a.id
+        LIMIT 1`,
+        skillId,
+        newApiUserId,
+        isThirdParty,
+        ...exclusions,
+    );
+
+    const row = rows[0];
+    if (!row) return null;
+
+    const recentCalls = Number(row.recent_calls);
+    const recentSuccesses = Number(row.recent_successes);
+    const successRate = recentCalls === 0 ? 1 : recentSuccesses / recentCalls;
+    const minCalls = Number(row.min_calls);
+    const threshold = Number(row.success_threshold);
+
+    if (recentCalls >= minCalls && successRate < threshold) {
+        await prisma.$executeRawUnsafe(
+            `UPDATE "ProviderAttribution"
+             SET status = 'expired_low_success_rate',
+                 "updatedAt" = NOW()
+             WHERE id = $1`,
+            row.attribution_id,
+        );
+        return null;
+    }
+
+    return toScoredProvider(row);
+}
+
+export async function deactivateSkillIfNoActiveProviders(skillId: number): Promise<boolean> {
+    const rows = await prisma.$queryRawUnsafe<{ count: number }[]>(
+        `SELECT COUNT(*)::int AS count
+         FROM "Provider"
+         WHERE "skillId" = $1
+           AND "isActive" = true`,
+        skillId,
+    );
+
+    if ((rows[0]?.count ?? 0) > 0) return false;
+
+    const updated = await prisma.$executeRawUnsafe(
+        `UPDATE "Skill"
+         SET "isActive" = false,
+             "reviewNote" = 'Auto-disabled: no active providers available.',
+             "lastEditedAt" = NOW()
+         WHERE id = $1
+           AND "isActive" = true`,
+        skillId,
+    );
+    return updated > 0;
 }
 
 // ── executeSkillViaProvider ───────────────────────────────────────────────────
@@ -357,6 +510,7 @@ export async function recordSkillCall(data: {
     skillId: number;
     providerId: number;
     isRetry?: boolean;
+    retryAttempt?: number;
     latencyMs?: number;
     success?: boolean;
     costUSD?: number;
@@ -364,14 +518,15 @@ export async function recordSkillCall(data: {
     errorType?: string;
 }): Promise<number> {
     const row = await prisma.$queryRawUnsafe<{ id: number }[]>(
-        `INSERT INTO "SkillCall" ("sessionId", "newApiUserId", "skillId", "providerId", "isRetry", "latencyMs", "success", "costUSD", "paramsHash", "errorType", "createdAt")
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW())
+        `INSERT INTO "SkillCall" ("sessionId", "newApiUserId", "skillId", "providerId", "isRetry", "retryAttempt", "latencyMs", "success", "costUSD", "paramsHash", "errorType", "createdAt")
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW())
          RETURNING id`,
         data.sessionId,
         data.newApiUserId,
         data.skillId,
         data.providerId,
         data.isRetry ?? false,
+        data.retryAttempt ?? 1,
         data.latencyMs ?? null,
         data.success ?? null,
         data.costUSD ?? null,

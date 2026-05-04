@@ -111,6 +111,65 @@ export async function GET(req: NextRequest) {
     const totalCalls = Number(overview?.total_calls ?? 0);
     const successCalls = Number(overview?.success_calls ?? 0);
 
+    const [discoveryOverview] = await prisma.$queryRawUnsafe<{
+        total_queries: number;
+        no_result_queries: number;
+        error_queries: number;
+        avg_latency_ms: number;
+    }[]>(
+        `SELECT
+            COUNT(*)::int AS total_queries,
+            COUNT(*) FILTER (WHERE "noResults" = true)::int AS no_result_queries,
+            COUNT(*) FILTER (WHERE error IS NOT NULL)::int AS error_queries,
+            COALESCE(AVG("latencyMs") FILTER (WHERE "latencyMs" IS NOT NULL), 0)::int AS avg_latency_ms
+         FROM "SkillDiscoveryLog"
+         WHERE "createdAt" > NOW() - ($1 || ' days')::interval`,
+        period,
+    );
+
+    const topNoResultQueries = await prisma.$queryRawUnsafe<{
+        normalized: string;
+        examples: string[];
+        count: number;
+        last_seen: string;
+    }[]>(
+        `SELECT
+            normalized,
+            ARRAY_AGG(query ORDER BY "createdAt" DESC)::text[] AS examples,
+            COUNT(*)::int AS count,
+            MAX("createdAt")::text AS last_seen
+         FROM "SkillDiscoveryLog"
+         WHERE "createdAt" > NOW() - ($1 || ' days')::interval
+           AND "noResults" = true
+         GROUP BY normalized
+         ORDER BY count DESC, MAX("createdAt") DESC
+         LIMIT 20`,
+        period,
+    );
+
+    const recentNoResultQueries = await prisma.$queryRawUnsafe<{
+        id: string;
+        query: string;
+        source: string;
+        category: string | null;
+        capability: string | null;
+        created_at: string;
+    }[]>(
+        `SELECT
+            id,
+            query,
+            source,
+            category,
+            capability,
+            "createdAt"::text AS created_at
+         FROM "SkillDiscoveryLog"
+         WHERE "createdAt" > NOW() - ($1 || ' days')::interval
+           AND "noResults" = true
+         ORDER BY "createdAt" DESC
+         LIMIT 20`,
+        period,
+    );
+
     return NextResponse.json({
         overview: {
             totalCalls,
@@ -147,5 +206,28 @@ export async function GET(req: NextRequest) {
             calls: Number(d.calls),
             successCalls: Number(d.success_calls),
         })),
+        discovery: {
+            totalQueries: Number(discoveryOverview?.total_queries ?? 0),
+            noResultQueries: Number(discoveryOverview?.no_result_queries ?? 0),
+            noResultRate: Number(discoveryOverview?.total_queries ?? 0) > 0
+                ? Number(discoveryOverview?.no_result_queries ?? 0) / Number(discoveryOverview?.total_queries ?? 0)
+                : 0,
+            errorQueries: Number(discoveryOverview?.error_queries ?? 0),
+            avgLatencyMs: Number(discoveryOverview?.avg_latency_ms ?? 0),
+            topNoResultQueries: topNoResultQueries.map((q) => ({
+                query: q.examples?.[0] ?? q.normalized,
+                normalized: q.normalized,
+                count: Number(q.count),
+                lastSeen: q.last_seen,
+            })),
+            recentNoResultQueries: recentNoResultQueries.map((q) => ({
+                id: q.id,
+                query: q.query,
+                source: q.source,
+                category: q.category,
+                capability: q.capability,
+                createdAt: q.created_at,
+            })),
+        },
     });
 }
