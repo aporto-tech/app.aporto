@@ -1,0 +1,25 @@
+name: Ensure channels are enabled
+
+on:
+  schedule:
+    - cron: "0 * * * *"
+  workflow_dispatch:
+
+jobs:
+  ensure-channels-enabled:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Check and enable channels
+        env:
+          NEWAPI_URL: ${{ secrets.NEWAPI_URL }}
+          NEWAPI_ADMIN_TOKEN: ${{ secrets.NEWAPI_ADMIN_TOKEN }}
+        run: node scripts/ensure-channels-enabled.mjs
