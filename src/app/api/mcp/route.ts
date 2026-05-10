@@ -29,6 +29,7 @@ import { validateApiKeyOrSession, deductUserQuota, logServiceUsage } from "@/lib
 import { prisma } from "@/lib/prisma";
 import { logSkillDiscovery } from "@/lib/discoveryLogs";
 import { storeSkillResultArtifacts } from "@/lib/artifacts";
+import { getSkillRun, runSkill } from "@/lib/skillRuns";
 import {
     MAX_PROVIDER_ATTEMPTS,
     deactivateSkillIfNoActiveProviders,
@@ -471,7 +472,7 @@ function buildMcpServer(userId: number, authHeader: string) {
     // ── aporto_execute_skill ──────────────────────────────────────────────────
     server.tool(
         "aporto_execute_skill",
-        "Execute an Aporto skill by its ID. The routing layer picks the best provider by price and latency. Passing the same sessionId on retry will automatically use a different provider. Get skillId from aporto_discover_skills.",
+        "Low-level execution for an Aporto skill by ID. This may return a provider taskId for async skills. Prefer aporto_run_skill when you want Aporto to execute, poll, store artifacts, and return the final result when possible.",
         {
             skillId:   z.number().int().describe("Skill ID from aporto_discover_skills"),
             params:    z.record(z.unknown()).describe("Parameters for the skill — see paramsSchema returned by aporto_discover_skills"),
@@ -500,6 +501,83 @@ function buildMcpServer(userId: number, authHeader: string) {
             } catch (err) {
                 return {
                     content: [{ type: "text" as const, text: `Execution error: ${String(err)}` }],
+                    isError: true,
+                };
+            }
+        },
+    );
+
+    // ── aporto_run_skill ──────────────────────────────────────────────────────
+    server.tool(
+        "aporto_run_skill",
+        "High-level Aporto skill runner. Use this as the default tool when the user asks you to perform a task. It discovers the skill when needed, selects a provider, executes it, polls async providers when possible, stores artifacts, and returns either the final result or a runId for aporto_get_skill_run.",
+        {
+            intent:         z.string().describe("Plain-language task intent, including model/provider hints when the user names them, e.g. 'Google Nano Banana image generation' or 'Veo 3.1 720p video generation'."),
+            params:         z.record(z.unknown()).optional().default({}).describe("Parameters for the skill. For generation skills this usually includes prompt."),
+            skillId:        z.number().int().optional().describe("Optional exact skill ID from aporto_discover_skills. If omitted, Aporto discovers the best matching skill from intent."),
+            providerHint:   z.string().optional().describe("Optional provider/model hint, e.g. 'nano banana', 'sora 2', 'veo 3.1 720p', or an Apify actor/provider name."),
+            waitForResult:  z.boolean().optional().default(true).describe("When true, Aporto polls async providers within maxWaitSeconds before returning."),
+            maxWaitSeconds: z.number().int().min(1).max(55).optional().default(45).describe("Maximum time to wait for async completion in this MCP call. Long tasks return a runId."),
+            sessionId:      z.string().optional().describe("Caller-controlled session identifier for retry routing and idempotent run grouping."),
+        },
+        async ({ intent, params = {}, skillId, providerHint, waitForResult = true, maxWaitSeconds = 45, sessionId }) => {
+            try {
+                const result = await runSkill({
+                    source: "mcp",
+                    newApiUserId: userId,
+                    authHeader,
+                    intent,
+                    params,
+                    skillId,
+                    providerHint,
+                    waitForResult,
+                    maxWaitSeconds,
+                    sessionId,
+                });
+                return {
+                    content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
+                    isError: result.status === "failed",
+                };
+            } catch (err) {
+                return {
+                    content: [{ type: "text" as const, text: `Run error: ${String(err)}` }],
+                    isError: true,
+                };
+            }
+        },
+    );
+
+    // ── aporto_get_skill_run ──────────────────────────────────────────────────
+    server.tool(
+        "aporto_get_skill_run",
+        "Fetch or continue polling an Aporto SkillRun returned by aporto_run_skill. Use this when aporto_run_skill returns status 'running' or 'waiting'.",
+        {
+            runId:          z.string().describe("SkillRun ID returned by aporto_run_skill."),
+            waitForResult:  z.boolean().optional().default(true).describe("When true, Aporto polls within maxWaitSeconds before returning."),
+            maxWaitSeconds: z.number().int().min(1).max(55).optional().default(45).describe("Maximum time to wait for async completion in this MCP call."),
+        },
+        async ({ runId, waitForResult = true, maxWaitSeconds = 45 }) => {
+            try {
+                const result = await getSkillRun({
+                    source: "mcp",
+                    newApiUserId: userId,
+                    runId,
+                    waitForResult,
+                    maxWaitSeconds,
+                });
+                if (!result) {
+                    return {
+                        content: [{ type: "text" as const, text: "Skill run not found." }],
+                        isError: true,
+                    };
+                }
+                return {
+                    content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
+                    isError: result.status === "failed",
+                };
+            } catch (err) {
+                return {
+                    content: [{ type: "text" as const, text: `Run status error: ${String(err)}` }],
                     isError: true,
                 };
             }

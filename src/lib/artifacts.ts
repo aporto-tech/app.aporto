@@ -1,8 +1,8 @@
 import { randomUUID } from "crypto";
-import { artifactExpiresAt, uploadToR2 } from "@/lib/r2";
+import { artifactExpiresAt, copyUrlToR2, uploadToR2 } from "@/lib/r2";
 
 export type StoredArtifact = {
-    type: "json" | "csv";
+    type: "json" | "csv" | "media";
     url: string;
     storage_key: string;
     expires_at: string;
@@ -29,6 +29,29 @@ function datePrefix(now = new Date()): string {
 function keyPrefix(input: StoreSkillArtifactsInput, now = new Date()): string {
     const callPart = input.skillCallId ? `call-${input.skillCallId}` : randomUUID();
     return `skill-results/${datePrefix(now)}/user-${input.userId}/skill-${input.skillId}/${callPart}`;
+}
+
+const MEDIA_URL_RE = /^https?:\/\/\S+\.(png|jpe?g|webp|gif|mp3|wav|m4a|aac|ogg|mp4|mov|webm)(?:[?#]\S*)?$/i;
+
+function extensionForUrl(url: string): string {
+    const match = url.match(/\.(png|jpe?g|webp|gif|mp3|wav|m4a|aac|ogg|mp4|mov|webm)(?:[?#]|$)/i);
+    return (match?.[1] ?? "bin").toLowerCase().replace("jpeg", "jpg");
+}
+
+function contentTypeForExtension(ext: string): string {
+    if (ext === "jpg" || ext === "jpeg") return "image/jpeg";
+    if (ext === "png") return "image/png";
+    if (ext === "webp") return "image/webp";
+    if (ext === "gif") return "image/gif";
+    if (ext === "mp3") return "audio/mpeg";
+    if (ext === "wav") return "audio/wav";
+    if (ext === "m4a") return "audio/mp4";
+    if (ext === "aac") return "audio/aac";
+    if (ext === "ogg") return "audio/ogg";
+    if (ext === "mp4") return "video/mp4";
+    if (ext === "mov") return "video/quicktime";
+    if (ext === "webm") return "video/webm";
+    return "application/octet-stream";
 }
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
@@ -67,12 +90,60 @@ function toCsv(rows: Record<string, unknown>[]): string {
     return `${lines.join("\n")}\n`;
 }
 
+async function copyMediaUrls(value: unknown, prefix: string, expiresAt: Date): Promise<{
+    value: unknown;
+    artifacts: StoredArtifact[];
+}> {
+    const copied = new Map<string, StoredArtifact>();
+
+    async function visit(node: unknown): Promise<unknown> {
+        if (typeof node === "string") {
+            if (!MEDIA_URL_RE.test(node)) return node;
+
+            const existing = copied.get(node);
+            if (existing) return existing.url;
+
+            const ext = extensionForUrl(node);
+            const key = `${prefix}-media-${copied.size + 1}.${ext}`;
+            const url = await copyUrlToR2(node, key, contentTypeForExtension(ext), { expiresAt });
+            const artifact: StoredArtifact = {
+                type: "media",
+                url,
+                storage_key: key,
+                expires_at: expiresAt.toISOString(),
+                content_type: contentTypeForExtension(ext),
+            };
+            copied.set(node, artifact);
+            return url;
+        }
+
+        if (Array.isArray(node)) {
+            return Promise.all(node.map((item) => visit(item)));
+        }
+
+        if (isPlainObject(node)) {
+            const entries = await Promise.all(
+                Object.entries(node).map(async ([key, item]) => [key, await visit(item)] as const),
+            );
+            return Object.fromEntries(entries);
+        }
+
+        return node;
+    }
+
+    return {
+        value: await visit(value),
+        artifacts: Array.from(copied.values()),
+    };
+}
+
 export async function storeSkillResultArtifacts(input: StoreSkillArtifactsInput): Promise<{
     artifact: StoredArtifact;
     artifacts: StoredArtifact[];
 }> {
     const expiresAt = artifactExpiresAt();
     const prefix = keyPrefix(input);
+    const mediaCopy = await copyMediaUrls(input.result, prefix, expiresAt);
 
     const payload = {
         source: input.source,
@@ -84,7 +155,7 @@ export async function storeSkillResultArtifacts(input: StoreSkillArtifactsInput)
         skill_call_id: input.skillCallId,
         cost_usd: input.costUSD,
         params: input.params,
-        result: input.result,
+        result: mediaCopy.value,
         created_at: new Date().toISOString(),
         expires_at: expiresAt.toISOString(),
     };
@@ -105,7 +176,9 @@ export async function storeSkillResultArtifacts(input: StoreSkillArtifactsInput)
         content_type: "application/json",
     }];
 
-    const rows = findTabularRows(input.result);
+    artifacts.push(...mediaCopy.artifacts);
+
+    const rows = findTabularRows(mediaCopy.value);
     if (rows) {
         const csvKey = `${prefix}.csv`;
         const csvUrl = await uploadToR2(

@@ -90,6 +90,15 @@ export async function discoverSkills(
     const embedding = await embedQuery(query);
     const vectorLiteral = `[${embedding.join(",")}]`;
     const offset = page * PAGE_SIZE;
+    const lexicalTerms = Array.from(new Set(
+        query
+            .toLowerCase()
+            .replace(/[^a-z0-9.\s-]/g, " ")
+            .split(/\s+/)
+            .map((term) => term.trim())
+            .filter((term) => term.length >= 3)
+            .slice(0, 6),
+    ));
 
     const conditions: string[] = [
         `"isActive" = true`,
@@ -114,6 +123,13 @@ export async function discoverSkills(
         args.push(`%"${filters.capability}"%`);
     }
 
+    const lexicalParts: string[] = [];
+    for (const term of lexicalTerms) {
+        lexicalParts.push(`CASE WHEN search_text ILIKE $${argIdx++} THEN 1 ELSE 0 END`);
+        args.push(`%${term}%`);
+    }
+    const lexicalScore = lexicalParts.length ? lexicalParts.join(" + ") : "0";
+
     const where = conditions.join(" AND ");
 
     const rows = await prisma.$queryRawUnsafe<{
@@ -122,13 +138,28 @@ export async function discoverSkills(
         input_types: string | null; output_types: string | null;
         params_schema: string | null; tags: string | null; similarity: number;
     }[]>(
-        `SELECT id, name, description, category, capabilities,
+        `WITH searchable AS (
+            SELECT "Skill".*,
+                   CONCAT_WS(' ',
+                     "Skill".name,
+                     "Skill".description,
+                     COALESCE("Skill".tags, ''),
+                     COALESCE("Skill".capabilities, ''),
+                     COALESCE("Skill"."inputTypes", ''),
+                     COALESCE("Skill"."outputTypes", ''),
+                     COALESCE(string_agg(CONCAT_WS(' ', p.name, p."syncConfig"), ' '), '')
+                   ) AS search_text
+            FROM "Skill"
+            LEFT JOIN "Provider" p ON p."skillId" = "Skill".id AND p."isActive" = true
+            GROUP BY "Skill".id
+        )
+        SELECT id, name, description, category, capabilities,
                 "inputTypes" AS input_types, "outputTypes" AS output_types,
                 "paramsSchema" AS params_schema, tags,
                 1 - (embedding <=> $1::vector) AS similarity
-         FROM "Skill"
+         FROM searchable AS "Skill"
          WHERE ${where}
-         ORDER BY embedding <=> $1::vector
+         ORDER BY (${lexicalScore}) DESC, embedding <=> $1::vector
          LIMIT $2 OFFSET $3`,
         ...args,
     );
@@ -156,6 +187,7 @@ export async function selectProvider(
     paramsHash?: string,
     isThirdParty = false,
     excludeProviderIds: number[] = [],
+    providerHint?: string,
 ): Promise<ScoredProvider | null> {
     // Unified CTE: exclude providers used in this session (24h) OR same paramsHash (2 min)
     // For third-party skills: also exclude providers without a providerSecret (T1 guard)
@@ -224,12 +256,16 @@ export async function selectProvider(
     const minLat = Math.min(...latencies);
     const maxLat = Math.max(...latencies);
 
+    const hint = providerHint?.toLowerCase().trim();
     const scored = rows.map((r) => {
         const normPrice =
             maxPrice === minPrice ? 0.5 : (Number(r.price_per_call) - minPrice) / (maxPrice - minPrice);
         const normLat =
             maxLat === minLat ? 0.5 : (Number(r.avg_latency_ms) - minLat) / (maxLat - minLat);
+        const providerText = `${r.name} ${r.sync_config ?? ""}`.toLowerCase();
+        const hintBoost = hint && providerText.includes(hint) ? 1 : 0;
         const score =
+            hintBoost +
             0.40 * (1 - normPrice) +
             0.30 * (1 - normLat) +
             0.15 * (1 - Number(r.retry_rate)) +

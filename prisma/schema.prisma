@@ -365,6 +365,35 @@ model SkillRevenue {
   @@index([publisherId, createdAt(sort: Desc)])
 }
 
+model SkillRun {
+  id                String   @id @default(cuid())
+  newApiUserId      Int
+  sessionId         String
+  skillId           Int
+  providerId        Int?
+  skillCallId       Int?
+  status            String
+  lifecycleMode     String
+  paramsHash        String?
+  providerTaskId    String?
+  providerStatusUrl String?
+  providerRaw       Json?
+  result            Json?
+  error             Json?
+  artifactJson      Json?
+  costUSD           Float?
+  attempts          Int      @default(0)
+  nextPollAt        DateTime?
+  expiresAt         DateTime?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([newApiUserId, createdAt(sort: Desc)])
+  @@index([status, nextPollAt])
+  @@index([providerTaskId])
+  @@index([newApiUserId, paramsHash, createdAt])
+}
+
 model abilities {
   group      String   @db.VarChar(64)
   model      String   @db.VarChar(255)

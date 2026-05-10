@@ -57,6 +57,7 @@ export async function copyUrlToR2(
     sourceUrl: string,
     key: string,
     fallbackContentType: string,
+    options: { expiresAt?: Date } = {},
 ): Promise<string> {
     const res = await fetch(sourceUrl, {
         signal: AbortSignal.timeout(30_000),
@@ -68,5 +69,5 @@ export async function copyUrlToR2(
 
     const contentType = res.headers.get("content-type") ?? fallbackContentType;
     const body = Buffer.from(await res.arrayBuffer());
-    return uploadToR2(key, body, contentType);
+    return uploadToR2(key, body, contentType, options);
 }
