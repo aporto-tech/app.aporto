@@ -138,3 +138,19 @@ Items deferred from the Email Verification + Bitrix24 + SDK plan review.
 **Where to start:** Read the approved mockup. Build the REST endpoint first (simple SELECT from ProviderOption). Then build the page with DashboardLayout, a search input, filter chips (gender/language), and a list row per voice with Copy ID button.
 
 **Depends on:** Capability Catalog V1 shipped. T6 (voice preview proxy) recommended before launch.
+
+---
+
+## T9 — Universal MCP SkillRun adapters
+
+**What:** Finish the universal Aporto skill lifecycle so all MCP skills can return a final result or a structured `runId`, not raw provider-specific task handles.
+
+**Why:** Aporto aggregates many skill providers: media generation, scrapers, SMS/email verification, enrichment, DB/server provisioning, browser automation, and future third-party MCP tools. Agents should call `aporto_run_skill` and get `succeeded`, `running`, `waiting`, or `failed` with a normalized contract.
+
+**Current state:** `SkillRun`, `aporto_run_skill`, `aporto_get_skill_run`, provider-aware discovery, and KIE first-pass async handling are implemented. Production discovery and run status routes are live.
+
+**Remaining work:** Add adapters for Apify, verification flows, provisioning flows, generic async HTTP providers, webhook callbacks, provider-level embeddings, run reconciliation, and admin observability.
+
+**Where to start:** Read `docs/autoplan/mcp-skill-run-lifecycle-20260510.md`, then finish KIE production terminal-result verification and implement the Apify adapter next.
+
+**Depends on:** Latest MCP lifecycle deployment and `SkillRun` migration.
