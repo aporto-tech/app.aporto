@@ -112,7 +112,7 @@ interface StatsData {
     };
 }
 
-type Tab = "promo" | "skills" | "stats" | "pending" | "publishers";
+type Tab = "promo" | "skills" | "stats" | "runs" | "pending" | "publishers";
 
 // ── Main Component ────────────────────────────────────────────────────────────
 
@@ -143,13 +143,13 @@ export default function AdminPage() {
 
             {/* Tab bar */}
             <div className={styles.tabBar}>
-                {(["promo", "skills", "stats", "pending", "publishers"] as Tab[]).map((t) => (
+                {(["promo", "skills", "stats", "runs", "pending", "publishers"] as Tab[]).map((t) => (
                     <button
                         key={t}
                         className={`${styles.tabBtn} ${activeTab === t ? styles.tabBtnActive : ""}`}
                         onClick={() => setActiveTab(t)}
                     >
-                        {t === "promo" ? "Promo Codes" : t === "skills" ? "Skills & Providers" : t === "stats" ? "Stats" : t === "pending" ? "Pending Review" : "Publishers"}
+                        {t === "promo" ? "Promo Codes" : t === "skills" ? "Skills & Providers" : t === "stats" ? "Stats" : t === "runs" ? "Skill Runs" : t === "pending" ? "Pending Review" : "Publishers"}
                     </button>
                 ))}
             </div>
@@ -157,6 +157,7 @@ export default function AdminPage() {
             {activeTab === "promo" && <PromoTab />}
             {activeTab === "skills" && <SkillsTab />}
             {activeTab === "stats" && <StatsTab />}
+            {activeTab === "runs" && <SkillRunsTab />}
             {activeTab === "pending" && <PendingReviewTab />}
             {activeTab === "publishers" && <PublishersTab />}
         </div>
@@ -1287,7 +1288,7 @@ function PendingReviewTab() {
             .finally(() => setLoading(false));
     };
 
-    useEffect(() => { load(); }, []);
+    useEffect(() => { load(); }, [load]);
 
     const reviewWithAi = async (id: number) => {
         setWorking(id);
@@ -1438,6 +1439,114 @@ function PendingReviewTab() {
 }
 
 // ── PublishersTab ─────────────────────────────────────────────────────────────
+
+interface SkillRunRow {
+    id: string;
+    created_at: string;
+    updated_at: string;
+    status: string;
+    lifecycle_mode: string;
+    skill_name: string;
+    skill_category: string | null;
+    provider_name: string | null;
+    provider_task_id: string | null;
+    cost_usd: number | null;
+    attempts: number;
+    error: unknown;
+    result: unknown;
+    session_id: string;
+    new_api_user_id: number;
+    resolved_at: string | null;
+    resolved_by: string | null;
+    resolution_note: string | null;
+}
+
+function SkillRunsTab() {
+    const [runs, setRuns] = useState<SkillRunRow[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [working, setWorking] = useState(false);
+
+    const load = useCallback(() => {
+        setLoading(true);
+        fetch("/api/admin/skill-runs?status=failed&limit=30", { cache: "no-store" })
+            .then((r) => r.json())
+            .then((d) => { if (d.success) setRuns(d.runs ?? []); })
+            .finally(() => setLoading(false));
+    }, []);
+
+    useEffect(() => { load(); }, []);
+
+    const resolve = async (id: string) => {
+        setWorking(true);
+        try {
+            await fetch(`/api/admin/skill-runs/${id}/resolve`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ note: "Resolved from admin dashboard" }),
+            });
+            load();
+        } finally {
+            setWorking(false);
+        }
+    };
+
+    if (loading) return <div style={{ color: "#64748b", padding: "24px 0" }}>Loading...</div>;
+
+    return (
+        <div>
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 16 }}>
+                <h2 style={{ margin: 0, fontSize: 18 }}>Failed Skill Runs ({runs.length})</h2>
+                <button onClick={load} style={{ padding: "6px 12px", borderRadius: 6, border: "1px solid #334155", background: "transparent", color: "#cbd5e1", cursor: "pointer" }}>Refresh</button>
+            </div>
+            {runs.length === 0 && <div style={{ color: "#64748b" }}>No failed runs in the current window.</div>}
+            {runs.map((run) => {
+                const error = run.error && typeof run.error === "object" ? run.error as { code?: string; message?: string; cause?: string; retryable?: boolean } : null;
+                return (
+                    <div key={run.id} style={{ border: "1px solid #1e293b", borderRadius: 8, padding: 16, marginBottom: 12, background: "#0f172a" }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "flex-start" }}>
+                            <div style={{ minWidth: 0 }}>
+                                <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                                    <div style={{ fontWeight: 600, fontSize: 15 }}>{run.skill_name}</div>
+                                    <span className={styles.codeBadge}>{run.status}</span>
+                                    <span style={{ color: "#94a3b8", fontSize: 12 }}>{run.skill_category ?? "unknown"}</span>
+                                    <span style={{ color: "#94a3b8", fontSize: 12 }}>{run.lifecycle_mode}</span>
+                                    {run.resolved_at && <span style={{ color: "#10b981", fontSize: 12 }}>resolved</span>}
+                                </div>
+                                <div style={{ color: "#64748b", fontSize: 12, marginTop: 6 }}>
+                                    provider: {run.provider_name ?? "n/a"} · task: {run.provider_task_id ?? "n/a"} · attempts: {run.attempts}
+                                </div>
+                                <div style={{ color: "#64748b", fontSize: 12, marginTop: 4 }}>
+                                    user {run.new_api_user_id} · session {run.session_id} · created {new Date(run.created_at).toLocaleString()}
+                                </div>
+                                {run.resolved_at && (
+                                    <div style={{ color: "#10b981", fontSize: 12, marginTop: 4 }}>
+                                        resolved by {run.resolved_by ?? "admin"} at {new Date(run.resolved_at).toLocaleString()}
+                                        {run.resolution_note ? ` · ${run.resolution_note}` : ""}
+                                    </div>
+                                )}
+                                {error && (
+                                    <div style={{ marginTop: 10, color: "#fecaca", fontSize: 13 }}>
+                                        <div><strong>{error.code ?? "ERROR"}</strong>: {error.message ?? "Unknown error"}</div>
+                                        {error.cause && <div style={{ marginTop: 4, color: "#fca5a5", whiteSpace: "pre-wrap" }}>{error.cause}</div>}
+                                    </div>
+                                )}
+                            </div>
+                            <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
+                                <button
+                                    onClick={() => resolve(run.id)}
+                                    disabled={working}
+                                    style={{ padding: "5px 12px", borderRadius: 6, border: "none", background: "#10b981", color: "#fff", cursor: "pointer", fontSize: 12 }}
+                                >
+                                    Resolve
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                );
+            })}
+        </div>
+    );
+}
 
 interface PublisherRow {
     publisher_id: string; display_name: string; email: string; website: string | null;

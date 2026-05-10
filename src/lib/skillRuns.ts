@@ -259,9 +259,9 @@ async function updateRun(
     );
 }
 
-async function getSkillMeta(skillId: number): Promise<{ name: string; publisherId: string | null; revenueShare: number | null } | null> {
-    const rows = await prisma.$queryRawUnsafe<{ name: string; publisherId: string | null; revenueShare: number | null }[]>(
-        `SELECT s.name, s."publisherId", p."revenueShare"
+async function getSkillMeta(skillId: number): Promise<{ name: string; category: string | null; publisherId: string | null; revenueShare: number | null } | null> {
+    const rows = await prisma.$queryRawUnsafe<{ name: string; category: string | null; publisherId: string | null; revenueShare: number | null }[]>(
+        `SELECT s.name, s.category, s."publisherId", p."revenueShare"
          FROM "Skill" s
          LEFT JOIN "Publisher" p ON p.id = s."publisherId"
          WHERE s.id = $1
@@ -583,8 +583,10 @@ export async function runSkill(input: RunSkillInput): Promise<RunSkillResult> {
         }).catch(() => {});
     }
 
+    const shouldWaitInline = waitForResult && skillMeta.category !== "media/video";
+
     if (lifecycleMode === "async_poll" && providerTaskId) {
-        if (!waitForResult) {
+        if (!shouldWaitInline) {
             return {
                 status: "running",
                 runId,
