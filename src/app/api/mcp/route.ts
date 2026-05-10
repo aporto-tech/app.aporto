@@ -28,6 +28,7 @@ import { z } from "zod";
 import { validateApiKeyOrSession, deductUserQuota, logServiceUsage } from "@/lib/serviceProxy";
 import { prisma } from "@/lib/prisma";
 import { logSkillDiscovery } from "@/lib/discoveryLogs";
+import { storeSkillResultArtifacts } from "@/lib/artifacts";
 import {
     MAX_PROVIDER_ATTEMPTS,
     deactivateSkillIfNoActiveProviders,
@@ -101,21 +102,53 @@ function buildMcpServer(userId: number, authHeader: string) {
 
             const { success, data, latencyMs, errorType } = await executeSkillViaProvider(provider, params, authHeader);
 
+            let storedData = data;
+            let recordedSuccess = success;
+            let recordedErrorType: string = errorType;
+
+            if (success) {
+                try {
+                    const artifactResult = await storeSkillResultArtifacts({
+                        source: "mcp",
+                        userId,
+                        sessionId,
+                        skillId,
+                        providerId: provider.id,
+                        providerName: provider.name,
+                        costUSD,
+                        params,
+                        result: data,
+                    });
+                    storedData = {
+                        ...(data && typeof data === "object" && !Array.isArray(data) ? data as Record<string, unknown> : { result: data }),
+                        artifact: artifactResult.artifact,
+                        artifacts: artifactResult.artifacts,
+                    };
+                } catch (storageError) {
+                    recordedSuccess = false;
+                    recordedErrorType = "storage_error";
+                    storedData = {
+                        message: "Skill result could not be stored in S3.",
+                        detail: String(storageError),
+                    };
+                }
+            }
+
             void recordSkillCall({
                 sessionId, newApiUserId: userId, skillId, providerId: provider.id,
                 isRetry: attempt > 1,
                 retryAttempt: attempt,
-                latencyMs, success, costUSD: success ? costUSD : 0,
-                errorType,
+                latencyMs, success: recordedSuccess, costUSD: recordedSuccess ? costUSD : 0,
+                errorType: recordedErrorType,
             }).catch((e) => console.error("[callSkill] recordSkillCall:", e));
 
-            void updateProviderStats(provider.id, latencyMs, success, errorType === "timeout")
+            void updateProviderStats(provider.id, latencyMs, recordedSuccess, recordedErrorType === "timeout")
                 .catch((e) => console.error("[callSkill] updateProviderStats:", e));
 
-            if (success) return { success, data };
+            if (recordedSuccess) return { success: true, data: storedData };
 
-            lastFailure = { provider: provider.name, data };
-            if (errorType === "error_4xx") break;
+            lastFailure = { provider: provider.name, data: storedData };
+            if (recordedErrorType === "error_4xx" || recordedErrorType === "storage_error") break;
         }
 
         return {
@@ -213,7 +246,10 @@ function buildMcpServer(userId: number, authHeader: string) {
             if (!result) return { content: [{ type: "text" as const, text: "No providers available" }], isError: true };
             if (!result.success) return { content: [{ type: "text" as const, text: `Error: ${JSON.stringify(result.data)}` }], isError: true };
 
-            const data = result.data as { images?: { url: string; storage_key?: string }[] };
+            const data = result.data as {
+                images?: { url: string; storage_key?: string }[];
+                artifact?: { url: string; storage_key?: string; expires_at?: string };
+            };
             const images = data.images ?? [];
             if (images.some((img) => !img.url)) {
                 return { content: [{ type: "text" as const, text: "Error: generated image was not stored in S3/R2." }], isError: true };
@@ -222,6 +258,7 @@ function buildMcpServer(userId: number, authHeader: string) {
                 content: [
                     { type: "text" as const, text: `Generated ${images.length} image(s).` },
                     ...images.map((img) => ({ type: "text" as const, text: `Image URL: ${img.url}` })),
+                    ...(data.artifact ? [{ type: "text" as const, text: `Result artifact: ${JSON.stringify(data.artifact)}` }] : []),
                 ],
             };
         },
@@ -232,7 +269,7 @@ function buildMcpServer(userId: number, authHeader: string) {
     // deduct quota here and refund on failure.
     server.tool(
         "aporto_tts_create",
-        "Convert text to speech via ElevenLabs. Returns an S3/R2 audio URL (valid 24h). Cost: $0.24 per 1,000 characters. " +
+        "Convert text to speech via ElevenLabs. Returns an S3/R2 audio URL using the shared artifact retention window. Cost: $0.24 per 1,000 characters. " +
         "Use aporto_list_options(skillId=5, optionType=\"voice\") to discover available voices before calling this. " +
         "Common voices: Rachel (21m00Tcm4TlvDq8ikWAM, female adult american), " +
         "Bella (EXAVITQu4vr4xnSDxMaL, female young american), " +
@@ -268,7 +305,12 @@ function buildMcpServer(userId: number, authHeader: string) {
                 return { content: [{ type: "text" as const, text: `ElevenLabs error: ${JSON.stringify(result.data)}` }], isError: true };
             }
 
-            const data = result.data as { url?: string; storage_key?: string; expires_at?: string };
+            const data = result.data as {
+                url?: string;
+                storage_key?: string;
+                expires_at?: string;
+                artifact?: { url: string; storage_key?: string; expires_at?: string };
+            };
             if (!data.url) {
                 await refundQuota(userId, costUSD);
                 return { content: [{ type: "text" as const, text: "Error: generated audio was not stored in S3/R2." }], isError: true };
@@ -279,7 +321,7 @@ function buildMcpServer(userId: number, authHeader: string) {
             return {
                 content: [
                     { type: "text" as const, text: `Audio generated. ${text.length} chars, cost $${costUSD.toFixed(4)}.` },
-                    { type: "text" as const, text: JSON.stringify({ url: data.url, storage_key: data.storage_key, expires_at: data.expires_at }) },
+                    { type: "text" as const, text: JSON.stringify({ url: data.url, storage_key: data.storage_key, expires_at: data.expires_at, artifact: data.artifact }) },
                 ],
             };
         },
@@ -308,9 +350,17 @@ function buildMcpServer(userId: number, authHeader: string) {
             if (!result) return { content: [{ type: "text" as const, text: "No providers available" }], isError: true };
             if (!result.success) return { content: [{ type: "text" as const, text: `LLM error: ${JSON.stringify(result.data)}` }], isError: true };
 
-            const data = result.data as { choices?: { message?: { content?: string } }[] };
+            const data = result.data as {
+                choices?: { message?: { content?: string } }[];
+                artifact?: { url: string; storage_key?: string; expires_at?: string };
+            };
             const reply = data.choices?.[0]?.message?.content ?? JSON.stringify(result.data);
-            return { content: [{ type: "text" as const, text: reply }] };
+            return {
+                content: [
+                    { type: "text" as const, text: reply },
+                    ...(data.artifact ? [{ type: "text" as const, text: `Result artifact: ${JSON.stringify(data.artifact)}` }] : []),
+                ],
+            };
         },
     );
 

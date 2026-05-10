@@ -3,7 +3,7 @@
  * Called by routing/execute with Authorization: Bearer {ELEVENLABS_API_KEY} (providerSecret).
  *
  * Returns JSON: { url, expires_at, char_count }
- * Audio is uploaded to R2 with a 24-hour lifecycle key.
+ * Audio is uploaded to R2 using the shared artifact retention window.
  *
  * Params (from routing layer):
  *   text               string  — text/prompt describing the sound effect
@@ -13,7 +13,7 @@
  * Billing: costPerChar = $0.00024 / char
  */
 import { NextRequest, NextResponse } from "next/server";
-import { uploadToR2 } from "@/lib/r2";
+import { artifactExpiresAt, uploadToR2 } from "@/lib/r2";
 import { randomUUID } from "crypto";
 
 export const dynamic = "force-dynamic";
@@ -58,14 +58,14 @@ export async function POST(req: NextRequest) {
 
         const audioBuffer = await res.arrayBuffer();
         const key = `sfx/${new Date().toISOString().slice(0, 10)}/${randomUUID()}.mp3`;
-        const url = await uploadToR2(key, Buffer.from(audioBuffer), "audio/mpeg");
-        const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+        const expiresAt = artifactExpiresAt();
+        const url = await uploadToR2(key, Buffer.from(audioBuffer), "audio/mpeg", { expiresAt });
 
         return NextResponse.json({
             success: true,
             url,
             storage_key: key,
-            expires_at: expiresAt,
+            expires_at: expiresAt.toISOString(),
             char_count: text.length,
         });
     } catch (error) {

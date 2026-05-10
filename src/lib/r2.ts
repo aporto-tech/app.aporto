@@ -17,6 +17,15 @@ function getClient(): S3Client {
     return _client;
 }
 
+export function artifactRetentionDays(): number {
+    const days = Number(process.env.ARTIFACT_RETENTION_DAYS ?? 30);
+    return Number.isFinite(days) && days > 0 ? days : 30;
+}
+
+export function artifactExpiresAt(from = new Date()): Date {
+    return new Date(from.getTime() + artifactRetentionDays() * 24 * 60 * 60 * 1000);
+}
+
 /**
  * Upload a buffer to S3 and return the public URL.
  * The bucket must have public access enabled.
@@ -25,6 +34,7 @@ export async function uploadToR2(
     key: string,
     body: Buffer | Uint8Array,
     contentType: string,
+    options: { expiresAt?: Date } = {},
 ): Promise<string> {
     const bucket = process.env.AWS_S3_BUCKET_NAME;
     const publicUrl = process.env.AWS_S3_PUBLIC_URL?.replace(/\/$/, "");
@@ -37,6 +47,7 @@ export async function uploadToR2(
             Key: key,
             Body: body,
             ContentType: contentType,
+            Expires: options.expiresAt ?? artifactExpiresAt(),
         }),
     );
     return `${publicUrl}/${key}`;

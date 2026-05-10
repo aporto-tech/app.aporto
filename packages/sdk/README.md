@@ -95,6 +95,7 @@ const result = await aporto.routing.executeSkill({
 });
 
 console.log(result.result); // Stored artifact URL / JSON depending on skill
+console.log(result.artifact.url); // Full JSON result saved in S3/R2
 console.log(result.provider, result.costUSD);
 ```
 

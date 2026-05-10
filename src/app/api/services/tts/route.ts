@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { randomUUID } from "crypto";
 import { validateApiKeyOrSession, deductUserQuota, logServiceUsage } from "@/lib/serviceProxy";
-import { uploadToR2 } from "@/lib/r2";
+import { artifactExpiresAt, uploadToR2 } from "@/lib/r2";
 
 export const dynamic = "force-dynamic";
 
@@ -80,9 +80,10 @@ export async function POST(req: NextRequest) {
         const audioBuffer = await res.arrayBuffer();
         let url: string;
         let storageKey: string;
+        const expiresAt = artifactExpiresAt();
         try {
             storageKey = `tts/${new Date().toISOString().slice(0, 10)}/${randomUUID()}.mp3`;
-            url = await uploadToR2(storageKey, Buffer.from(audioBuffer), "audio/mpeg");
+            url = await uploadToR2(storageKey, Buffer.from(audioBuffer), "audio/mpeg", { expiresAt });
         } catch (storageError) {
             await refundQuota(auth.newApiUserId, costUSD);
             return NextResponse.json(
@@ -101,7 +102,7 @@ export async function POST(req: NextRequest) {
             success: true,
             url,
             storage_key: storageKey,
-            expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+            expires_at: expiresAt.toISOString(),
             costUSD,
             char_count: charCount,
         });

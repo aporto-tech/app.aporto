@@ -16,6 +16,23 @@ bun dev
 
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
+## Skill Artifacts
+
+Skill outputs are stored in S3/R2 before a successful response is returned. REST and MCP skill calls include a JSON artifact URL, and tabular JSON results also get a CSV sidecar when possible.
+
+Relevant environment variables:
+
+```bash
+AWS_ACCESS_KEY_ID=
+AWS_SECRET_ACCESS_KEY=
+AWS_REGION=us-east-1
+AWS_S3_BUCKET_NAME=
+AWS_S3_PUBLIC_URL=
+ARTIFACT_RETENTION_DAYS=30
+```
+
+`ARTIFACT_RETENTION_DAYS` defaults to 30. The app sets object `Expires` metadata; configure the same lifecycle policy on the bucket if objects must be physically deleted after that window.
+
 You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.

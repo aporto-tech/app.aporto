@@ -34,6 +34,14 @@ export interface ExecuteSkillOptions {
     sessionId?: string;
 }
 
+export interface SkillArtifact {
+    type: "json" | "csv";
+    url: string;
+    storage_key: string;
+    expires_at: string;
+    content_type: string;
+}
+
 export interface ExecuteSkillResult {
     success: true;
     provider: string;
@@ -41,6 +49,8 @@ export interface ExecuteSkillResult {
     costUSD: number;
     errorType: "success";
     attempts: number;
+    artifact: SkillArtifact;
+    artifacts: SkillArtifact[];
     result: unknown;
 }
 

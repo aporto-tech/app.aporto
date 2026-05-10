@@ -11,6 +11,7 @@ import {
     updateProviderStats,
 } from "@/lib/routing";
 import { prisma } from "@/lib/prisma";
+import { storeSkillResultArtifacts } from "@/lib/artifacts";
 
 export const dynamic = "force-dynamic";
 // Note: uses Node.js crypto — this route must NOT be configured as Edge runtime
@@ -139,6 +140,40 @@ export async function POST(req: NextRequest) {
                 ).catch((e) => console.error("[routing/execute] refund failed:", e));
             }
 
+            let artifactResult: Awaited<ReturnType<typeof storeSkillResultArtifacts>> | null = null;
+            let recordedSuccess = success;
+            let recordedErrorType: string = errorType;
+
+            if (success) {
+                try {
+                    artifactResult = await storeSkillResultArtifacts({
+                        source: "rest",
+                        userId: auth.newApiUserId,
+                        sessionId: resolvedSessionId,
+                        skillId,
+                        providerId: provider.id,
+                        providerName: provider.name,
+                        costUSD: actualCost,
+                        params: params as Record<string, unknown>,
+                        result: data,
+                    });
+                } catch (storageError) {
+                    recordedSuccess = false;
+                    recordedErrorType = "storage_error";
+                    void prisma.$executeRawUnsafe(
+                        `UPDATE users SET quota = quota + $1, used_quota = used_quota - $1 WHERE id = $2`,
+                        Math.ceil(actualCost * QUOTA_PER_DOLLAR),
+                        auth.newApiUserId,
+                    ).catch((e) => console.error("[routing/execute] storage refund failed:", e));
+                    lastFailure = {
+                        provider: provider.name,
+                        latencyMs,
+                        errorType: recordedErrorType,
+                        result: { message: "Skill result could not be stored in S3.", detail: String(storageError) },
+                    };
+                }
+            }
+
             const skillCallId = await recordSkillCall({
                 sessionId: resolvedSessionId,
                 newApiUserId: auth.newApiUserId,
@@ -147,14 +182,14 @@ export async function POST(req: NextRequest) {
                 isRetry: isRetry || attempt > 1,
                 retryAttempt: attempt,
                 latencyMs,
-                success,
-                costUSD: success ? actualCost : 0,
+                success: recordedSuccess,
+                costUSD: recordedSuccess ? actualCost : 0,
                 paramsHash,
-                errorType,
+                errorType: recordedErrorType,
             });
 
             // Write revenue record for third-party skill calls
-            if (success && isThirdParty && publisherId && revenueShare != null && actualCost > 0) {
+            if (recordedSuccess && isThirdParty && publisherId && revenueShare != null && actualCost > 0) {
                 void createSkillRevenue({
                     skillId,
                     publisherId,
@@ -164,27 +199,29 @@ export async function POST(req: NextRequest) {
                 }).catch(() => {/* error already logged inside createSkillRevenue */});
             }
 
-            void updateProviderStats(provider.id, latencyMs, success, errorType === "timeout")
+            void updateProviderStats(provider.id, latencyMs, recordedSuccess, recordedErrorType === "timeout")
                 .catch((e) => console.error("[routing/execute] updateProviderStats:", e));
 
-            void logServiceUsage(auth.newApiUserId, "skill", provider.name, success ? actualCost : 0, { skillId, latencyMs, errorType, attempt })
+            void logServiceUsage(auth.newApiUserId, "skill", provider.name, recordedSuccess ? actualCost : 0, { skillId, latencyMs, errorType: recordedErrorType, attempt })
                 .catch((e) => console.error("[routing/execute] logServiceUsage:", e));
 
-            if (success) {
+            if (recordedSuccess && artifactResult) {
                 return NextResponse.json({
-                    success,
+                    success: true,
                     provider: provider.name,
                     latencyMs,
                     costUSD: actualCost,
-                    errorType,
+                    errorType: recordedErrorType,
                     attempts: attempt,
+                    artifact: artifactResult.artifact,
+                    artifacts: artifactResult.artifacts,
                     result: data,
                 }, { status: 200 });
             }
 
-            lastFailure = { provider: provider.name, latencyMs, errorType, result: data };
+            lastFailure ??= { provider: provider.name, latencyMs, errorType: recordedErrorType, result: data };
 
-            if (errorType === "error_4xx") {
+            if (recordedErrorType === "error_4xx" || recordedErrorType === "storage_error") {
                 break;
             }
         }
