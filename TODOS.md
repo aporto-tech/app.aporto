@@ -45,21 +45,21 @@ Items deferred from the Email Verification + Bitrix24 + SDK plan review.
 
 ---
 
-## T3 — SDK v0.2: activate real service modules
+## T3 — SDK follow-up: broaden optional modules
 
-**What:** Implement real logic in `packages/sdk/src/modules/audio.ts`, `images.ts`, `browser.ts`, `compute.ts`, `messaging.ts`, `db.ts`, `sms.ts` (currently stubs throwing `AportoNotAvailableError`).
+**What:** Add backend routes before exposing optional SDK modules for browser, compute, messaging, and db. Keep unavailable modules explicit with `AportoNotAvailableError` until their routes are live.
 
-**Why:** 78% of the SDK's advertised surface throws on call. For the "single API key for all services" promise to be credible, at least 3-4 more modules need real implementations. The `@aporto/sdk` Guide page will look hollow with 7 stubs.
+**Why:** The core SDK surface now has real routes for LLM, search, image, TTS, SMS send, routing, and x402. Additional modules should not be advertised as usable until the backend contract exists.
 
-**Pros:** Completes the SDK value proposition. Developers can actually use it for full-stack AI agents.
+**Pros:** Keeps the public SDK honest while leaving a clear path to broaden the platform.
 
-**Cons:** Requires confirming which routes are live on `api.aporto.tech` for each service first.
+**Cons:** Requires backend work before those modules can be enabled.
 
-**Context:** From the design doc Open Questions: "Does `api.aporto.tech` currently proxy the non-LLM services (Linkup, ElevenLabs, Fal.ai, etc.) or are those routes yet to be built?" This must be confirmed before any v0.2 implementation. Order of priority once routes are live: audio (ElevenLabs TTS/STT), images (Fal.ai), then others.
+**Context:** Media SDK methods return stored S3/R2 artifact URLs. `sms.check` remains unavailable because there is no `/api/services/sms/check` route.
 
-**Where to start:** `packages/sdk/src/modules/` — remove the stub throw, add real `fetch` call to the confirmed route. Keep error types consistent with `AportoError`.
+**Where to start:** Add the backend route first, then wire the matching SDK module and README example in the same change.
 
-**Depends on:** api.aporto.tech routing confirmed for each service. @aporto npm org created. SDK v0.1 published.
+**Depends on:** Confirmed backend route and pricing/billing behavior.
 
 ---
 

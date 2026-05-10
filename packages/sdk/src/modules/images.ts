@@ -1,4 +1,4 @@
-import { AportoError } from "../errors";
+import { DEFAULT_APP_BASE_URL, apiFetchJson, createJsonHeaders } from "./http";
 
 export interface GenerateImageOptions {
     prompt: string;
@@ -8,35 +8,35 @@ export interface GenerateImageOptions {
 }
 
 export interface GenerateImageResult {
-    images: Array<{ url: string; width: number; height: number }>;
+    images: Array<{
+        url: string;
+        storage_key: string;
+        width?: number;
+        height?: number;
+        content_type?: string;
+        [key: string]: unknown;
+    }>;
     costUSD: number;
     [key: string]: unknown;
 }
 
-export function createImagesModule(apiKey: string, agentName?: string) {
-    const headers: Record<string, string> = {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-    };
-    if (agentName) headers["X-Agent-Name"] = agentName;
+export function createImagesModule(apiKey: string, agentName?: string, appBaseUrl = DEFAULT_APP_BASE_URL) {
+    const headers = createJsonHeaders(apiKey, agentName);
 
     return {
         async generate(opts: GenerateImageOptions): Promise<GenerateImageResult> {
-            const res = await fetch("https://app.aporto.tech/api/services/image", {
-                method: "POST",
+            return apiFetchJson<GenerateImageResult>(
+                appBaseUrl,
+                "/api/services/image",
                 headers,
-                body: JSON.stringify({
+                {
                     prompt: opts.prompt,
                     model: opts.model ?? "flux-schnell",
                     image_size: opts.image_size ?? "square_hd",
                     num_images: opts.num_images ?? 1,
-                }),
-            });
-            if (!res.ok) {
-                const text = await res.text().catch(() => "");
-                throw new AportoError(`Image generation failed: ${res.status} ${res.statusText}${text ? ` — ${text}` : ""}`, res.status);
-            }
-            return res.json() as Promise<GenerateImageResult>;
+                },
+                "Image generation",
+            );
         },
     };
 }

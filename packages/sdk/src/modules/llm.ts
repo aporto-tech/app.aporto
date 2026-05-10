@@ -1,4 +1,5 @@
 import OpenAI from "openai";
+import { DEFAULT_LLM_BASE_URL } from "./http";
 
 /**
  * LLM module — wraps the OpenAI SDK with api.aporto.tech as baseURL.
@@ -11,7 +12,7 @@ import OpenAI from "openai";
  *     messages: [{ role: 'user', content: 'Hello' }],
  *   })
  */
-export function createLlmModule(apiKey: string, agentName?: string): OpenAI {
+export function createLlmModule(apiKey: string, agentName?: string, baseURL = DEFAULT_LLM_BASE_URL): OpenAI {
     const defaultHeaders: Record<string, string> = {};
     if (agentName) {
         defaultHeaders["X-Agent-Name"] = agentName;
@@ -19,7 +20,7 @@ export function createLlmModule(apiKey: string, agentName?: string): OpenAI {
 
     return new OpenAI({
         apiKey,
-        baseURL: "https://api.aporto.tech/v1",
+        baseURL,
         defaultHeaders,
     });
 }

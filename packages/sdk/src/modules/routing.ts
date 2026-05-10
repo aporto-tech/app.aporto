@@ -1,4 +1,4 @@
-import { AportoError } from "../errors";
+import { DEFAULT_APP_BASE_URL, apiFetchJson, createJsonHeaders } from "./http";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -35,37 +35,22 @@ export interface ExecuteSkillOptions {
 }
 
 export interface ExecuteSkillResult {
-    success: boolean;
-    data: unknown;
-    skillId: number;
-    providerId: number;
-    providerName: string;
+    success: true;
+    provider: string;
     latencyMs: number;
+    costUSD: number;
+    errorType: "success";
+    attempts: number;
+    result: unknown;
 }
 
 // ── Module ────────────────────────────────────────────────────────────────────
 
-export function createRoutingModule(apiKey: string, agentName?: string) {
-    const headers: Record<string, string> = {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-    };
-    if (agentName) headers["X-Agent-Name"] = agentName;
+export function createRoutingModule(apiKey: string, agentName?: string, appBaseUrl = DEFAULT_APP_BASE_URL) {
+    const headers = createJsonHeaders(apiKey, agentName);
 
     async function apiFetch<T>(path: string, body: object): Promise<T> {
-        const res = await fetch(`https://app.aporto.tech${path}`, {
-            method: "POST",
-            headers,
-            body: JSON.stringify(body),
-        });
-        if (!res.ok) {
-            const text = await res.text().catch(() => "");
-            throw new AportoError(
-                `Routing request failed: ${res.status} ${res.statusText}${text ? ` — ${text}` : ""}`,
-                res.status
-            );
-        }
-        return res.json() as Promise<T>;
+        return apiFetchJson<T>(appBaseUrl, path, headers, body, "Routing request");
     }
 
     return {
@@ -106,6 +91,7 @@ export function createRoutingModule(apiKey: string, agentName?: string) {
          *   params: { prompt: "a cat on the moon", model: "flux-schnell" },
          *   sessionId: "my-session-abc",
          * });
+         * console.log(result.result);
          */
         async executeSkill(opts: ExecuteSkillOptions): Promise<ExecuteSkillResult> {
             return apiFetch("/api/routing/execute", {

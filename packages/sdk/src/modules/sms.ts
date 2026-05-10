@@ -1,7 +1,9 @@
-import { AportoError } from "../errors";
+import { AportoNotAvailableError } from "../errors";
+import { DEFAULT_APP_BASE_URL, apiFetchJson, createJsonHeaders } from "./http";
 
 export interface SendSmsOptions {
     to: string;
+    type?: "sms" | "whatsapp";
 }
 
 export interface CheckSmsOptions {
@@ -14,38 +16,22 @@ export interface SmsResult {
     [key: string]: unknown;
 }
 
-export function createSmsModule(apiKey: string, agentName?: string) {
-    const headers: Record<string, string> = {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-    };
-    if (agentName) headers["X-Agent-Name"] = agentName;
+export function createSmsModule(apiKey: string, agentName?: string, appBaseUrl = DEFAULT_APP_BASE_URL) {
+    const headers = createJsonHeaders(apiKey, agentName);
 
     return {
         async send(opts: SendSmsOptions): Promise<SmsResult> {
-            const res = await fetch("https://app.aporto.tech/api/services/sms", {
-                method: "POST",
+            return apiFetchJson<SmsResult>(
+                appBaseUrl,
+                "/api/services/sms",
                 headers,
-                body: JSON.stringify({ to: opts.to }),
-            });
-            if (!res.ok) {
-                const text = await res.text().catch(() => "");
-                throw new AportoError(`SMS send failed: ${res.status} ${res.statusText}${text ? ` — ${text}` : ""}`, res.status);
-            }
-            return res.json() as Promise<SmsResult>;
+                { to: opts.to, type: opts.type ?? "sms" },
+                "SMS send",
+            );
         },
 
-        async check(opts: CheckSmsOptions): Promise<SmsResult> {
-            const res = await fetch("https://app.aporto.tech/api/services/sms/check", {
-                method: "POST",
-                headers,
-                body: JSON.stringify({ to: opts.to, code: opts.code }),
-            });
-            if (!res.ok) {
-                const text = await res.text().catch(() => "");
-                throw new AportoError(`SMS check failed: ${res.status} ${res.statusText}${text ? ` — ${text}` : ""}`, res.status);
-            }
-            return res.json() as Promise<SmsResult>;
+        async check(): Promise<SmsResult> {
+            throw new AportoNotAvailableError("sms.check");
         },
     };
 }

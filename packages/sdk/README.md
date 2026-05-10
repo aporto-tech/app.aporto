@@ -21,6 +21,16 @@ const chat = await aporto.llm.chat.completions.create({
 });
 ```
 
+For local or self-hosted deployments, override the service and LLM base URLs:
+
+```typescript
+const aporto = new AportoClient({
+  apiKey: process.env.APORTO_API_KEY,
+  appBaseUrl: "http://localhost:3000",
+  llmBaseUrl: "https://api.aporto.tech/v1",
+});
+```
+
 Any OpenAI-compatible client works too — just set `baseURL`:
 
 ```typescript
@@ -42,18 +52,23 @@ const results = await aporto.search.linkup({ query: "AI news" });
 
 ```typescript
 const img = await aporto.images.generate({ prompt: "a cat on the moon" });
+console.log(img.images[0].url); // S3/R2 URL
+console.log(img.images[0].storage_key);
 ```
 
 ## Text-to-Speech
 
 ```typescript
 const audio = await aporto.audio.speech({ text: "Hello from Aporto!" });
+console.log(audio.url); // S3/R2 MP3 URL
+console.log(audio.storage_key);
 ```
 
 ## SMS
 
 ```typescript
-await aporto.sms.send({ to: "+1234567890", message: "Your code: 1234" });
+await aporto.sms.send({ to: "+1234567890", type: "sms" });
+await aporto.sms.send({ to: "+1234567890", type: "whatsapp" });
 ```
 
 ---
@@ -79,7 +94,8 @@ const result = await aporto.routing.executeSkill({
   sessionId: "my-agent-session-123", // optional — enables retry deduplication
 });
 
-console.log(result.data); // MP3 audio / URL / JSON depending on skill
+console.log(result.result); // Stored artifact URL / JSON depending on skill
+console.log(result.provider, result.costUSD);
 ```
 
 Filter by category or capability:

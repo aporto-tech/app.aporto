@@ -1,5 +1,5 @@
 /**
- * @aporto/sdk — Error types
+ * @aporto-tech/sdk - Error types
  */
 
 export class AportoError extends Error {
@@ -21,7 +21,7 @@ export class AportoConfigError extends AportoError {
 export class AportoNotAvailableError extends AportoError {
     constructor(module: string) {
         super(
-            `${module} is not available in @aporto/sdk v0.1 — it will be enabled in v0.2 once the backend route is confirmed live on api.aporto.tech`,
+            `${module} is not available in @aporto-tech/sdk yet because the backend route is not live on app.aporto.tech`,
             501
         );
         this.name = "AportoNotAvailableError";

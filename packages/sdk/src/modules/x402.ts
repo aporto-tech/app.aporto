@@ -1,6 +1,5 @@
 import { AportoError } from "../errors";
-
-const APP_URL = "https://app.aporto.tech";
+import { cleanBaseUrl, DEFAULT_APP_BASE_URL } from "./http";
 
 export class AportoPaymentError extends AportoError {
     readonly code: "INSUFFICIENT_BALANCE" | "PAY_FAILED" | "UNSUPPORTED_NETWORK";
@@ -13,6 +12,7 @@ export class AportoPaymentError extends AportoError {
 
 export interface CreateX402FetchOptions {
     apiKey: string;
+    appBaseUrl?: string;
 }
 
 /**
@@ -30,7 +30,7 @@ export interface CreateX402FetchOptions {
  *   const res = await fetch("https://some-x402-api.com/data");
  */
 export function createX402Fetch(options: CreateX402FetchOptions) {
-    const { apiKey } = options;
+    const { apiKey, appBaseUrl = DEFAULT_APP_BASE_URL } = options;
 
     return async function x402Fetch(
         input: RequestInfo | URL,
@@ -57,7 +57,7 @@ export function createX402Fetch(options: CreateX402FetchOptions) {
         }
 
         // Pay via Aporto
-        const payRes = await fetch(`${APP_URL}/api/x402/pay`, {
+        const payRes = await fetch(`${cleanBaseUrl(appBaseUrl)}/api/x402/pay`, {
             method: "POST",
             headers: {
                 Authorization: `Bearer ${apiKey}`,
