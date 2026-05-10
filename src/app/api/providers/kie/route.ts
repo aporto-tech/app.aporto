@@ -196,6 +196,10 @@ export async function POST(req: NextRequest) {
                 ...(bodyDefaults ?? {}),
                 ...params,
             };
+            if (typeof requestBody.aspectRatio === "string" && typeof requestBody.aspect_ratio !== "string") {
+                requestBody.aspect_ratio = requestBody.aspectRatio;
+                delete requestBody.aspectRatio;
+            }
         }
 
         const res = await fetch(`${KIE_BASE}${path}`, {

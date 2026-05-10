@@ -269,7 +269,7 @@ function requestConfig(row) {
             bodyDefaults: {
                 model: qualityModel,
                 generationType,
-                aspectRatio: "16:9",
+                aspect_ratio: "16:9",
                 enableTranslation: true,
                 enableFallback: false,
             },

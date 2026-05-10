@@ -124,6 +124,29 @@ function normalizeKieRecordInfo(data: unknown): { status: RunStatus; data?: unkn
     const payload = isPlainObject(data) && isPlainObject(data.data) ? data.data : data;
     if (!isPlainObject(payload)) return { status: "running" };
 
+    if (typeof payload.successFlag === "number") {
+        if (payload.successFlag === 1) {
+            return {
+                status: "succeeded",
+                data: {
+                    ...(isPlainObject(payload.response) ? payload.response : { response: payload.response }),
+                    providerTask: payload,
+                },
+            };
+        }
+        if (payload.successFlag === 2 || payload.successFlag === 3) {
+            return {
+                status: "failed",
+                error: {
+                    code: String(payload.errorCode ?? "PROVIDER_TASK_FAILED"),
+                    message: String(payload.errorMessage ?? "Provider task failed"),
+                    retryable: false,
+                },
+            };
+        }
+        return { status: "running" };
+    }
+
     const state = String(payload.state ?? payload.status ?? "").toLowerCase();
     if (["fail", "failed", "error"].includes(state)) {
         return {
@@ -308,11 +331,15 @@ async function pollKieProvider(provider: ScoredProvider, providerTaskId: string)
     latencyMs: number;
     errorType: "success" | "timeout" | "network_error" | "error_5xx" | "error_4xx";
 }> {
+    const submitPath = typeof provider.syncConfig?.apiPath === "string" ? provider.syncConfig.apiPath : "";
+    const recordInfoPath = submitPath === "/api/v1/veo/generate"
+        ? "/api/v1/veo/record-info"
+        : "/api/v1/jobs/recordInfo";
     return executeSkillViaProvider(
         provider,
         {
             requestType: "jobs.recordInfo",
-            apiPath: "/api/v1/jobs/recordInfo",
+            apiPath: recordInfoPath,
             taskId: providerTaskId,
         },
         "",
