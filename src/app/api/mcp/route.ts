@@ -8,8 +8,8 @@
  *   aporto_search        — Web search via Linkup ($0.006 standard / $0.055 deep)
  *   aporto_ai_search     — AI-powered search via You.com ($0.005 / $0.0065 research)
  *   aporto_sms_send      — SMS/WhatsApp verification via Prelude ($0.015)
- *   aporto_image_generate — Image generation via fal.ai (from $0.004/MP)
- *   aporto_tts_create    — Text-to-speech via ElevenLabs ($0.24/1k chars)
+ *   aporto_image_generate — Image generation via fal.ai, stored in S3/R2 (from $0.004/MP)
+ *   aporto_tts_create    — Text-to-speech via ElevenLabs, stored in S3/R2 ($0.24/1k chars)
  *   aporto_chat          — LLM chat completions via Aporto gateway
  *
  * Auth: Authorization: Bearer sk-live-{key}  (same key used for LLM calls)
@@ -195,7 +195,7 @@ function buildMcpServer(userId: number, authHeader: string) {
     // ── aporto_image_generate ─────────────────────────────────────────────────
     server.tool(
         "aporto_image_generate",
-        "Generate images via fal.ai. flux-schnell is cheapest ($0.004/MP). Returns image URLs.",
+        "Generate images via fal.ai. flux-schnell is cheapest ($0.004/MP). Returns S3/R2 image URLs.",
         {
             prompt:     z.string().describe("Image description prompt"),
             model:      z.enum(["flux-schnell", "flux-dev", "flux-pro"]).optional().default("flux-schnell")
@@ -213,8 +213,11 @@ function buildMcpServer(userId: number, authHeader: string) {
             if (!result) return { content: [{ type: "text" as const, text: "No providers available" }], isError: true };
             if (!result.success) return { content: [{ type: "text" as const, text: `Error: ${JSON.stringify(result.data)}` }], isError: true };
 
-            const data = result.data as { images?: { url: string }[] };
+            const data = result.data as { images?: { url: string; storage_key?: string }[] };
             const images = data.images ?? [];
+            if (images.some((img) => !img.url)) {
+                return { content: [{ type: "text" as const, text: "Error: generated image was not stored in S3/R2." }], isError: true };
+            }
             return {
                 content: [
                     { type: "text" as const, text: `Generated ${images.length} image(s).` },
@@ -229,7 +232,7 @@ function buildMcpServer(userId: number, authHeader: string) {
     // deduct quota here and refund on failure.
     server.tool(
         "aporto_tts_create",
-        "Convert text to speech via ElevenLabs. Returns audio URL (valid 24h). Cost: $0.24 per 1,000 characters. " +
+        "Convert text to speech via ElevenLabs. Returns an S3/R2 audio URL (valid 24h). Cost: $0.24 per 1,000 characters. " +
         "Use aporto_list_options(skillId=5, optionType=\"voice\") to discover available voices before calling this. " +
         "Common voices: Rachel (21m00Tcm4TlvDq8ikWAM, female adult american), " +
         "Bella (EXAVITQu4vr4xnSDxMaL, female young american), " +
@@ -265,24 +268,18 @@ function buildMcpServer(userId: number, authHeader: string) {
                 return { content: [{ type: "text" as const, text: `ElevenLabs error: ${JSON.stringify(result.data)}` }], isError: true };
             }
 
-            const data = result.data as { url: string | null; audio_base64?: string; expires_at?: string };
-            if (data.url) {
-                void logServiceUsage(userId, "tts", "elevenlabs", costUSD, { text_length: text.length, voice_id, model_id })
-                    .catch((e) => console.error("[mcp/tts] logServiceUsage:", e));
-                return {
-                    content: [
-                        { type: "text" as const, text: `Audio generated. ${text.length} chars, cost $${costUSD.toFixed(4)}.` },
-                        { type: "text" as const, text: JSON.stringify({ url: data.url, expires_at: data.expires_at }) },
-                    ],
-                };
+            const data = result.data as { url?: string; storage_key?: string; expires_at?: string };
+            if (!data.url) {
+                await refundQuota(userId, costUSD);
+                return { content: [{ type: "text" as const, text: "Error: generated audio was not stored in S3/R2." }], isError: true };
             }
-            // S3 not yet configured — return base64 fallback
+
             void logServiceUsage(userId, "tts", "elevenlabs", costUSD, { text_length: text.length, voice_id, model_id })
                 .catch((e) => console.error("[mcp/tts] logServiceUsage:", e));
             return {
                 content: [
                     { type: "text" as const, text: `Audio generated. ${text.length} chars, cost $${costUSD.toFixed(4)}.` },
-                    { type: "text" as const, text: `base64:audio/mpeg:${data.audio_base64}` },
+                    { type: "text" as const, text: JSON.stringify({ url: data.url, storage_key: data.storage_key, expires_at: data.expires_at }) },
                 ],
             };
         },

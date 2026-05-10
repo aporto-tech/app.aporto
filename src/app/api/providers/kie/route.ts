@@ -15,6 +15,8 @@
  * task status skill to retrieve final URLs.
  */
 import { NextRequest, NextResponse } from "next/server";
+import { randomUUID } from "crypto";
+import { copyUrlToR2 } from "@/lib/r2";
 
 export const dynamic = "force-dynamic";
 
@@ -31,12 +33,76 @@ interface KieConfig {
     bodyDefaults?: Record<string, unknown>;
 }
 
+type StoredArtifact = {
+    url: string;
+    storage_key: string;
+};
+
+const MEDIA_URL_RE = /^https?:\/\/\S+\.(png|jpe?g|webp|gif|mp3|wav|m4a|aac|ogg|mp4|mov|webm)(?:[?#]\S*)?$/i;
+
+function extensionForUrl(url: string): string {
+    const match = url.match(/\.(png|jpe?g|webp|gif|mp3|wav|m4a|aac|ogg|mp4|mov|webm)(?:[?#]|$)/i);
+    return (match?.[1] ?? "bin").toLowerCase().replace("jpeg", "jpg");
+}
+
+function contentTypeForExtension(ext: string): string {
+    if (ext === "jpg" || ext === "jpeg") return "image/jpeg";
+    if (ext === "png") return "image/png";
+    if (ext === "webp") return "image/webp";
+    if (ext === "gif") return "image/gif";
+    if (ext === "mp3") return "audio/mpeg";
+    if (ext === "wav") return "audio/wav";
+    if (ext === "m4a") return "audio/mp4";
+    if (ext === "aac") return "audio/aac";
+    if (ext === "ogg") return "audio/ogg";
+    if (ext === "mp4") return "video/mp4";
+    if (ext === "mov") return "video/quicktime";
+    if (ext === "webm") return "video/webm";
+    return "application/octet-stream";
+}
+
+async function storeMediaUrls(value: unknown): Promise<{ value: unknown; artifacts: StoredArtifact[] }> {
+    const datePrefix = new Date().toISOString().slice(0, 10);
+    const cache = new Map<string, StoredArtifact>();
+
+    async function visit(node: unknown): Promise<unknown> {
+        if (typeof node === "string") {
+            if (!MEDIA_URL_RE.test(node)) return node;
+
+            const cached = cache.get(node);
+            if (cached) return cached.url;
+
+            const ext = extensionForUrl(node);
+            const key = `kie/${datePrefix}/${randomUUID()}.${ext}`;
+            const url = await copyUrlToR2(node, key, contentTypeForExtension(ext));
+            cache.set(node, { url, storage_key: key });
+            return url;
+        }
+
+        if (Array.isArray(node)) {
+            return Promise.all(node.map((item) => visit(item)));
+        }
+
+        if (node && typeof node === "object") {
+            const entries = await Promise.all(
+                Object.entries(node as Record<string, unknown>).map(async ([key, item]) => [key, await visit(item)] as const),
+            );
+            return Object.fromEntries(entries);
+        }
+
+        return node;
+    }
+
+    const storedValue = await visit(value);
+    return { value: storedValue, artifacts: Array.from(cache.values()) };
+}
+
 function cleanPath(path: string) {
     if (!path.startsWith("/")) return `/${path}`;
     return path;
 }
 
-async function parseKieResponse(res: Response) {
+async function parseKieResponse(res: Response, options: { storeArtifacts?: boolean } = {}) {
     const text = await res.text();
     let data: unknown;
     try {
@@ -61,7 +127,18 @@ async function parseKieResponse(res: Response) {
         );
     }
 
-    return NextResponse.json({ success: true, ...payload, raw: data });
+    const responsePayload: Record<string, unknown> = { success: true, ...payload, raw: data };
+    if (!options.storeArtifacts) {
+        return NextResponse.json(responsePayload);
+    }
+
+    const { value, artifacts } = await storeMediaUrls(responsePayload);
+    const storedPayload = value as Record<string, unknown>;
+    if (artifacts.length > 0) {
+        storedPayload.stored_artifacts = artifacts;
+    }
+
+    return NextResponse.json(storedPayload);
 }
 
 export async function POST(req: NextRequest) {
@@ -93,7 +170,7 @@ export async function POST(req: NextRequest) {
                 headers: { "Authorization": `Bearer ${apiKey}` },
                 signal: AbortSignal.timeout(30_000),
             });
-            return parseKieResponse(res);
+            return parseKieResponse(res, { storeArtifacts: true });
         }
 
         const path = cleanPath(apiPath ?? (requestType === "suno.direct" ? "/api/v1/generate" : "/api/v1/jobs/createTask"));
@@ -131,7 +208,7 @@ export async function POST(req: NextRequest) {
             signal: AbortSignal.timeout(30_000),
         });
 
-        return parseKieResponse(res);
+        return parseKieResponse(res, { storeArtifacts: requestType === "suno.direct" || requestType === "direct" });
     } catch (error) {
         console.error("[providers/kie] POST error:", error);
         return NextResponse.json({ success: false, message: String(error) }, { status: 500 });

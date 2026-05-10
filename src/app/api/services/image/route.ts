@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
+import { randomUUID } from "crypto";
 import { validateApiKeyOrSession, deductUserQuota, logServiceUsage } from "@/lib/serviceProxy";
+import { copyUrlToR2 } from "@/lib/r2";
 
 export const dynamic = "force-dynamic";
 
@@ -23,6 +25,30 @@ const SIZE_TO_MP: Record<string, number> = {
     "landscape_16_9":   0.58,  // 1024x576
 };
 const DEFAULT_SIZE = "square_hd";
+
+type FalImage = {
+    url?: string;
+    content_type?: string;
+    width?: number;
+    height?: number;
+    [key: string]: unknown;
+};
+
+async function refundQuota(userId: number, costUSD: number) {
+    const { prisma } = await import("@/lib/prisma");
+    await prisma.$executeRawUnsafe(
+        `UPDATE users SET quota = quota + $1, used_quota = used_quota - $1 WHERE id = $2`,
+        Math.ceil(costUSD * 500_000),
+        userId,
+    );
+}
+
+function extensionForContentType(contentType: string | undefined): string {
+    if (contentType?.includes("png")) return "png";
+    if (contentType?.includes("webp")) return "webp";
+    if (contentType?.includes("jpeg") || contentType?.includes("jpg")) return "jpg";
+    return "png";
+}
 
 export async function POST(req: NextRequest) {
     try {
@@ -63,16 +89,38 @@ export async function POST(req: NextRequest) {
         const data = await res.json();
 
         if (!res.ok) {
-            await import("@/lib/prisma").then(({ prisma }) =>
-                prisma.$executeRawUnsafe(
-                    `UPDATE users SET quota = quota + $1, used_quota = used_quota - $1 WHERE id = $2`,
-                    Math.ceil(costUSD * 500_000),
-                    auth.newApiUserId
-                )
-            );
+            await refundQuota(auth.newApiUserId, costUSD);
             return NextResponse.json(
                 { success: false, message: data.message ?? "fal.ai error", detail: data },
                 { status: res.status }
+            );
+        }
+
+        let images: FalImage[];
+        try {
+            const generatedImages = Array.isArray(data.images) ? data.images as FalImage[] : [];
+            const datePrefix = new Date().toISOString().slice(0, 10);
+            images = await Promise.all(generatedImages.map(async (image, index) => {
+                if (!image.url) {
+                    throw new Error(`fal.ai returned image ${index + 1} without url`);
+                }
+
+                const contentType = image.content_type ?? "image/png";
+                const ext = extensionForContentType(contentType);
+                const key = `images/${datePrefix}/${randomUUID()}.${ext}`;
+                const url = await copyUrlToR2(image.url, key, contentType);
+
+                return {
+                    ...image,
+                    url,
+                    storage_key: key,
+                };
+            }));
+        } catch (storageError) {
+            await refundQuota(auth.newApiUserId, costUSD);
+            return NextResponse.json(
+                { success: false, message: "Generated images could not be stored in S3/R2", detail: String(storageError) },
+                { status: 502 },
             );
         }
 
@@ -82,7 +130,7 @@ export async function POST(req: NextRequest) {
             num_images,
         });
 
-        return NextResponse.json({ success: true, ...data, costUSD });
+        return NextResponse.json({ success: true, ...data, images, costUSD });
     } catch (error) {
         console.error("[services/image] POST error:", error);
         return NextResponse.json({ success: false, message: String(error) }, { status: 500 });

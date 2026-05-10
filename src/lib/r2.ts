@@ -41,3 +41,21 @@ export async function uploadToR2(
     );
     return `${publicUrl}/${key}`;
 }
+
+export async function copyUrlToR2(
+    sourceUrl: string,
+    key: string,
+    fallbackContentType: string,
+): Promise<string> {
+    const res = await fetch(sourceUrl, {
+        signal: AbortSignal.timeout(30_000),
+    });
+
+    if (!res.ok) {
+        throw new Error(`Failed to fetch generated artifact: ${res.status}`);
+    }
+
+    const contentType = res.headers.get("content-type") ?? fallbackContentType;
+    const body = Buffer.from(await res.arrayBuffer());
+    return uploadToR2(key, body, contentType);
+}

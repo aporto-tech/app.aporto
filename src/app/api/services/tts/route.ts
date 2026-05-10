@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
+import { randomUUID } from "crypto";
 import { validateApiKeyOrSession, deductUserQuota, logServiceUsage } from "@/lib/serviceProxy";
+import { uploadToR2 } from "@/lib/r2";
 
 export const dynamic = "force-dynamic";
 
@@ -15,7 +17,16 @@ const MODEL_COST: Record<string, number> = {
 };
 const DEFAULT_MODEL = "eleven_multilingual_v2";
 
-/** Direct service endpoint — returns audio/mpeg binary. */
+async function refundQuota(userId: number, costUSD: number) {
+    const { prisma } = await import("@/lib/prisma");
+    await prisma.$executeRawUnsafe(
+        `UPDATE users SET quota = quota + $1, used_quota = used_quota - $1 WHERE id = $2`,
+        Math.ceil(costUSD * 500_000),
+        userId,
+    );
+}
+
+/** Direct service endpoint — returns a stored audio URL. */
 export async function POST(req: NextRequest) {
     try {
         const auth = await validateApiKeyOrSession(req);
@@ -59,16 +70,24 @@ export async function POST(req: NextRequest) {
 
         if (!res.ok) {
             const errText = await res.text();
-            await import("@/lib/prisma").then(({ prisma }) =>
-                prisma.$executeRawUnsafe(
-                    `UPDATE users SET quota = quota + $1, used_quota = used_quota - $1 WHERE id = $2`,
-                    Math.ceil(costUSD * 500_000),
-                    auth.newApiUserId,
-                )
-            );
+            await refundQuota(auth.newApiUserId, costUSD);
             return NextResponse.json(
                 { success: false, message: `ElevenLabs error: ${res.status}`, detail: errText },
                 { status: res.status },
+            );
+        }
+
+        const audioBuffer = await res.arrayBuffer();
+        let url: string;
+        let storageKey: string;
+        try {
+            storageKey = `tts/${new Date().toISOString().slice(0, 10)}/${randomUUID()}.mp3`;
+            url = await uploadToR2(storageKey, Buffer.from(audioBuffer), "audio/mpeg");
+        } catch (storageError) {
+            await refundQuota(auth.newApiUserId, costUSD);
+            return NextResponse.json(
+                { success: false, message: "Generated audio could not be stored in S3/R2", detail: String(storageError) },
+                { status: 502 },
             );
         }
 
@@ -78,14 +97,13 @@ export async function POST(req: NextRequest) {
             model_id,
         });
 
-        const audioBuffer = await res.arrayBuffer();
-        return new NextResponse(audioBuffer, {
-            status: 200,
-            headers: {
-                "Content-Type": "audio/mpeg",
-                "X-Cost-USD": costUSD.toFixed(6),
-                "X-Char-Count": String(charCount),
-            },
+        return NextResponse.json({
+            success: true,
+            url,
+            storage_key: storageKey,
+            expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+            costUSD,
+            char_count: charCount,
         });
     } catch (error) {
         console.error("[services/tts] POST error:", error);
