@@ -308,36 +308,15 @@ async function pollKieProvider(provider: ScoredProvider, providerTaskId: string)
     latencyMs: number;
     errorType: "success" | "timeout" | "network_error" | "error_5xx" | "error_4xx";
 }> {
-    const start = Date.now();
-    try {
-        const url = new URL("https://api.kie.ai/api/v1/jobs/recordInfo");
-        url.searchParams.set("taskId", providerTaskId);
-        const res = await fetch(url, {
-            headers: { Authorization: `Bearer ${provider.secret ?? ""}` },
-            signal: AbortSignal.timeout(30_000),
-        });
-        const text = await res.text();
-        let data: unknown;
-        try {
-            data = JSON.parse(text);
-        } catch {
-            data = text;
-        }
-        return {
-            success: res.ok,
-            data,
-            latencyMs: Date.now() - start,
-            errorType: res.ok ? "success" : res.status >= 500 ? "error_5xx" : "error_4xx",
-        };
-    } catch (err) {
-        const isTimeout = err instanceof Error && (err.name === "TimeoutError" || err.name === "AbortError");
-        return {
-            success: false,
-            data: { error: String(err) },
-            latencyMs: Date.now() - start,
-            errorType: isTimeout ? "timeout" : "network_error",
-        };
-    }
+    return executeSkillViaProvider(
+        provider,
+        {
+            requestType: "jobs.recordInfo",
+            apiPath: "/api/v1/jobs/recordInfo",
+            taskId: providerTaskId,
+        },
+        "",
+    );
 }
 
 async function waitForProviderResult(input: {
