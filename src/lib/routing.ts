@@ -196,7 +196,7 @@ export async function selectProvider(
         ? `AND p.id NOT IN (${exclusions.map((_, idx) => `$${idx + 6}`).join(", ")})`
         : "";
 
-    const preferred = await selectAttributedProvider(skillId, newApiUserId, isThirdParty, exclusions);
+    const preferred = await selectAttributedProvider(skillId, newApiUserId, isThirdParty, exclusions, providerHint);
     if (preferred) return preferred;
 
     const rows = await prisma.$queryRawUnsafe<
@@ -256,14 +256,15 @@ export async function selectProvider(
     const minLat = Math.min(...latencies);
     const maxLat = Math.max(...latencies);
 
-    const hint = providerHint?.toLowerCase().trim();
+    const normalize = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, "");
+    const hint = providerHint ? normalize(providerHint) : null;
     const scored = rows.map((r) => {
         const normPrice =
             maxPrice === minPrice ? 0.5 : (Number(r.price_per_call) - minPrice) / (maxPrice - minPrice);
         const normLat =
             maxLat === minLat ? 0.5 : (Number(r.avg_latency_ms) - minLat) / (maxLat - minLat);
-        const providerText = `${r.name} ${r.sync_config ?? ""}`.toLowerCase();
-        const hintBoost = hint && providerText.includes(hint) ? 1 : 0;
+        const providerText = normalize(`${r.name} ${r.sync_config ?? ""}`);
+        const hintBoost = hint && providerText.includes(hint) ? 1.5 : 0;
         const score =
             hintBoost +
             0.40 * (1 - normPrice) +
@@ -284,6 +285,7 @@ async function selectAttributedProvider(
     newApiUserId: number,
     isThirdParty: boolean,
     excludeProviderIds: number[],
+    providerHint?: string,
 ): Promise<ScoredProvider | null> {
     const exclusions = Array.from(new Set(excludeProviderIds.filter((id) => Number.isInteger(id) && id > 0)));
     const exclusionClause = exclusions.length
@@ -345,8 +347,15 @@ async function selectAttributedProvider(
         ...exclusions,
     );
 
+    const normalize = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, "");
+    const hint = providerHint ? normalize(providerHint) : null;
     const row = rows[0];
     if (!row) return null;
+
+    if (hint) {
+        const providerText = normalize(`${row.name} ${row.sync_config ?? ""}`);
+        if (!providerText.includes(hint)) return null;
+    }
 
     const recentCalls = Number(row.recent_calls);
     const recentSuccesses = Number(row.recent_successes);
