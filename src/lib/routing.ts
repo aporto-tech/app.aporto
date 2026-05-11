@@ -35,6 +35,8 @@ export interface DiscoveredSkill {
     similarity: number;
 }
 
+export type SkillLookup = Pick<DiscoveredSkill, "id" | "name" | "description" | "category" | "capabilities" | "paramsSchema" | "tags">;
+
 export interface ScoredProvider {
     id: number;
     name: string;
@@ -78,6 +80,79 @@ function toScoredProvider(row: ProviderRow): ScoredProvider {
         secret: row.secret ?? null,
         syncConfig: row.sync_config ? JSON.parse(row.sync_config) : null,
     };
+}
+
+export function normalizeSkillText(value: string): string {
+    return value.toLowerCase().replace(/[^a-z0-9]+/g, "");
+}
+
+function parseJsonArray(value: string | null): string[] {
+    if (!value) return [];
+    try {
+        const parsed = JSON.parse(value);
+        return Array.isArray(parsed) ? parsed.map((item) => String(item)) : [];
+    } catch {
+        return [];
+    }
+}
+
+function skillFromRow(row: {
+    id: number;
+    name: string;
+    description: string;
+    category: string | null;
+    capabilities: string | null;
+    params_schema: string | null;
+    tags: string | null;
+}): SkillLookup {
+    return {
+        id: row.id,
+        name: row.name,
+        description: row.description,
+        category: row.category,
+        capabilities: parseJsonArray(row.capabilities),
+        paramsSchema: row.params_schema,
+        tags: row.tags,
+    };
+}
+
+export async function findExactSkillByIntent(intent: string): Promise<SkillLookup | null> {
+    const normalizedIntent = normalizeSkillText(intent);
+    if (!normalizedIntent) return null;
+
+    const rows = await prisma.$queryRawUnsafe<{
+        id: number; name: string; description: string;
+        category: string | null; capabilities: string | null;
+        params_schema: string | null; tags: string | null;
+    }[]>(
+        `SELECT s.id, s.name, s.description, s.category, s.capabilities,
+                s."paramsSchema" AS params_schema, s.tags
+         FROM "Skill" s
+         WHERE s."isActive" = true
+           AND s.status = 'live'
+           AND EXISTS (
+             SELECT 1 FROM "Provider" p
+             WHERE p."skillId" = s.id AND p."isActive" = true
+           )`,
+    );
+
+    const exact = rows
+        .map((row) => {
+            const tags = parseJsonArray(row.tags);
+            const name = normalizeSkillText(row.name);
+            const tagHit = tags.some((tag) => normalizeSkillText(tag) === normalizedIntent);
+            const exactName = name === normalizedIntent;
+            const containedName = name.includes(normalizedIntent);
+            return { row, exactName, tagHit, containedName, nameLength: name.length };
+        })
+        .filter((item) => item.exactName || item.tagHit || item.containedName)
+        .sort((a, b) => {
+            const scoreA = (a.exactName ? 3 : 0) + (a.tagHit ? 2 : 0) + (a.containedName ? 1 : 0);
+            const scoreB = (b.exactName ? 3 : 0) + (b.tagHit ? 2 : 0) + (b.containedName ? 1 : 0);
+            return scoreB - scoreA || a.nameLength - b.nameLength || a.row.id - b.row.id;
+        });
+
+    return exact[0] ? skillFromRow(exact[0].row) : null;
 }
 
 // ── discoverSkills ────────────────────────────────────────────────────────────

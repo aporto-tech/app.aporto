@@ -7,10 +7,13 @@ import {
     deactivateSkillIfNoActiveProviders,
     discoverSkills,
     executeSkillViaProvider,
+    findExactSkillByIntent,
     recordSkillCall,
     selectProvider,
     updateProviderStats,
+    normalizeSkillText,
     type ScoredProvider,
+    type DiscoveredSkill,
 } from "@/lib/routing";
 
 const QUOTA_PER_DOLLAR = 500_000;
@@ -27,7 +30,7 @@ export const DEFAULT_WAIT_SECONDS = Math.min(
 
 type SkillRunSource = "mcp" | "rest";
 
-type RunStatus = "succeeded" | "running" | "waiting" | "failed";
+type RunStatus = "succeeded" | "running" | "waiting" | "failed" | "needs_selection";
 
 type RunSkillInput = {
     source: SkillRunSource;
@@ -56,6 +59,14 @@ type RunSkillResult = {
     data?: unknown;
     artifact?: StoredArtifact;
     artifacts?: StoredArtifact[];
+    choices?: Array<{
+        skillId: number;
+        name: string;
+        description: string;
+        category: string | null;
+        paramsSchema: unknown;
+        similarity: number;
+    }>;
     error?: {
         code: string;
         message: string;
@@ -63,6 +74,46 @@ type RunSkillResult = {
         retryable: boolean;
     };
 };
+
+function parseParamsSchema(value: string | null): unknown {
+    if (!value) return null;
+    try {
+        return JSON.parse(value);
+    } catch {
+        return null;
+    }
+}
+
+function selectionChoices(matches: DiscoveredSkill[]) {
+    return matches.slice(0, 5).map((match) => ({
+        skillId: match.id,
+        name: match.name,
+        description: match.description,
+        category: match.category,
+        paramsSchema: parseParamsSchema(match.paramsSchema),
+        similarity: Math.round(match.similarity * 100) / 100,
+    }));
+}
+
+function hasCloseSkillVariants(intent: string, matches: DiscoveredSkill[]): boolean {
+    if (matches.length < 2) return false;
+
+    const [first, second] = matches;
+    if (!first || !second) return false;
+    if (first.category !== second.category) return false;
+    if (Math.abs(first.similarity - second.similarity) > 0.03) return false;
+
+    const normalizedIntent = normalizeSkillText(intent);
+    const variantTokens = ["1k", "2k", "4k", "720p", "1080p", "fast", "stable", "pro", "10s", "15s"];
+    const mentionsVariant = variantTokens.some((token) => normalizedIntent.includes(token));
+    const closeNames = matches
+        .slice(0, 5)
+        .filter((match) => match.category === first.category)
+        .map((match) => normalizeSkillText(match.name));
+    const hasResolutionFamily = closeNames.filter((name) => name.includes("nanobanana") || name.includes("sora") || name.includes("veo")).length > 1;
+
+    return mentionsVariant || hasResolutionFamily;
+}
 
 type PollDueSkillRunsResult = {
     checked: number;
@@ -497,8 +548,34 @@ export async function runSkill(input: RunSkillInput): Promise<RunSkillResult> {
     let skillId = input.skillId;
     let skillName: string | undefined;
     if (!skillId) {
-        const matches = await discoverSkills(input.intent, 0);
-        const match = matches[0];
+        const exactMatch = await findExactSkillByIntent(input.intent);
+        const matches = exactMatch ? [] : await discoverSkills(input.intent, 0);
+        if (!exactMatch && hasCloseSkillVariants(input.intent, matches)) {
+            const runId = await createRun({
+                newApiUserId: input.newApiUserId,
+                sessionId,
+                skillId: 0,
+                status: "failed",
+                lifecycleMode: "none",
+                error: {
+                    code: "SKILL_SELECTION_REQUIRED",
+                    message: "Multiple matching skills found. Choose one skillId and call aporto_run_skill again with that skillId.",
+                    retryable: false,
+                },
+            });
+            return {
+                status: "needs_selection",
+                runId,
+                skillId: 0,
+                choices: selectionChoices(matches),
+                error: {
+                    code: "SKILL_SELECTION_REQUIRED",
+                    message: "Multiple matching skills found. Choose one skillId and call aporto_run_skill again with that skillId.",
+                    retryable: false,
+                },
+            };
+        }
+        const match = exactMatch ?? matches[0];
         if (!match) {
             const runId = await createRun({
                 newApiUserId: input.newApiUserId,

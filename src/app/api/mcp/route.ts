@@ -516,7 +516,7 @@ function buildMcpServer(userId: number, authHeader: string, internalBaseUrl?: st
     // ── aporto_run_skill ──────────────────────────────────────────────────────
     server.tool(
         "aporto_run_skill",
-        "High-level Aporto skill runner. Use this as the default tool when the user asks you to perform a task. It discovers the skill when needed, selects a provider, executes it, stores a SkillRun, and returns a runId on every response. When status is succeeded, return the artifacts to the user. When status is running or waiting, automatically call aporto_get_skill_run every 30 seconds until status is succeeded or failed; do not ask the user to poll manually.",
+        "High-level Aporto skill runner. Use this as the default tool when the user asks you to perform a task. It discovers the skill when needed, selects a provider, executes it, stores a SkillRun, and returns a runId on every response. If status is needs_selection, show the choices to the user once and then call aporto_run_skill again with the chosen skillId. When status is succeeded, return the artifacts to the user. When status is running or waiting, automatically call aporto_get_skill_run every 30 seconds until status is succeeded or failed; do not ask the user to poll manually.",
         {
             intent:         z.string().describe("Plain-language task intent, including model/provider hints when the user names them, e.g. 'Google Nano Banana image generation' or 'Veo 3.1 720p video generation'."),
             params:         z.record(z.unknown()).optional().default({}).describe("Parameters for the skill. For generation skills this usually includes prompt."),
