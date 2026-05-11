@@ -64,6 +64,15 @@ type RunSkillResult = {
     };
 };
 
+type PollDueSkillRunsResult = {
+    checked: number;
+    succeeded: number;
+    failed: number;
+    running: number;
+    errors: Array<{ runId: string; error: string }>;
+    runs: RunSkillResult[];
+};
+
 type SkillRunRow = {
     id: string;
     newApiUserId: number;
@@ -78,6 +87,19 @@ type SkillRunRow = {
     error: unknown;
     artifactJson: unknown;
     costUSD: number | null;
+};
+
+type ProviderLookupRow = {
+    id: number;
+    name: string;
+    endpoint: string;
+    price_per_call: number;
+    cost_per_char: number | null;
+    avg_latency_ms: number;
+    retry_rate: number;
+    timeout_rate: number;
+    secret: string | null;
+    sync_config: string | null;
 };
 
 function sleep(ms: number) {
@@ -195,6 +217,21 @@ function lifecycleModeFor(provider: ScoredProvider, data: unknown): "sync" | "as
     if (requestType === "jobs.createTask") return "async_poll";
     if (extractProviderTaskId(data) && /\/api\/providers\/kie$/.test(provider.endpoint)) return "async_poll";
     return "sync";
+}
+
+function providerFromRow(row: ProviderLookupRow): ScoredProvider {
+    return {
+        id: row.id,
+        name: row.name,
+        endpoint: row.endpoint,
+        pricePerCall: Number(row.price_per_call),
+        costPerChar: row.cost_per_char == null ? null : Number(row.cost_per_char),
+        avgLatencyMs: Number(row.avg_latency_ms),
+        retryRate: Number(row.retry_rate),
+        timeoutRate: Number(row.timeout_rate),
+        secret: row.secret,
+        syncConfig: row.sync_config ? JSON.parse(row.sync_config) : null,
+    };
 }
 
 async function refundQuota(newApiUserId: number, costUSD: number) {
@@ -744,10 +781,7 @@ export async function getSkillRun(input: {
         };
     }
 
-    const providerRows = await prisma.$queryRawUnsafe<{
-        id: number; name: string; endpoint: string; price_per_call: number; cost_per_char: number | null;
-        avg_latency_ms: number; retry_rate: number; timeout_rate: number; secret: string | null; sync_config: string | null;
-    }[]>(
+    const providerRows = await prisma.$queryRawUnsafe<ProviderLookupRow[]>(
         `SELECT id, name, endpoint, "pricePerCall" AS price_per_call, "costPerChar" AS cost_per_char,
                 "avgLatencyMs" AS avg_latency_ms, "retryRate" AS retry_rate, "timeoutRate" AS timeout_rate,
                 "providerSecret" AS secret, "syncConfig" AS sync_config
@@ -765,18 +799,7 @@ export async function getSkillRun(input: {
             error: { code: "PROVIDER_NOT_FOUND", message: "Provider for this run is no longer active.", retryable: false },
         };
     }
-    const provider: ScoredProvider = {
-        id: row.id,
-        name: row.name,
-        endpoint: row.endpoint,
-        pricePerCall: Number(row.price_per_call),
-        costPerChar: row.cost_per_char == null ? null : Number(row.cost_per_char),
-        avgLatencyMs: Number(row.avg_latency_ms),
-        retryRate: Number(row.retry_rate),
-        timeoutRate: Number(row.timeout_rate),
-        secret: row.secret,
-        syncConfig: row.sync_config ? JSON.parse(row.sync_config) : null,
-    };
+    const provider = providerFromRow(row);
 
     return waitForProviderResult({
         runId: run.id,
@@ -791,4 +814,129 @@ export async function getSkillRun(input: {
         maxWaitSeconds: Math.min(input.maxWaitSeconds ?? DEFAULT_WAIT_SECONDS, MAX_WAIT_SECONDS),
         internalBaseUrl: input.internalBaseUrl,
     });
+}
+
+export async function pollSkillRunById(input: {
+    runId: string;
+    source?: SkillRunSource;
+    maxWaitSeconds?: number;
+    internalBaseUrl?: string;
+}): Promise<RunSkillResult | null> {
+    const rows = await prisma.$queryRawUnsafe<SkillRunRow[]>(
+        `SELECT id, "newApiUserId", "sessionId", "skillId", "providerId", "skillCallId",
+                status, "lifecycleMode", "providerTaskId", result, error,
+                "artifactJson", "costUSD"
+         FROM "SkillRun"
+         WHERE id = $1
+         LIMIT 1`,
+        input.runId,
+    );
+    const run = rows[0];
+    if (!run) return null;
+
+    if (!["running", "waiting"].includes(run.status) || run.lifecycleMode !== "async_poll" || !run.providerId || !run.providerTaskId) {
+        return getSkillRun({
+            source: input.source ?? "rest",
+            newApiUserId: run.newApiUserId,
+            runId: run.id,
+            waitForResult: false,
+            maxWaitSeconds: input.maxWaitSeconds,
+            internalBaseUrl: input.internalBaseUrl,
+        });
+    }
+
+    const providerRows = await prisma.$queryRawUnsafe<ProviderLookupRow[]>(
+        `SELECT id, name, endpoint, "pricePerCall" AS price_per_call, "costPerChar" AS cost_per_char,
+                "avgLatencyMs" AS avg_latency_ms, "retryRate" AS retry_rate, "timeoutRate" AS timeout_rate,
+                "providerSecret" AS secret, "syncConfig" AS sync_config
+         FROM "Provider"
+         WHERE id = $1 AND "isActive" = true
+         LIMIT 1`,
+        run.providerId,
+    );
+    const row = providerRows[0];
+    if (!row) {
+        const error = { code: "PROVIDER_NOT_FOUND", message: "Provider for this run is no longer active.", retryable: false };
+        await updateRun(run.id, { status: "failed", error, nextPollAt: null });
+        return {
+            status: "failed",
+            runId: run.id,
+            skillId: run.skillId,
+            providerId: run.providerId,
+            providerTaskId: run.providerTaskId,
+            error,
+        };
+    }
+
+    return waitForProviderResult({
+        runId: run.id,
+        source: input.source ?? "rest",
+        newApiUserId: run.newApiUserId,
+        sessionId: run.sessionId,
+        skillId: run.skillId,
+        provider: providerFromRow(row),
+        providerTaskId: run.providerTaskId,
+        params: {},
+        costUSD: run.costUSD ?? 0,
+        maxWaitSeconds: Math.min(input.maxWaitSeconds ?? 5, MAX_WAIT_SECONDS),
+        internalBaseUrl: input.internalBaseUrl,
+    });
+}
+
+export async function pollDueSkillRuns(input: {
+    limit?: number;
+    maxWaitSecondsPerRun?: number;
+    internalBaseUrl?: string;
+} = {}): Promise<PollDueSkillRunsResult> {
+    const limit = Math.min(50, Math.max(1, input.limit ?? 10));
+    const rows = await prisma.$queryRawUnsafe<{ id: string }[]>(
+        `UPDATE "SkillRun"
+         SET status = 'waiting',
+             "nextPollAt" = NOW() + INTERVAL '60 seconds',
+             "updatedAt" = NOW()
+         WHERE id IN (
+             SELECT id
+             FROM "SkillRun"
+             WHERE status = 'running'
+               AND "lifecycleMode" = 'async_poll'
+               AND "providerTaskId" IS NOT NULL
+               AND ("nextPollAt" IS NULL OR "nextPollAt" <= NOW())
+               AND ("expiresAt" IS NULL OR "expiresAt" > NOW())
+             ORDER BY "nextPollAt" ASC NULLS FIRST, "createdAt" ASC
+             FOR UPDATE SKIP LOCKED
+             LIMIT $1
+         )
+         RETURNING id`,
+        limit,
+    );
+
+    const summary: PollDueSkillRunsResult = {
+        checked: 0,
+        succeeded: 0,
+        failed: 0,
+        running: 0,
+        errors: [],
+        runs: [],
+    };
+
+    for (const row of rows) {
+        summary.checked += 1;
+        try {
+            const result = await pollSkillRunById({
+                runId: row.id,
+                source: "rest",
+                maxWaitSeconds: input.maxWaitSecondsPerRun ?? 5,
+                internalBaseUrl: input.internalBaseUrl,
+            });
+            if (!result) continue;
+            summary.runs.push(result);
+            if (result.status === "succeeded") summary.succeeded += 1;
+            else if (result.status === "failed") summary.failed += 1;
+            else summary.running += 1;
+        } catch (error) {
+            summary.errors.push({ runId: row.id, error: String(error) });
+        }
+    }
+
+    return summary;
 }
