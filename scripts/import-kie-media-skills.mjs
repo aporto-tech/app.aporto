@@ -176,7 +176,32 @@ function variantParts(row) {
     return [...new Set(parts)];
 }
 
+function modelDisplayName(row) {
+    const text = row.modelDescription.toLowerCase();
+    if (text.includes("google nano banana 2")) return "Nano Banana 2";
+    if (text.includes("google nano banana pro")) return "Nano Banana Pro";
+    if (text.includes("google nano banana")) return "Nano Banana";
+    if (text.includes("sora 2 pro")) return "Sora 2 Pro";
+    if (text.includes("sora 2")) return "Sora 2";
+    return platformName(row);
+}
+
 function skillName(row) {
+    const text = row.modelDescription.toLowerCase();
+    const quality = row.modelDescription.match(/\b(4k|2k|1k|1080p|720p|480p)\b/i)?.[1].toUpperCase();
+    const duration = row.modelDescription.match(/\b(\d+(?:\.\d+)?)s\b/i)?.[1];
+
+    if (text.includes("nano banana")) {
+        const pieces = [operationName(row), modelDisplayName(row), quality];
+        return compact(pieces.filter(Boolean).join(" "));
+    }
+
+    if (text.includes("sora 2") && operationName(row) === "Text-to-Video") {
+        const variant = text.includes("stable") ? "Stable" : text.includes("standard") ? "Fast" : null;
+        const pieces = [modelDisplayName(row), variant, "Text-to-Video Generation", duration ? `${Number(duration)}s` : null];
+        return compact(pieces.filter(Boolean).join(" "));
+    }
+
     const pieces = [platformName(row), operationName(row), ...variantParts(row)];
     return compact(pieces.join(" "));
 }
@@ -189,7 +214,7 @@ function inferCategory(row) {
 
 function capabilities(row) {
     const op = operationName(row).toLowerCase();
-    const caps = ["create-media", `kie-${row.interfaceType}`];
+    const caps = ["generate", "create-media", `kie-${row.interfaceType}`];
     if (op.includes("text-to")) caps.push("generate-from-text");
     if (op.includes("image-to")) caps.push("generate-from-image");
     if (op.includes("video-to") || op.includes("video edit")) caps.push("transform-video");
@@ -422,11 +447,19 @@ function priceForRow(row) {
 }
 
 function tags(row) {
+    const modelTags = modelDisplayName(row).toLowerCase().split(/\s+/).filter(Boolean);
+    const text = row.modelDescription.toLowerCase();
+    const aliasTags = [];
+    if (text.includes("sora 2") && text.includes("standard")) aliasTags.push("fast");
+    if (text.includes("nano banana")) aliasTags.push("banana");
+
     return [
         "kie",
         row.interfaceType,
         platformName(row).toLowerCase().replace(/\s+/g, "-"),
         operationName(row).toLowerCase().replace(/\s+/g, "-"),
+        ...modelTags,
+        ...aliasTags,
     ];
 }
 
