@@ -432,6 +432,7 @@ export async function executeSkillViaProvider(
     authHeader: string,
     isThirdParty = false,
     internalBaseUrl?: string,
+    mergeSyncConfig = true,
 ): Promise<{ success: boolean; data: unknown; latencyMs: number; errorType: ErrorType }> {
     const url = resolveProviderUrl(provider.endpoint, internalBaseUrl);
 
@@ -439,7 +440,7 @@ export async function executeSkillViaProvider(
 
     // Merge provider-level config (e.g. actorId for Apify) into params.
     // syncConfig keys are set by provider admin and never exposed to callers.
-    const mergedParams = provider.syncConfig
+    const mergedParams = mergeSyncConfig && provider.syncConfig
         ? { ...params, ...provider.syncConfig }
         : params;
 

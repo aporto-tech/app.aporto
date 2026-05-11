@@ -346,6 +346,7 @@ async function pollKieProvider(provider: ScoredProvider, providerTaskId: string,
         "",
         false,
         internalBaseUrl,
+        false,
     );
 }
 
