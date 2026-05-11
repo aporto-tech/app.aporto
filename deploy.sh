@@ -34,5 +34,20 @@ else
     PORT=3000 pm2 start "npm start" --name "aporto-app"
 fi
 
+# 6. Start/Restart async SkillRun poller with PM2
+if [ -z "$CRON_SECRET" ]; then
+    echo "ERROR: CRON_SECRET is required for aporto-skill-poller"
+    exit 1
+fi
+
+export APORTO_INTERNAL_BASE_URL="${APORTO_INTERNAL_BASE_URL:-http://127.0.0.1:${PORT:-3000}}"
+
+echo "Restarting SkillRun poller with PM2..."
+if pm2 describe "aporto-skill-poller" > /dev/null 2>&1; then
+    pm2 reload "aporto-skill-poller" --update-env
+else
+    pm2 start "npm run skill-runs:poller" --name "aporto-skill-poller"
+fi
+
 pm2 save
 echo "Deployment finished successfully!"
