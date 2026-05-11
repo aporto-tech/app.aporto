@@ -29,7 +29,7 @@ import { validateApiKeyOrSession, deductUserQuota, logServiceUsage } from "@/lib
 import { prisma } from "@/lib/prisma";
 import { logSkillDiscovery } from "@/lib/discoveryLogs";
 import { storeSkillResultArtifacts } from "@/lib/artifacts";
-import { getSkillRun, runSkill } from "@/lib/skillRuns";
+import { DEFAULT_WAIT_SECONDS, MAX_WAIT_SECONDS, getSkillRun, runSkill } from "@/lib/skillRuns";
 import {
     MAX_PROVIDER_ATTEMPTS,
     deactivateSkillIfNoActiveProviders,
@@ -523,10 +523,10 @@ function buildMcpServer(userId: number, authHeader: string, internalBaseUrl?: st
             skillId:        z.number().int().optional().describe("Optional exact skill ID from aporto_discover_skills. If omitted, Aporto discovers the best matching skill from intent."),
             providerHint:   z.string().optional().describe("Optional provider/model hint, e.g. 'nano banana', 'sora 2', 'veo 3.1 720p', or an Apify actor/provider name."),
             waitForResult:  z.boolean().optional().default(true).describe("When true, Aporto polls async providers within maxWaitSeconds before returning."),
-            maxWaitSeconds: z.number().int().min(1).max(55).optional().default(45).describe("Maximum time to wait for async completion in this MCP call. Long tasks return a runId."),
+            maxWaitSeconds: z.number().int().min(1).max(MAX_WAIT_SECONDS).optional().default(DEFAULT_WAIT_SECONDS).describe("Maximum time to wait for async completion in this MCP call. Long tasks return a runId."),
             sessionId:      z.string().optional().describe("Caller-controlled session identifier for retry routing and idempotent run grouping."),
         },
-        async ({ intent, params = {}, skillId, providerHint, waitForResult = true, maxWaitSeconds = 45, sessionId }) => {
+        async ({ intent, params = {}, skillId, providerHint, waitForResult = true, maxWaitSeconds = DEFAULT_WAIT_SECONDS, sessionId }) => {
             try {
                 const result = await runSkill({
                     source: "mcp",
@@ -561,9 +561,9 @@ function buildMcpServer(userId: number, authHeader: string, internalBaseUrl?: st
         {
             runId:          z.string().describe("SkillRun ID returned by aporto_run_skill."),
             waitForResult:  z.boolean().optional().default(true).describe("When true, Aporto polls within maxWaitSeconds before returning."),
-            maxWaitSeconds: z.number().int().min(1).max(55).optional().default(45).describe("Maximum time to wait for async completion in this MCP call."),
+            maxWaitSeconds: z.number().int().min(1).max(MAX_WAIT_SECONDS).optional().default(DEFAULT_WAIT_SECONDS).describe("Maximum time to wait for async completion in this MCP call."),
         },
-        async ({ runId, waitForResult = true, maxWaitSeconds = 45 }) => {
+        async ({ runId, waitForResult = true, maxWaitSeconds = DEFAULT_WAIT_SECONDS }) => {
             try {
                 const result = await getSkillRun({
                     source: "mcp",

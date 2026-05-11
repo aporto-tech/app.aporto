@@ -14,8 +14,16 @@ import {
 } from "@/lib/routing";
 
 const QUOTA_PER_DOLLAR = 500_000;
-const DEFAULT_WAIT_SECONDS = 45;
-const MAX_WAIT_SECONDS = 55;
+function waitSecondsFromEnv(name: string, fallback: number): number {
+    const value = Number(process.env[name]);
+    return Number.isFinite(value) && value > 0 ? Math.floor(value) : fallback;
+}
+
+export const MAX_WAIT_SECONDS = waitSecondsFromEnv("APORTO_MAX_WAIT_SECONDS", 90);
+export const DEFAULT_WAIT_SECONDS = Math.min(
+    waitSecondsFromEnv("APORTO_DEFAULT_WAIT_SECONDS", 85),
+    MAX_WAIT_SECONDS,
+);
 
 type SkillRunSource = "mcp" | "rest";
 
@@ -615,7 +623,7 @@ export async function runSkill(input: RunSkillInput): Promise<RunSkillResult> {
         }).catch(() => {});
     }
 
-    const shouldWaitInline = waitForResult && skillMeta.category !== "media/video";
+    const shouldWaitInline = waitForResult;
 
     if (lifecycleMode === "async_poll" && providerTaskId) {
         if (!shouldWaitInline) {

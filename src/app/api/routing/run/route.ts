@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { validateApiKeyOrSession } from "@/lib/serviceProxy";
-import { runSkill } from "@/lib/skillRuns";
+import { DEFAULT_WAIT_SECONDS, runSkill } from "@/lib/skillRuns";
 
 export const dynamic = "force-dynamic";
 
@@ -17,7 +17,7 @@ export async function POST(req: NextRequest) {
         skillId,
         providerHint,
         waitForResult = true,
-        maxWaitSeconds = 45,
+        maxWaitSeconds = DEFAULT_WAIT_SECONDS,
         sessionId,
     } = body;
 
@@ -42,7 +42,7 @@ export async function POST(req: NextRequest) {
             skillId,
             providerHint,
             waitForResult: Boolean(waitForResult),
-            maxWaitSeconds: Number(maxWaitSeconds) || 45,
+            maxWaitSeconds: Number(maxWaitSeconds) || DEFAULT_WAIT_SECONDS,
             sessionId,
         });
 
