@@ -19,6 +19,10 @@ export interface AuthResult {
     tokenId: number | null;
 }
 
+type SessionUserWithNewApiId = {
+    newApiUserId?: number | string | bigint | null;
+};
+
 /**
  * Validate auth from either a NextAuth session cookie or a Bearer API key.
  * Returns null and writes a 401/402 response on failure.
@@ -32,9 +36,10 @@ export async function validateApiKeyOrSession(
 ): Promise<AuthResult | null> {
     // 1. Try session first (dashboard use)
     const session = await getServerSession(authOptions);
-    if (session?.user && (session.user as any).newApiUserId) {
+    const sessionUser = session?.user as SessionUserWithNewApiId | undefined;
+    if (sessionUser?.newApiUserId) {
         return {
-            newApiUserId: Number((session.user as any).newApiUserId),
+            newApiUserId: Number(sessionUser.newApiUserId),
             tokenId: null,
         };
     }
@@ -58,7 +63,7 @@ export async function validateApiKeyOrSession(
 
     if (!rows.length) return null;
 
-    return { newApiUserId: rows[0].user_id, tokenId: rows[0].id };
+    return { newApiUserId: Number(rows[0].user_id), tokenId: Number(rows[0].id) };
 }
 
 /**
@@ -109,7 +114,7 @@ export async function logServiceUsage(
     metadata?: Record<string, unknown>
 ): Promise<void> {
     try {
-        await (prisma as any).serviceUsage.create({
+        await prisma.serviceUsage.create({
             data: {
                 newApiUserId,
                 service,

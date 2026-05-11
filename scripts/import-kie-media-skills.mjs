@@ -89,7 +89,7 @@ function extractModel(row) {
     if (desc.includes("kling 2.6 motion control")) return "kling-2.6/motion-control";
     if (desc.includes("wan 2.7 image pro")) return "wan/2-7-image-pro";
     if (desc.includes("wan 2.7 image")) return "wan/2-7-image";
-    if (desc.includes("google nano banana 2")) return "google/nano-banana-2";
+    if (desc.includes("google nano banana 2")) return "nano-banana-2";
     return null;
 }
 
@@ -227,7 +227,13 @@ function inputDefaults(row) {
     const defaults = {};
 
     const quality = row.modelDescription.match(/\b(4k|2k|1k|1080p|720p|480p)\b/i);
-    if (quality) defaults.quality = quality[1].toLowerCase();
+    if (quality) {
+        const value = quality[1].toLowerCase();
+        defaults.quality = value;
+        if (row.modelDescription.toLowerCase().includes("nano banana 2")) {
+            defaults.resolution = value.toUpperCase();
+        }
+    }
 
     if (row.interfaceType === "video") {
         defaults.duration = String(durationSeconds(row));
@@ -239,6 +245,10 @@ function inputDefaults(row) {
     if (row.interfaceType === "image") {
         defaults.num_images = "1";
         defaults.aspect_ratio = "1:1";
+        if (row.modelDescription.toLowerCase().includes("nano banana 2")) {
+            defaults.image_input = [];
+            defaults.output_format = "png";
+        }
     }
 
     return defaults;

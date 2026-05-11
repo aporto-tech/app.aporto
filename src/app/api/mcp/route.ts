@@ -65,7 +65,7 @@ async function refundQuota(userId: number, costUSD: number) {
 
 // ── build the MCP server (one per request in stateless mode) ──────────────────
 
-function buildMcpServer(userId: number, authHeader: string) {
+function buildMcpServer(userId: number, authHeader: string, internalBaseUrl?: string) {
     const server = new McpServer({
         name: "aporto",
         version: "1.0.0",
@@ -101,7 +101,13 @@ function buildMcpServer(userId: number, authHeader: string) {
 
             attemptedProviderIds.push(provider.id);
 
-            const { success, data, latencyMs, errorType } = await executeSkillViaProvider(provider, params, authHeader);
+            const { success, data, latencyMs, errorType } = await executeSkillViaProvider(
+                provider,
+                params,
+                authHeader,
+                false,
+                internalBaseUrl,
+            );
 
             let storedData = data;
             let recordedSuccess = success;
@@ -526,6 +532,7 @@ function buildMcpServer(userId: number, authHeader: string) {
                     source: "mcp",
                     newApiUserId: userId,
                     authHeader,
+                    internalBaseUrl,
                     intent,
                     params,
                     skillId,
@@ -564,6 +571,7 @@ function buildMcpServer(userId: number, authHeader: string) {
                     runId,
                     waitForResult,
                     maxWaitSeconds,
+                    internalBaseUrl,
                 });
                 if (!result) {
                     return {
@@ -602,7 +610,7 @@ async function handleMcpRequest(request: NextRequest): Promise<Response> {
         enableJsonResponse: true,      // return JSON instead of SSE for simple tool calls
     });
 
-    const server = buildMcpServer(auth.newApiUserId, authHeader);
+    const server = buildMcpServer(auth.newApiUserId, authHeader, request.nextUrl.origin);
     await server.connect(transport);
 
     return transport.handleRequest(request);

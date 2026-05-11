@@ -25,6 +25,7 @@ type RunSkillInput = {
     source: SkillRunSource;
     newApiUserId: number;
     authHeader: string;
+    internalBaseUrl?: string;
     intent: string;
     params?: Record<string, unknown>;
     skillId?: number;
@@ -325,7 +326,7 @@ async function storeFinalResult(input: {
     return artifactResult;
 }
 
-async function pollKieProvider(provider: ScoredProvider, providerTaskId: string): Promise<{
+async function pollKieProvider(provider: ScoredProvider, providerTaskId: string, internalBaseUrl?: string): Promise<{
     success: boolean;
     data: unknown;
     latencyMs: number;
@@ -343,6 +344,8 @@ async function pollKieProvider(provider: ScoredProvider, providerTaskId: string)
             taskId: providerTaskId,
         },
         "",
+        false,
+        internalBaseUrl,
     );
 }
 
@@ -357,13 +360,14 @@ async function waitForProviderResult(input: {
     params: Record<string, unknown>;
     costUSD: number;
     maxWaitSeconds: number;
+    internalBaseUrl?: string;
 }): Promise<RunSkillResult> {
     const deadline = Date.now() + Math.max(1, input.maxWaitSeconds) * 1000;
     let lastData: unknown = null;
 
     while (Date.now() < deadline) {
         await sleep(2000);
-        const polled = await pollKieProvider(input.provider, input.providerTaskId);
+        const polled = await pollKieProvider(input.provider, input.providerTaskId, input.internalBaseUrl);
         lastData = polled.data;
         await updateRun(input.runId, {
             providerRaw: polled.data,
@@ -539,7 +543,7 @@ export async function runSkill(input: RunSkillInput): Promise<RunSkillResult> {
         };
     }
 
-    const executed = await executeSkillViaProvider(provider, params, input.authHeader, isThirdParty);
+    const executed = await executeSkillViaProvider(provider, params, input.authHeader, isThirdParty, input.internalBaseUrl);
     const providerTaskId = executed.success ? extractProviderTaskId(executed.data) : null;
     const lifecycleMode = executed.success ? lifecycleModeFor(provider, executed.data) : "sync";
     const runId = await createRun({
@@ -639,6 +643,7 @@ export async function runSkill(input: RunSkillInput): Promise<RunSkillResult> {
                 params,
                 costUSD,
                 maxWaitSeconds,
+                internalBaseUrl: input.internalBaseUrl,
             })),
         };
     }
@@ -674,6 +679,7 @@ export async function getSkillRun(input: {
     runId: string;
     waitForResult?: boolean;
     maxWaitSeconds?: number;
+    internalBaseUrl?: string;
 }): Promise<RunSkillResult | null> {
     const rows = await prisma.$queryRawUnsafe<SkillRunRow[]>(
         `SELECT id, "newApiUserId", "sessionId", "skillId", "providerId", "skillCallId",
@@ -774,5 +780,6 @@ export async function getSkillRun(input: {
         params: {},
         costUSD: run.costUSD ?? 0,
         maxWaitSeconds: Math.min(input.maxWaitSeconds ?? DEFAULT_WAIT_SECONDS, MAX_WAIT_SECONDS),
+        internalBaseUrl: input.internalBaseUrl,
     });
 }

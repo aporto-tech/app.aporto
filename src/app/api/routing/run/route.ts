@@ -36,6 +36,7 @@ export async function POST(req: NextRequest) {
             source: "rest",
             newApiUserId: auth.newApiUserId,
             authHeader: req.headers.get("authorization") ?? "",
+            internalBaseUrl: req.nextUrl.origin,
             intent,
             params,
             skillId,

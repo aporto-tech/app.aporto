@@ -18,6 +18,7 @@ async function readRun(req: NextRequest, id: string, body?: Record<string, unkno
         runId: id,
         waitForResult: body?.waitForResult !== false,
         maxWaitSeconds: Number(body?.maxWaitSeconds ?? 45) || 45,
+        internalBaseUrl: req.nextUrl.origin,
     });
 
     if (!result) {

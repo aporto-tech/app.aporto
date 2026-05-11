@@ -407,11 +407,19 @@ export async function executeSkillViaProvider(
     params: Record<string, unknown>,
     authHeader: string,
     isThirdParty = false,
+    internalBaseUrl?: string,
 ): Promise<{ success: boolean; data: unknown; latencyMs: number; errorType: ErrorType }> {
     // HTTPS-only enforcement (SSRF guard — admin controls endpoint URL)
     const url = new URL(provider.endpoint);
     if (url.protocol !== "https:") {
         throw new Error(`Provider endpoint must use HTTPS: ${provider.endpoint}`);
+    }
+    const publicAppUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://app.aporto.tech";
+    const publicHost = new URL(publicAppUrl).host;
+    if (url.host === publicHost && internalBaseUrl) {
+        const local = new URL(internalBaseUrl);
+        url.protocol = local.protocol;
+        url.host = local.host;
     }
 
     const start = Date.now();
@@ -424,7 +432,7 @@ export async function executeSkillViaProvider(
 
     let res: Response;
     try {
-        res = await fetch(provider.endpoint, {
+        res = await fetch(url, {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",

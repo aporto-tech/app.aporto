@@ -129,7 +129,13 @@ export async function POST(req: NextRequest) {
             const balanceError = await deductUserQuota(auth.newApiUserId, actualCost);
             if (balanceError) return balanceError;
 
-            const { success, data, latencyMs, errorType } = await executeSkillViaProvider(provider, params, authHeader, isThirdParty);
+            const { success, data, latencyMs, errorType } = await executeSkillViaProvider(
+                provider,
+                params,
+                authHeader,
+                isThirdParty,
+                req.nextUrl.origin,
+            );
 
             // Refund if provider failed
             if (!success) {
