@@ -402,6 +402,30 @@ export async function deactivateSkillIfNoActiveProviders(skillId: number): Promi
 
 // ── executeSkillViaProvider ───────────────────────────────────────────────────
 
+function resolveProviderUrl(providerEndpoint: string, internalBaseUrl?: string): URL {
+    const url = new URL(providerEndpoint);
+    if (url.protocol !== "https:") {
+        throw new Error(`Provider endpoint must use HTTPS: ${providerEndpoint}`);
+    }
+
+    const publicAppUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://app.aporto.tech";
+    const publicHost = new URL(publicAppUrl).host;
+    if (url.host !== publicHost) return url;
+
+    const requestHost = internalBaseUrl ? new URL(internalBaseUrl).host : null;
+    const serverBaseUrl: string =
+        process.env.APORTO_INTERNAL_BASE_URL ??
+        process.env.INTERNAL_APP_URL ??
+        (requestHost && requestHost !== publicHost && internalBaseUrl
+            ? internalBaseUrl
+            : `http://127.0.0.1:${process.env.PORT ?? "3000"}`);
+
+    const serverBase = new URL(serverBaseUrl);
+    url.protocol = serverBase.protocol;
+    url.host = serverBase.host;
+    return url;
+}
+
 export async function executeSkillViaProvider(
     provider: ScoredProvider,
     params: Record<string, unknown>,
@@ -409,18 +433,7 @@ export async function executeSkillViaProvider(
     isThirdParty = false,
     internalBaseUrl?: string,
 ): Promise<{ success: boolean; data: unknown; latencyMs: number; errorType: ErrorType }> {
-    // HTTPS-only enforcement (SSRF guard — admin controls endpoint URL)
-    const url = new URL(provider.endpoint);
-    if (url.protocol !== "https:") {
-        throw new Error(`Provider endpoint must use HTTPS: ${provider.endpoint}`);
-    }
-    const publicAppUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://app.aporto.tech";
-    const publicHost = new URL(publicAppUrl).host;
-    if (url.host === publicHost && internalBaseUrl) {
-        const local = new URL(internalBaseUrl);
-        url.protocol = local.protocol;
-        url.host = local.host;
-    }
+    const url = resolveProviderUrl(provider.endpoint, internalBaseUrl);
 
     const start = Date.now();
 
