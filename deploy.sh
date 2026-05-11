@@ -7,6 +7,17 @@ echo "Starting Deployment for Aporto..."
 # 1. Fetch latest changes from GitHub
 echo "Pulling latest changes from GitHub..."
 cd /var/www/app.aporto.tech
+
+if [ -f .env.local ]; then
+    set -a
+    . ./.env.local
+    set +a
+elif [ -f .env ]; then
+    set -a
+    . ./.env
+    set +a
+fi
+
 git pull origin main || git pull origin master
 
 # 2. Update/Install dependencies
