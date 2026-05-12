@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
+import type { CSSProperties } from "react";
 import { useState } from "react";
 import styles from "./new.module.css";
 
@@ -113,6 +114,23 @@ const controlItems = [
   "Override routing decisions",
 ];
 
+const workflowEvents = [
+  ["Request", "generate launch video from product screenshots"],
+  ["Intent", "video generation, voiceover, captions"],
+  ["Route", "Veo 3.1 primary, Sora 2 fallback"],
+  ["Optimize", "quality high, cost cap $0.42"],
+  ["Result", "artifact, logs, provider trace"],
+];
+
+const providerNodes = ["OpenAI", "Google", "ElevenLabs", "Fal", "Apify", "Runway"];
+
+const liveExecutions = [
+  ["Image upscale", "Recraft", "312ms"],
+  ["Lead research", "Apify", "1.8s"],
+  ["Voiceover", "ElevenLabs", "740ms"],
+  ["Reasoning", "Claude", "2.1s"],
+];
+
 const comparisons = [
   ["One provider", "Multi-provider routing"],
   ["Manual scaling", "Automatic load balancing"],
@@ -201,17 +219,42 @@ export default function NewLandingPage() {
           <Link href="https://docs.aporto.tech" className={styles.secondaryCta}>Documentation</Link>
         </div>
 
-        <div className={styles.terminalPreview} aria-label="Aporto MCP router preview">
-          <div className={styles.terminalTop}>
-            <span />
-            <span />
-            <span />
+        <div className={styles.heroProduct} aria-label="Aporto routing workflow preview">
+          <div className={styles.routeMap}>
+            <div className={styles.coreNode}>
+              <span>1000+</span>
+              <small>skills</small>
+            </div>
+            {providerNodes.map((node, index) => (
+              <span key={node} className={styles.providerNode} style={{ "--node-index": index } as CSSProperties}>
+                {node}
+              </span>
+            ))}
           </div>
-          <pre>{`agent.task("create launch visuals")
+
+          <div className={styles.terminalPreview}>
+            <div className={styles.terminalTop}>
+              <span />
+              <span />
+              <span />
+            </div>
+            <pre>{`agent.task("create launch visuals")
   -> Aporto MCP Router
   -> Image generation: Nano Banana 2
   -> Provider health: 99.8%
   -> Result stored on S3`}</pre>
+          </div>
+
+          <div className={styles.liveFeed}>
+            <span>Live routing</span>
+            {liveExecutions.map(([task, provider, latency]) => (
+              <div key={task}>
+                <strong>{task}</strong>
+                <small>{provider}</small>
+                <em>{latency}</em>
+              </div>
+            ))}
+          </div>
         </div>
       </section>
 
@@ -321,6 +364,22 @@ console.log(result.artifact?.url);`}</pre>
             <article key={title}>
               <span>{String(index + 1).padStart(2, "0")}</span>
               <h3>{title}</h3>
+              <p>{body}</p>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      <section className={styles.workflowSection}>
+        <div className={styles.workflowCopy}>
+          <span>Workflow layer</span>
+          <h2>One request can become a routed multi-skill execution.</h2>
+          <p>Instead of wiring tools one by one, Aporto turns intent into a traceable workflow with routing, fallback, and cost controls.</p>
+        </div>
+        <div className={styles.workflowBoard} aria-label="Workflow execution timeline">
+          {workflowEvents.map(([label, body], index) => (
+            <article key={label} style={{ "--step-index": index } as CSSProperties}>
+              <span>{label}</span>
               <p>{body}</p>
             </article>
           ))}
