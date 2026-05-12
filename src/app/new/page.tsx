@@ -80,8 +80,6 @@ const skillCategories: SkillCategory[] = [
   },
 ];
 
-const logoNames = ["Vercel", "Raycast", "Linear", "Retool", "Mercury", "Notion", "GitHub", "Mintlify"];
-
 const audienceCards = [
   "Developers building AI apps and agents",
   "Content creators producing videos, scripts, and media",
@@ -122,13 +120,24 @@ const workflowEvents = [
   ["Result", "artifact, logs, provider trace"],
 ];
 
-const providerNodes = ["OpenAI", "Google", "ElevenLabs", "Fal", "Apify", "Runway"];
+const radarSkills = [
+  { label: "Flux", x: 18, y: 22 },
+  { label: "Sora 2", x: 72, y: 12 },
+  { label: "ElevenLabs", x: 85, y: 55 },
+  { label: "Claude", x: 65, y: 82 },
+  { label: "Apify", x: 12, y: 68 },
+  { label: "Veo 3.1", x: 42, y: 88 },
+  { label: "Recraft", x: 88, y: 30 },
+  { label: "DeepSeek", x: 28, y: 45 },
+];
 
-const liveExecutions = [
-  ["Image upscale", "Recraft", "312ms"],
-  ["Lead research", "Apify", "1.8s"],
-  ["Voiceover", "ElevenLabs", "740ms"],
-  ["Reasoning", "Claude", "2.1s"],
+const chatMessages = [
+  { from: "agent", text: "Generate a product video from screenshots" },
+  { from: "aporto", text: "Routing \u2192 Veo 3.1 (720p, $0.12)" },
+  { from: "aporto", text: "\u2713 Video ready \u2014 4.2s" },
+  { from: "agent", text: "Now create a voiceover for it" },
+  { from: "aporto", text: "Routing \u2192 ElevenLabs TTS ($0.03)" },
+  { from: "aporto", text: "\u2713 Audio synced \u2014 1.1s" },
 ];
 
 const comparisons = [
@@ -206,12 +215,7 @@ export default function NewLandingPage() {
 
         <h1>Turn Any AI Agent Into a Full AI Workforce</h1>
         <p className={styles.heroCopy}>
-          Add MCP router to your AI Agent and instantly route tasks across 1000+ skills and providers
-          with <span className={styles.typeCycle} aria-label="automatic load balancing, failover, and best-result selection">
-            <span>automatic load balancing</span>
-            <span>failover</span>
-            <span>best-result selection</span>
-          </span>
+          One MCP integration connects your AI agent to 1000+ skills with automatic routing, failover, and load balancing.
         </p>
 
         <div className={styles.heroActions}>
@@ -219,51 +223,68 @@ export default function NewLandingPage() {
           <Link href="https://docs.aporto.tech" className={styles.secondaryCta}>Documentation</Link>
         </div>
 
-        <div className={styles.heroProduct} aria-label="Aporto routing workflow preview">
-          <div className={styles.routeMap}>
-            <div className={styles.coreNode}>
-              <span>1000+</span>
-              <small>skills</small>
+        <div className={styles.heroShowcase}>
+          <div className={styles.radar} aria-label="Skill discovery radar">
+            <div className={styles.radarRings}>
+              <div className={styles.radarRing} />
+              <div className={styles.radarRing} />
+              <div className={styles.radarRing} />
             </div>
-            {providerNodes.map((node, index) => (
-              <span key={node} className={styles.providerNode} style={{ "--node-index": index } as CSSProperties}>
-                {node}
+            <div className={styles.radarSweep} />
+            <div className={styles.radarCenter}>
+              <Image src="/logo.svg" alt="" width={24} height={24} />
+            </div>
+            {radarSkills.map((skill, i) => (
+              <span
+                key={skill.label}
+                className={styles.radarDot}
+                style={{
+                  "--dot-x": `${skill.x}%`,
+                  "--dot-y": `${skill.y}%`,
+                  "--dot-delay": `${i * 0.5}s`,
+                } as CSSProperties}
+              >
+                {skill.label}
               </span>
             ))}
           </div>
 
-          <div className={styles.terminalPreview}>
-            <div className={styles.terminalTop}>
-              <span />
-              <span />
-              <span />
+          <div className={styles.chatDemo} aria-label="Agent-Aporto conversation demo">
+            <div className={styles.chatHeader}>
+              <span className={styles.chatDot} />
+              <span>Live routing</span>
             </div>
-            <pre>{`agent.task("create launch visuals")
-  -> Aporto MCP Router
-  -> Image generation: Nano Banana 2
-  -> Provider health: 99.8%
-  -> Result stored on S3`}</pre>
-          </div>
-
-          <div className={styles.liveFeed}>
-            <span>Live routing</span>
-            {liveExecutions.map(([task, provider, latency]) => (
-              <div key={task}>
-                <strong>{task}</strong>
-                <small>{provider}</small>
-                <em>{latency}</em>
+            <div className={styles.chatMessages} style={{ "--cycle-duration": "14s" } as CSSProperties}>
+              {chatMessages.map((msg, i) => (
+                <div
+                  key={`${msg.from}-${i}`}
+                  className={`${styles.chatBubble} ${msg.from === "aporto" ? styles.chatAporto : styles.chatAgent}`}
+                  style={{ "--bubble-delay": `${i * 1.4}s`, "--cycle-duration": "14s" } as CSSProperties}
+                >
+                  <small>{msg.from === "aporto" ? "Aporto" : "Agent"}</small>
+                  <p>{msg.text}</p>
+                </div>
+              ))}
+              <div className={styles.typingIndicator} style={{ "--bubble-delay": "8.4s", "--cycle-duration": "14s" } as CSSProperties}>
+                <span /><span /><span />
               </div>
-            ))}
+            </div>
           </div>
         </div>
-      </section>
 
-      <section className={styles.trustSection}>
-        <p>Access MCP skills from companies of all sizes through the Aporto router.</p>
-        <div className={styles.logoRail} aria-label="Trusted company logos placeholder">
-          {logoNames.map((name) => (
-            <span key={name}>{name}</span>
-          ))}
+        <div className={styles.metrics}>
+          <div className={styles.metricCard}>
+            <strong>1000+</strong>
+            <span>skills connected</span>
+          </div>
+          <div className={styles.metricCard}>
+            <strong>&lt;200ms</strong>
+            <span>routing latency</span>
+          </div>
+          <div className={styles.metricCard}>
+            <strong>99.9%</strong>
+            <span>uptime</span>
+          </div>
         </div>
       </section>
 
