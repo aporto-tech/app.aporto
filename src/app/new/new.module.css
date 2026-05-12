@@ -297,7 +297,13 @@
 
 .trustSection,
 .integrateSection,
-.featureBand {
+.audienceSection,
+.processSection,
+.engineSection,
+.comparisonSection,
+.faqSection,
+.pricingSection,
+.footer {
   width: min(1120px, calc(100% - 32px));
   margin: 0 auto;
 }
@@ -336,6 +342,40 @@
 
 .integrateSection {
   padding: 92px 0 80px;
+}
+
+.skillStats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1px;
+  margin: 0 0 28px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.skillStats div {
+  min-height: 118px;
+  padding: 24px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0.012)),
+    #080809;
+}
+
+.skillStats strong {
+  display: block;
+  color: #ffffff;
+  font-size: 42px;
+  line-height: 1;
+  font-weight: 620;
+}
+
+.skillStats span {
+  display: block;
+  margin-top: 10px;
+  color: #9c9ca5;
+  font-size: 14px;
 }
 
 .sectionIntro {
@@ -391,19 +431,37 @@
 }
 
 .tabs button {
-  min-height: 54px;
+  min-height: 64px;
   padding: 0 18px;
   flex: 0 0 auto;
   color: #8f8f98;
   border-right: 1px solid rgba(255, 255, 255, 0.08);
   background: rgba(0, 0, 0, 0.18);
   font-size: 14px;
+  text-align: left;
+}
+
+.tabs button span,
+.tabs button small {
+  display: block;
+}
+
+.tabs button small {
+  margin-top: 5px;
+  color: #66666f;
+  font-size: 11px;
+  transition: color 160ms ease;
 }
 
 .tabs button:hover,
 .tabs .activeTab {
   color: #ffffff;
   background: rgba(255, 255, 255, 0.055);
+}
+
+.tabs button:hover small,
+.tabs .activeTab small {
+  color: #a9a9b2;
 }
 
 .skillPanel {
@@ -472,18 +530,16 @@
   color: #dedeE4;
 }
 
-.featureBand {
-  padding: 86px 0 120px;
+.audienceSection,
+.processSection,
+.comparisonSection,
+.faqSection {
+  padding: 86px 0;
 }
 
-.featureBand > div:first-child {
-  max-width: 720px;
-  margin-bottom: 34px;
-}
-
-.featureGrid {
+.audienceGrid,
+.processGrid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
   gap: 1px;
   overflow: hidden;
   border: 1px solid rgba(255, 255, 255, 0.08);
@@ -491,24 +547,369 @@
   background: rgba(255, 255, 255, 0.08);
 }
 
-.featureGrid article {
-  min-height: 210px;
-  padding: 28px;
-  background: #080809;
+.audienceGrid {
+  grid-template-columns: repeat(5, 1fr);
 }
 
-.featureGrid h3 {
-  margin: 0 0 12px;
+.audienceGrid article,
+.processGrid article {
+  position: relative;
+  min-height: 220px;
+  padding: 26px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0.01)),
+    #080809;
+  overflow: hidden;
+}
+
+.audienceGrid article::after,
+.processGrid article::after,
+.engineCard::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(115deg, transparent 0%, rgba(255, 255, 255, 0.08) 45%, transparent 70%);
+  transform: translateX(-120%);
+  animation: surfaceSweep 8s ease-in-out infinite;
+  pointer-events: none;
+}
+
+.audienceGrid article:nth-child(2)::after,
+.processGrid article:nth-child(2)::after {
+  animation-delay: 0.8s;
+}
+
+.audienceGrid article:nth-child(3)::after,
+.processGrid article:nth-child(3)::after {
+  animation-delay: 1.6s;
+}
+
+.audienceGrid span {
+  display: block;
+  width: 28px;
+  height: 3px;
+  margin-bottom: 54px;
+  border-radius: 999px;
+  background: #ffffff;
+  opacity: 0.74;
+}
+
+.audienceGrid h3,
+.processGrid h3 {
+  position: relative;
+  margin: 0;
   color: #f4f4f5;
   font-size: 19px;
+  line-height: 1.28;
   font-weight: 560;
 }
 
-.featureGrid p {
-  margin: 0;
+.processGrid {
+  grid-template-columns: repeat(4, 1fr);
+}
+
+.processGrid article > span {
+  display: inline-flex;
+  margin-bottom: 58px;
+  color: #6d6d75;
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 13px;
+}
+
+.processGrid p {
+  position: relative;
+  margin: 14px 0 0;
   color: #a0a0a8;
   font-size: 15px;
+  line-height: 1.55;
+}
+
+.engineSection {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  padding: 86px 0;
+}
+
+.engineCard {
+  position: relative;
+  min-height: 520px;
+  padding: 34px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  background:
+    radial-gradient(circle at 80% 0%, rgba(255, 255, 255, 0.08), transparent 18rem),
+    #070708;
+}
+
+.engineCard h2 {
+  max-width: 440px;
+  margin: 0;
+  color: #ffffff;
+  font-size: clamp(28px, 4vw, 44px);
+  line-height: 1.05;
+  font-weight: 610;
+  letter-spacing: 0;
+}
+
+.engineCard p {
+  max-width: 420px;
+  margin: 16px 0 0;
+  color: #a0a0a8;
+  font-size: 16px;
   line-height: 1.6;
+}
+
+.engineCard ul {
+  position: absolute;
+  left: 34px;
+  right: 34px;
+  bottom: 34px;
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.engineCard li {
+  min-height: 42px;
+  display: flex;
+  align-items: center;
+  padding: 0 14px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.035);
+  color: #d5d5dc;
+  font-size: 14px;
+}
+
+.engineCard li::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  margin-right: 10px;
+  border-radius: 50%;
+  background: #42d781;
+  box-shadow: 0 0 16px rgba(66, 215, 129, 0.72);
+}
+
+.comparisonTable {
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.tableHead,
+.tableRow {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1px;
+}
+
+.tableHead span,
+.tableRow span {
+  min-height: 64px;
+  display: flex;
+  align-items: center;
+  padding: 0 22px;
+  background: #080809;
+  color: #d8d8de;
+  font-size: 16px;
+}
+
+.tableHead span {
+  min-height: 52px;
+  color: #8d8d96;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.tableRow span:nth-child(2) {
+  color: #ffffff;
+  background:
+    linear-gradient(90deg, rgba(66, 215, 129, 0.08), transparent),
+    #080809;
+}
+
+.faqList {
+  display: grid;
+  gap: 10px;
+}
+
+.faqList details {
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.035);
+  overflow: hidden;
+}
+
+.faqList summary {
+  min-height: 68px;
+  display: flex;
+  align-items: center;
+  padding: 0 22px;
+  color: #f1f1f3;
+  font-size: 17px;
+  font-weight: 540;
+  cursor: pointer;
+}
+
+.faqList p {
+  margin: 0;
+  padding: 0 22px 22px;
+  color: #a8a8b0;
+  font-size: 15px;
+  line-height: 1.6;
+}
+
+.pricingSection {
+  padding: 88px 0 96px;
+}
+
+.pricingCard {
+  position: relative;
+  overflow: hidden;
+  padding: 46px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 14px;
+  background:
+    radial-gradient(circle at 72% 20%, rgba(66, 215, 129, 0.14), transparent 18rem),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.02)),
+    #070708;
+}
+
+.pricingCard > span {
+  color: #8d8d96;
+  font-size: 14px;
+}
+
+.pricingCard h2 {
+  max-width: 720px;
+  margin: 16px 0 0;
+  color: #ffffff;
+  font-size: clamp(34px, 5vw, 62px);
+  line-height: 1;
+  font-weight: 620;
+  letter-spacing: 0;
+}
+
+.pricingBullets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 26px 0;
+}
+
+.pricingBullets span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 36px;
+  padding: 0 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 7px;
+  color: #d9d9df;
+  background: rgba(255, 255, 255, 0.045);
+  font-size: 14px;
+}
+
+.pricingCard p {
+  max-width: 680px;
+  margin: 0 0 28px;
+  color: #a8a8b0;
+  font-size: 17px;
+  line-height: 1.65;
+}
+
+.footer {
+  display: grid;
+  grid-template-columns: 1fr 2fr;
+  gap: 48px;
+  padding: 44px 0 56px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.footerBrand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  align-self: start;
+  color: #ffffff;
+  font-weight: 600;
+}
+
+.footerBrand img {
+  border-radius: 8px;
+}
+
+.footerColumns {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 24px;
+}
+
+.footerColumns div {
+  display: grid;
+  gap: 10px;
+}
+
+.footerColumns strong {
+  margin-bottom: 6px;
+  color: #ffffff;
+  font-size: 14px;
+}
+
+.footerColumns a {
+  color: #8f8f98;
+  font-size: 14px;
+}
+
+.footerColumns a:hover {
+  color: #ffffff;
+}
+
+@keyframes surfaceSweep {
+  0%,
+  35% {
+    transform: translateX(-120%);
+  }
+  55% {
+    transform: translateX(120%);
+  }
+  100% {
+    transform: translateX(120%);
+  }
+}
+
+@supports (animation-timeline: view()) {
+  .trustSection,
+  .integrateSection,
+  .audienceSection,
+  .processSection,
+  .engineSection,
+  .comparisonSection,
+  .faqSection,
+  .pricingSection {
+    animation: revealUp both;
+    animation-timeline: view();
+    animation-range: entry 8% cover 28%;
+  }
+
+  @keyframes revealUp {
+    from {
+      opacity: 0;
+      transform: translateY(36px);
+      filter: blur(8px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+      filter: blur(0);
+    }
+  }
 }
 
 @media (max-width: 860px) {
@@ -569,7 +970,12 @@
   }
 
   .logoRail,
-  .featureGrid {
+  .audienceGrid,
+  .processGrid,
+  .skillStats,
+  .engineSection,
+  .footer,
+  .footerColumns {
     grid-template-columns: repeat(2, 1fr);
   }
 
@@ -587,8 +993,13 @@
     padding: 26px;
   }
 
-  .featureGrid article {
+  .audienceGrid article,
+  .processGrid article {
     min-height: 170px;
+  }
+
+  .engineCard {
+    min-height: 480px;
   }
 }
 
@@ -610,7 +1021,13 @@
   .hero,
   .trustSection,
   .integrateSection,
-  .featureBand {
+  .audienceSection,
+  .processSection,
+  .engineSection,
+  .comparisonSection,
+  .faqSection,
+  .pricingSection,
+  .footer {
     width: min(100% - 24px, 1120px);
   }
 
@@ -625,11 +1042,41 @@
   }
 
   .logoRail,
-  .featureGrid {
+  .audienceGrid,
+  .processGrid,
+  .skillStats,
+  .engineSection,
+  .footer,
+  .footerColumns {
     grid-template-columns: 1fr;
   }
 
   .tabs button {
     padding: 0 14px;
+  }
+
+  .engineCard {
+    min-height: auto;
+  }
+
+  .engineCard ul {
+    position: relative;
+    left: auto;
+    right: auto;
+    bottom: auto;
+    margin-top: 34px;
+  }
+
+  .tableHead,
+  .tableRow {
+    grid-template-columns: 1fr;
+  }
+
+  .tableHead span:nth-child(2) {
+    display: none;
+  }
+
+  .pricingCard {
+    padding: 30px;
   }
 }
