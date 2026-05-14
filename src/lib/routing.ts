@@ -212,6 +212,7 @@ export async function discoverSkills(
         category: string | null; capabilities: string | null;
         input_types: string | null; output_types: string | null;
         params_schema: string | null; tags: string | null; similarity: number;
+        min_price: number | null;
     }[]>(
         `WITH searchable AS (
             SELECT "Skill".*,
@@ -223,7 +224,8 @@ export async function discoverSkills(
                      COALESCE("Skill"."inputTypes", ''),
                      COALESCE("Skill"."outputTypes", ''),
                      COALESCE(string_agg(CONCAT_WS(' ', p.name, p."syncConfig"), ' '), '')
-                   ) AS search_text
+                   ) AS search_text,
+                   MIN(p."pricePerCall") AS min_price
             FROM "Skill"
             LEFT JOIN "Provider" p ON p."skillId" = "Skill".id AND p."isActive" = true
             GROUP BY "Skill".id
@@ -231,7 +233,8 @@ export async function discoverSkills(
         SELECT id, name, description, category, capabilities,
                 "inputTypes" AS input_types, "outputTypes" AS output_types,
                 "paramsSchema" AS params_schema, tags,
-                1 - (embedding <=> $1::vector) AS similarity
+                1 - (embedding <=> $1::vector) AS similarity,
+                min_price
          FROM searchable AS "Skill"
          WHERE ${where}
          ORDER BY (${lexicalScore}) DESC, embedding <=> $1::vector
@@ -250,6 +253,7 @@ export async function discoverSkills(
         paramsSchema: r.params_schema,
         tags: r.tags,
         similarity: Number(r.similarity),
+        priceUSD: r.min_price != null ? Number(r.min_price) : null,
     }));
 }
 

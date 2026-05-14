@@ -24,7 +24,7 @@ function waitSecondsFromEnv(name: string, fallback: number): number {
     return Number.isFinite(value) && value > 0 ? Math.floor(value) : fallback;
 }
 
-export const MAX_WAIT_SECONDS = waitSecondsFromEnv("APORTO_MAX_WAIT_SECONDS", 90);
+export const MAX_WAIT_SECONDS = waitSecondsFromEnv("APORTO_MAX_WAIT_SECONDS", 300);
 export const DEFAULT_WAIT_SECONDS = Math.min(
     waitSecondsFromEnv("APORTO_DEFAULT_WAIT_SECONDS", 85),
     MAX_WAIT_SECONDS,

@@ -23,6 +23,8 @@ export interface SkillResult {
     paramsSchema: string | null;
     tags: string | null;
     similarity: number;
+    /** Minimum price (USD) per call from active providers */
+    priceUSD: number | null;
 }
 
 export interface ExecuteSkillOptions {

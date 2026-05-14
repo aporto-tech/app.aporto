@@ -114,7 +114,7 @@ function printJson(value: unknown): void {
     process.stdout.write(`${JSON.stringify(value, null, 2)}\n`);
 }
 
-function printSkills(result: { skills?: Array<{ id?: number; skillId?: number; name?: string; category?: string | null; similarity?: number }> }): void {
+function printSkills(result: { skills?: Array<{ id?: number; skillId?: number; name?: string; category?: string | null; similarity?: number; priceUSD?: number | null }> }): void {
     const skills = result.skills ?? [];
     if (skills.length === 0) {
         process.stdout.write("No matching skills found.\n");
@@ -122,8 +122,8 @@ function printSkills(result: { skills?: Array<{ id?: number; skillId?: number; n
     }
     for (const skill of skills) {
         const id = skill.skillId ?? skill.id;
-        const similarity = typeof skill.similarity === "number" ? `  similarity=${skill.similarity.toFixed(2)}` : "";
-        process.stdout.write(`${id}\t${skill.name ?? "Unnamed skill"}${skill.category ? `  ${skill.category}` : ""}${similarity}\n`);
+        const price = skill.priceUSD != null ? `  $${skill.priceUSD < 0.001 ? skill.priceUSD.toExponential(1) : skill.priceUSD.toFixed(4)}/call` : "";
+        process.stdout.write(`${id}\t${skill.name ?? "Unnamed skill"}${skill.category ? `  ${skill.category}` : ""}${price}\n`);
     }
 }
 
@@ -194,15 +194,24 @@ async function main() {
         if (!target) throw new AportoConfigError("run requires a skillId or intent");
         const numericSkillId = /^\d+$/.test(target) ? Number(target) : undefined;
         const provider = flagString(flags, "provider");
-        const result = await client.routing.runSkill({
+        const shouldWait = flags.wait === true;
+        let result = await client.routing.runSkill({
             intent: target,
             skillId: numericSkillId,
             params: readParams(flags),
             providerHint: provider && provider !== "auto" ? provider : undefined,
-            waitForResult: flags.wait === true,
+            waitForResult: shouldWait,
             maxWaitSeconds: flagNumber(flags, "max-wait"),
             sessionId: flagString(flags, "session"),
         });
+        if (shouldWait && result.runId && (result.status === "running" || result.status === "waiting")) {
+            result = await client.routing.waitSkillRun({
+                runId: result.runId,
+                timeoutSeconds: flagNumber(flags, "max-wait") ?? 300,
+                pollIntervalSeconds: 5,
+                maxWaitSeconds: 85,
+            });
+        }
         if (asJson) printJson(result);
         else printRun(result);
         process.exitCode = result.status === "failed" ? 1 : 0;
