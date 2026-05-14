@@ -280,17 +280,20 @@ export async function selectProvider(
         `WITH used AS (
             SELECT DISTINCT "providerId"
             FROM "SkillCall"
-            WHERE (
-                "sessionId" = $1
-                AND "newApiUserId" = $2
-                AND "skillId" = $3
-                AND "createdAt" > NOW() - INTERVAL '24 hours'
-            )
-            OR (
-                $4::text IS NOT NULL
-                AND "paramsHash" = $4
-                AND "newApiUserId" = $2
-                AND "createdAt" > NOW() - INTERVAL '2 minutes'
+            WHERE success = false
+            AND (
+                (
+                    "sessionId" = $1
+                    AND "newApiUserId" = $2
+                    AND "skillId" = $3
+                    AND "createdAt" > NOW() - INTERVAL '24 hours'
+                )
+                OR (
+                    $4::text IS NOT NULL
+                    AND "paramsHash" = $4
+                    AND "newApiUserId" = $2
+                    AND "createdAt" > NOW() - INTERVAL '2 minutes'
+                )
             )
         )
         SELECT
