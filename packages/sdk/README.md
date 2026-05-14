@@ -112,6 +112,83 @@ const { skills } = await aporto.routing.discoverSkills({
 
 The `sessionId` parameter enables smart retry routing — if a provider fails, the next `executeSkill` call with the same `sessionId` will automatically route to a different provider.
 
+### High-level SkillRun lifecycle
+
+For agent workflows, prefer `runSkill`. It matches the MCP `aporto_run_skill` tool: discovery, provider routing, async polling, artifact storage, and billing are handled by Aporto.
+
+```typescript
+const run = await aporto.routing.runSkill({
+  intent: "generate image with nano banana",
+  params: { prompt: "A clean product image on a white background" },
+  providerHint: "kie",        // optional
+  waitForResult: true,
+  maxWaitSeconds: 120,
+});
+
+console.log(run.runId, run.status, run.costUSD);
+console.log(run.artifacts?.[0]?.url);
+```
+
+Poll an existing run:
+
+```typescript
+const run = await aporto.routing.getSkillRun({
+  runId: "skill-run-id",
+  waitForResult: false,
+});
+
+const final = await aporto.routing.waitSkillRun({
+  runId: "skill-run-id",
+  timeoutSeconds: 300,
+});
+```
+
+---
+
+## CLI for AI agents
+
+Install the SDK globally to get the `aporto` command:
+
+```bash
+npm install -g @aporto-tech/sdk
+export APORTO_API_KEY=sk-live-YOUR_API_KEY
+```
+
+Discover the right skill:
+
+```bash
+aporto discover "generate a 5 second 720p vertical video" --json
+```
+
+Run by skill ID:
+
+```bash
+aporto run 76 --params params.json --provider auto --wait --json
+```
+
+Run by natural-language intent and provider hint:
+
+```bash
+aporto run "generate image with nano banana" \
+  --param prompt="A clean product image on a white background" \
+  --provider kie \
+  --wait \
+  --json
+```
+
+Poll async runs:
+
+```bash
+aporto runs get <runId> --json
+aporto runs wait <runId> --json
+```
+
+For local or staging deployments:
+
+```bash
+export APORTO_BASE_URL=http://localhost:3000
+```
+
 ---
 
 ## x402 Agent Payments

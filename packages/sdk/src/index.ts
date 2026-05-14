@@ -90,4 +90,15 @@ export type { TextToSpeechOptions, TextToSpeechResult } from "./modules/audio";
 export type { SendSmsOptions, CheckSmsOptions, SmsResult } from "./modules/sms";
 export { createX402Fetch, AportoPaymentError } from "./modules/x402";
 export type { CreateX402FetchOptions } from "./modules/x402";
-export type { DiscoverSkillsOptions, SkillResult, ExecuteSkillOptions, ExecuteSkillResult, SkillArtifact } from "./modules/routing";
+export type {
+    DiscoverSkillsOptions,
+    SkillResult,
+    ExecuteSkillOptions,
+    ExecuteSkillResult,
+    SkillArtifact,
+    RunSkillOptions,
+    RunSkillResult,
+    GetSkillRunOptions,
+    WaitSkillRunOptions,
+    SkillChoice,
+} from "./modules/routing";

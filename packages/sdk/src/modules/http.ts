@@ -39,3 +39,25 @@ export async function apiFetchJson<T>(
 
     return res.json() as Promise<T>;
 }
+
+export async function apiGetJson<T>(
+    baseUrl: string,
+    path: string,
+    headers: Record<string, string>,
+    label: string,
+): Promise<T> {
+    const res = await fetch(`${cleanBaseUrl(baseUrl)}${path}`, {
+        method: "GET",
+        headers,
+    });
+
+    if (!res.ok) {
+        const text = await res.text().catch(() => "");
+        throw new AportoError(
+            `${label} failed: ${res.status} ${res.statusText}${text ? ` - ${text}` : ""}`,
+            res.status,
+        );
+    }
+
+    return res.json() as Promise<T>;
+}
