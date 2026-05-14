@@ -25,9 +25,7 @@ async function readRun(req: NextRequest, id: string, body?: Record<string, unkno
         return NextResponse.json({ success: false, message: "Skill run not found" }, { status: 404 });
     }
 
-    return NextResponse.json({ success: result.status !== "failed", ...result }, {
-        status: result.status === "failed" ? 502 : 200,
-    });
+    return NextResponse.json({ success: result.status !== "failed", ...result });
 }
 
 export async function GET(req: NextRequest, { params }: Params) {

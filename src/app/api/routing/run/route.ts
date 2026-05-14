@@ -46,9 +46,7 @@ export async function POST(req: NextRequest) {
             sessionId,
         });
 
-        return NextResponse.json({ success: result.status !== "failed", ...result }, {
-            status: result.status === "failed" ? 502 : 200,
-        });
+        return NextResponse.json({ success: result.status !== "failed", ...result });
     } catch (error) {
         console.error("[routing/run] error:", error);
         return NextResponse.json({ success: false, message: String(error) }, { status: 500 });

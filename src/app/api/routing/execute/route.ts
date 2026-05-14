@@ -110,7 +110,7 @@ export async function POST(req: NextRequest) {
                     attempts: attemptedProviderIds.length,
                     deactivated,
                     lastFailure,
-                }, { status: lastFailure ? 502 : 503 });
+                }, { status: 422 });
             }
 
             attemptedProviderIds.push(provider.id);
@@ -238,7 +238,7 @@ export async function POST(req: NextRequest) {
             attempts: attemptedProviderIds.length,
             costUSD: 0,
             lastFailure,
-        }, { status: 502 });
+        }, { status: 422 });
     } catch (err) {
         console.error("[routing/execute] error:", err);
         const isNetworkError =
@@ -246,7 +246,7 @@ export async function POST(req: NextRequest) {
             (err.message.includes("HTTPS") || err.message.includes("fetch"));
         return NextResponse.json(
             { success: false, message: String(err) },
-            { status: isNetworkError ? 503 : 500 },
+            { status: isNetworkError ? 422 : 500 },
         );
     }
 }
