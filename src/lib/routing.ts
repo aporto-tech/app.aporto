@@ -677,3 +677,13 @@ export async function recordSkillCall(data: {
     );
     return row[0].id;
 }
+
+export async function updateSkillCallCost(skillCallId: number, costUSD: number): Promise<void> {
+    await prisma.$executeRawUnsafe(
+        `UPDATE "SkillCall"
+         SET "costUSD" = $2
+         WHERE id = $1`,
+        skillCallId,
+        costUSD,
+    );
+}

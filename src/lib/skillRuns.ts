@@ -1,5 +1,5 @@
 import { createHash } from "crypto";
-import { deductUserQuota, logServiceUsage } from "@/lib/serviceProxy";
+import { adjustUserQuota, deductUserQuota, logServiceUsage } from "@/lib/serviceProxy";
 import { prisma } from "@/lib/prisma";
 import { storeSkillResultArtifacts, type StoredArtifact } from "@/lib/artifacts";
 import {
@@ -9,6 +9,7 @@ import {
     executeSkillViaProvider,
     findExactSkillByIntent,
     recordSkillCall,
+    updateSkillCallCost,
     selectProvider,
     updateProviderStats,
     normalizeSkillText,
@@ -17,6 +18,7 @@ import {
 } from "@/lib/routing";
 
 const QUOTA_PER_DOLLAR = 500_000;
+const KIE_CREDIT_TO_USD = 0.005;
 function waitSecondsFromEnv(name: string, fallback: number): number {
     const value = Number(process.env[name]);
     return Number.isFinite(value) && value > 0 ? Math.floor(value) : fallback;
@@ -202,6 +204,46 @@ function findStringKey(value: unknown, keys: string[]): string | null {
     return null;
 }
 
+function findNumberKey(value: unknown, keys: string[]): number | null {
+    if (typeof value === "number" && Number.isFinite(value)) return value;
+    if (!value || typeof value !== "object") return null;
+
+    if (Array.isArray(value)) {
+        for (const item of value) {
+            const found = findNumberKey(item, keys);
+            if (found != null) return found;
+        }
+        return null;
+    }
+
+    const object = value as Record<string, unknown>;
+    for (const key of keys) {
+        const direct = object[key];
+        if (typeof direct === "number" && Number.isFinite(direct)) return direct;
+        if (typeof direct === "string" && direct.trim() && Number.isFinite(Number(direct))) {
+            return Number(direct);
+        }
+    }
+
+    for (const child of Object.values(object)) {
+        const found = findNumberKey(child, keys);
+        if (found != null) return found;
+    }
+    return null;
+}
+
+function resolveActualCostUSD(provider: ScoredProvider, result: unknown, estimatedCostUSD: number): number {
+    const isKieProvider = /\/api\/providers\/kie$/.test(provider.endpoint) || provider.name.startsWith("KIE - ");
+    if (!isKieProvider) return estimatedCostUSD;
+
+    const creditsConsumed = findNumberKey(result, ["creditsConsumed", "credits_consumed", "creditConsumed", "credit_consumed"]);
+    if (creditsConsumed != null && creditsConsumed > 0) {
+        return Math.max(0.0001, creditsConsumed * KIE_CREDIT_TO_USD);
+    }
+
+    return estimatedCostUSD;
+}
+
 function normalizeKieRecordInfo(data: unknown): { status: RunStatus; data?: unknown; error?: RunSkillResult["error"] } {
     const payload = isPlainObject(data) && isPlainObject(data.data) ? data.data : data;
     if (!isPlainObject(payload)) return { status: "running" };
@@ -349,6 +391,7 @@ async function updateRun(
         skillCallId?: number | null;
         attemptsIncrement?: number;
         nextPollAt?: Date | null;
+        costUSD?: number | null;
     },
 ) {
     await prisma.$executeRawUnsafe(
@@ -363,6 +406,7 @@ async function updateRun(
              "skillCallId" = COALESCE($9, "skillCallId"),
              attempts = attempts + $10,
              "nextPollAt" = $11,
+             "costUSD" = COALESCE($12, "costUSD"),
              "updatedAt" = NOW()
          WHERE id = $1`,
         runId,
@@ -376,6 +420,7 @@ async function updateRun(
         data.skillCallId ?? null,
         data.attemptsIncrement ?? 0,
         data.nextPollAt ?? null,
+        data.costUSD ?? null,
     );
 }
 
@@ -398,10 +443,16 @@ async function storeFinalResult(input: {
     sessionId: string;
     skillId: number;
     provider: ScoredProvider;
-    costUSD: number;
+    estimatedCostUSD: number;
+    actualCostUSD: number;
     params: Record<string, unknown>;
     result: unknown;
 }) {
+    const deltaUSD = input.actualCostUSD - input.estimatedCostUSD;
+    if (deltaUSD !== 0) {
+        await adjustUserQuota(input.userId, deltaUSD);
+    }
+
     const artifactResult = await storeSkillResultArtifacts({
         source: input.source,
         userId: input.userId,
@@ -409,7 +460,7 @@ async function storeFinalResult(input: {
         skillId: input.skillId,
         providerId: input.provider.id,
         providerName: input.provider.name,
-        costUSD: input.costUSD,
+        costUSD: input.actualCostUSD,
         params: input.params,
         result: input.result,
     });
@@ -417,6 +468,7 @@ async function storeFinalResult(input: {
         status: "succeeded",
         result: input.result,
         artifactJson: artifactResult,
+        costUSD: input.actualCostUSD,
         nextPollAt: null,
     });
     return artifactResult;
@@ -454,8 +506,11 @@ async function waitForProviderResult(input: {
     skillId: number;
     provider: ScoredProvider;
     providerTaskId: string;
+    skillCallId?: number | null;
+    publisherId?: string | null;
+    revenueShare?: number | null;
     params: Record<string, unknown>;
-    costUSD: number;
+    estimatedCostUSD: number;
     maxWaitSeconds: number;
     internalBaseUrl?: string;
 }): Promise<RunSkillResult> {
@@ -478,6 +533,7 @@ async function waitForProviderResult(input: {
 
         const normalized = normalizeKieRecordInfo(polled.data);
         if (normalized.status === "succeeded") {
+            const actualCostUSD = resolveActualCostUSD(input.provider, normalized.data, input.estimatedCostUSD);
             const artifactResult = await storeFinalResult({
                 source: input.source,
                 runId: input.runId,
@@ -485,10 +541,31 @@ async function waitForProviderResult(input: {
                 sessionId: input.sessionId,
                 skillId: input.skillId,
                 provider: input.provider,
-                costUSD: input.costUSD,
+                estimatedCostUSD: input.estimatedCostUSD,
+                actualCostUSD,
                 params: input.params,
                 result: normalized.data,
             });
+            if (input.skillCallId != null) {
+                await updateSkillCallCost(input.skillCallId, actualCostUSD).catch((error) => {
+                    console.error("[waitForProviderResult] updateSkillCallCost:", error);
+                });
+            }
+            if (input.publisherId && input.revenueShare != null && actualCostUSD > 0 && input.skillCallId != null) {
+                void createSkillRevenue({
+                    skillId: input.skillId,
+                    publisherId: input.publisherId,
+                    skillCallId: input.skillCallId,
+                    grossUSD: actualCostUSD,
+                    revenueShare: Number(input.revenueShare),
+                }).catch(() => {});
+            }
+            void logServiceUsage(input.newApiUserId, "skill", input.provider.name, actualCostUSD, {
+                skillId: input.skillId,
+                runId: input.runId,
+                providerTaskId: input.providerTaskId,
+                actualCostUSD,
+            }).catch((error) => console.error("[waitForProviderResult] logServiceUsage:", error));
             return {
                 status: "succeeded",
                 runId: input.runId,
@@ -496,7 +573,7 @@ async function waitForProviderResult(input: {
                 providerId: input.provider.id,
                 provider: input.provider.name,
                 providerTaskId: input.providerTaskId,
-                costUSD: input.costUSD,
+                costUSD: actualCostUSD,
                 data: normalized.data,
                 artifact: artifactResult.artifact,
                 artifacts: artifactResult.artifacts,
@@ -535,7 +612,7 @@ async function waitForProviderResult(input: {
         provider: input.provider.name,
         providerTaskId: input.providerTaskId,
         nextPollAt: nextPollAt.toISOString(),
-        costUSD: input.costUSD,
+        costUSD: input.estimatedCostUSD,
     };
 }
 
@@ -639,10 +716,10 @@ export async function runSkill(input: RunSkillInput): Promise<RunSkillResult> {
         };
     }
 
-    const costUSD = provider.costPerChar != null && typeof params.text === "string"
+    const estimatedCostUSD = provider.costPerChar != null && typeof params.text === "string"
         ? Math.max(0.0001, params.text.length * provider.costPerChar)
         : provider.pricePerCall;
-    const balanceError = await deductUserQuota(input.newApiUserId, costUSD);
+    const balanceError = await deductUserQuota(input.newApiUserId, estimatedCostUSD);
     if (balanceError) {
         const runId = await createRun({
             newApiUserId: input.newApiUserId,
@@ -652,7 +729,7 @@ export async function runSkill(input: RunSkillInput): Promise<RunSkillResult> {
             status: "failed",
             lifecycleMode: "none",
             paramsHash,
-            costUSD,
+            costUSD: estimatedCostUSD,
             error: { code: "INSUFFICIENT_BALANCE", message: "Insufficient balance.", retryable: false },
         });
         return {
@@ -679,7 +756,7 @@ export async function runSkill(input: RunSkillInput): Promise<RunSkillResult> {
         paramsHash,
         providerTaskId,
         providerRaw: executed.data,
-        costUSD,
+        costUSD: estimatedCostUSD,
         nextPollAt: lifecycleMode === "async_poll" ? new Date(Date.now() + 2000) : null,
         expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
     });
@@ -691,7 +768,7 @@ export async function runSkill(input: RunSkillInput): Promise<RunSkillResult> {
         providerId: provider.id,
         latencyMs: executed.latencyMs,
         success: executed.success,
-        costUSD: executed.success ? costUSD : 0,
+        costUSD: executed.success ? estimatedCostUSD : 0,
         paramsHash,
         errorType: executed.errorType,
     });
@@ -699,15 +776,9 @@ export async function runSkill(input: RunSkillInput): Promise<RunSkillResult> {
 
     void updateProviderStats(provider.id, executed.latencyMs, executed.success, executed.errorType === "timeout")
         .catch((error) => console.error("[runSkill] updateProviderStats:", error));
-    void logServiceUsage(input.newApiUserId, "skill", provider.name, executed.success ? costUSD : 0, {
-        skillId,
-        runId,
-        latencyMs: executed.latencyMs,
-        errorType: executed.errorType,
-    }).catch((error) => console.error("[runSkill] logServiceUsage:", error));
 
     if (!executed.success) {
-        void refundQuota(input.newApiUserId, costUSD).catch((error) => console.error("[runSkill] refund failed:", error));
+        void refundQuota(input.newApiUserId, estimatedCostUSD).catch((error) => console.error("[runSkill] refund failed:", error));
         const error = {
             code: executed.errorType.toUpperCase(),
             message: "Provider submit failed.",
@@ -727,16 +798,6 @@ export async function runSkill(input: RunSkillInput): Promise<RunSkillResult> {
         };
     }
 
-    if (skillMeta.publisherId && skillMeta.revenueShare != null && costUSD > 0) {
-        void createSkillRevenue({
-            skillId,
-            publisherId: skillMeta.publisherId,
-            skillCallId,
-            grossUSD: costUSD,
-            revenueShare: Number(skillMeta.revenueShare),
-        }).catch(() => {});
-    }
-
     const shouldWaitInline = waitForResult;
 
     if (lifecycleMode === "async_poll" && providerTaskId) {
@@ -750,7 +811,7 @@ export async function runSkill(input: RunSkillInput): Promise<RunSkillResult> {
                 provider: provider.name,
                 providerTaskId,
                 nextPollAt: new Date(Date.now() + 2000).toISOString(),
-                costUSD,
+                costUSD: estimatedCostUSD,
             };
         }
         return {
@@ -763,14 +824,18 @@ export async function runSkill(input: RunSkillInput): Promise<RunSkillResult> {
                 skillId,
                 provider,
                 providerTaskId,
+                publisherId: skillMeta.publisherId,
+                revenueShare: skillMeta.revenueShare,
                 params,
-                costUSD,
+                estimatedCostUSD,
                 maxWaitSeconds,
                 internalBaseUrl: input.internalBaseUrl,
+                skillCallId,
             })),
         };
     }
 
+    const actualCostUSD = resolveActualCostUSD(provider, executed.data, estimatedCostUSD);
     const artifactResult = await storeFinalResult({
         source: input.source,
         runId,
@@ -778,10 +843,31 @@ export async function runSkill(input: RunSkillInput): Promise<RunSkillResult> {
         sessionId,
         skillId,
         provider,
-        costUSD,
+        estimatedCostUSD,
+        actualCostUSD,
         params,
         result: executed.data,
     });
+    if (skillCallId != null) {
+        await updateSkillCallCost(skillCallId, actualCostUSD).catch((error) => {
+            console.error("[runSkill] updateSkillCallCost:", error);
+        });
+    }
+    if (skillMeta.publisherId && skillMeta.revenueShare != null && actualCostUSD > 0) {
+        void createSkillRevenue({
+            skillId,
+            publisherId: skillMeta.publisherId,
+            skillCallId,
+            grossUSD: actualCostUSD,
+            revenueShare: Number(skillMeta.revenueShare),
+        }).catch(() => {});
+    }
+    void logServiceUsage(input.newApiUserId, "skill", provider.name, actualCostUSD, {
+        skillId,
+        runId,
+        latencyMs: executed.latencyMs,
+        errorType: executed.errorType,
+    }).catch((error) => console.error("[runSkill] logServiceUsage:", error));
     return {
         status: "succeeded",
         runId,
@@ -789,7 +875,7 @@ export async function runSkill(input: RunSkillInput): Promise<RunSkillResult> {
         skillName,
         providerId: provider.id,
         provider: provider.name,
-        costUSD,
+        costUSD: actualCostUSD,
         data: executed.data,
         artifact: artifactResult.artifact,
         artifacts: artifactResult.artifacts,
@@ -887,7 +973,7 @@ export async function getSkillRun(input: {
         provider,
         providerTaskId: run.providerTaskId,
         params: {},
-        costUSD: run.costUSD ?? 0,
+        estimatedCostUSD: run.costUSD ?? 0,
         maxWaitSeconds: Math.min(input.maxWaitSeconds ?? DEFAULT_WAIT_SECONDS, MAX_WAIT_SECONDS),
         internalBaseUrl: input.internalBaseUrl,
     });
@@ -954,7 +1040,7 @@ export async function pollSkillRunById(input: {
         provider: providerFromRow(row),
         providerTaskId: run.providerTaskId,
         params: {},
-        costUSD: run.costUSD ?? 0,
+        estimatedCostUSD: run.costUSD ?? 0,
         maxWaitSeconds: Math.min(input.maxWaitSeconds ?? 5, MAX_WAIT_SECONDS),
         internalBaseUrl: input.internalBaseUrl,
     });

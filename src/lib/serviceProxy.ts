@@ -103,6 +103,36 @@ export async function deductUserQuota(
 }
 
 /**
+ * Apply a signed quota delta in USD units.
+ * Positive delta charges more usage, negative delta refunds usage.
+ * Used when async providers report a different final cost than the estimate.
+ */
+export async function adjustUserQuota(
+    newApiUserId: number,
+    deltaUSD: number
+): Promise<void> {
+    if (deltaUSD === 0) return;
+
+    const quotaDelta = Math.round(Math.abs(deltaUSD) * QUOTA_PER_DOLLAR);
+    if (quotaDelta === 0) return;
+
+    if (deltaUSD > 0) {
+        await prisma.$executeRawUnsafe(
+            `UPDATE users SET quota = quota - $1, used_quota = used_quota + $1 WHERE id = $2`,
+            quotaDelta,
+            newApiUserId,
+        );
+        return;
+    }
+
+    await prisma.$executeRawUnsafe(
+        `UPDATE users SET quota = quota + $1, used_quota = used_quota - $1 WHERE id = $2`,
+        quotaDelta,
+        newApiUserId,
+    );
+}
+
+/**
  * Log a non-LLM service call to the service_usages table.
  * Silent on failure — never block the response.
  */
