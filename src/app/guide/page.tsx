@@ -4,142 +4,86 @@ import React, { useState } from "react";
 import DashboardLayout from "../components/DashboardLayout";
 import styles from "./guide.module.css";
 
-const MOCK_API_KEY = "sk_live_iwQtcLiMnBMpZgFhXkMh3ig1042Pi7xwjGpdgfH0diJ";
+type IntegrationMode = "cli" | "mcp" | "sdk";
 
-const SERVICES = [
-    { id: "prelude", title: "Prelude", desc: "Phone verification", icon: "💬", color: "light" },
-    { id: "openrouter", title: "OpenRouter", desc: "Unified LLM access", icon: "🤖", color: "light" },
-    { id: "linkup", title: "Linkup", desc: "AI web search", icon: "🔍", color: "light" },
-    { id: "youcom", title: "You.com", desc: "Real-time AI search", icon: "🔍", color: "light" },
+const CLI_STEPS = [
+    {
+        title: "Install the CLI",
+        code: `npm install -g @aporto-tech/sdk`,
+    },
+    {
+        title: "Set your API key",
+        code: `export APORTO_API_KEY=sk-live-YOUR_KEY`,
+    },
+    {
+        title: "Discover skills",
+        code: `aporto discover "generate image"
+
+# Output:
+# 4    Image Generation         media/image    $0.0040/call
+# 96   Image Generation Nano Banana 2 1K  media/image  $0.0400/call
+# 67   Image Generation Recraft media/image    $0.0200/call`,
+    },
+    {
+        title: "Run a skill",
+        code: `aporto run 4 --param prompt="a cat on the moon" --wait
+
+# Output:
+# status: succeeded
+# runId: abc123...
+# skill: Image Generation
+# provider: fal-flux-schnell
+# costUSD: 0.004
+# artifact: https://storage.aporto.tech/...`,
+    },
 ];
 
+const MCP_CONFIG = `// Add to your MCP client config (Claude, Cursor, Windsurf, etc.)
+{
+  "mcpServers": {
+    "aporto": {
+      "url": "https://app.aporto.tech/api/mcp",
+      "headers": {
+        "Authorization": "Bearer sk-live-YOUR_KEY"
+      }
+    }
+  }
+}
+
+// Available MCP tools:
+// - aporto_discover_skills — find skills by description
+// - aporto_run_skill — execute with smart routing
+// - aporto_get_skill_run — poll async results
+// - aporto_chat — LLM completions
+// - aporto_image_generate — image generation
+// - aporto_tts_create — text to speech
+// - aporto_search — web search`;
+
+const SDK_CODE = `import { AportoClient } from "@aporto-tech/sdk";
+
+const aporto = new AportoClient({
+  apiKey: process.env.APORTO_API_KEY,
+});
+
+// Discover skills
+const { skills } = await aporto.routing.discoverSkills({
+  query: "generate image",
+});
+
+// Run a skill
+const result = await aporto.routing.runSkill({
+  intent: "generate product image",
+  params: { prompt: "a cat on the moon" },
+  waitForResult: true,
+});
+
+console.log(result.artifacts?.[0]?.url);`;
+
 export default function GuidePage() {
-    const [currentStep, setCurrentStep] = useState(1);
-    const [selectedService, setSelectedService] = useState<string | null>(null);
-    const [agentName, setAgentName] = useState("my-agent");
-    const [codeFormat, setCodeFormat] = useState<"Axios" | "Fetch">("Axios");
-
-    const handleNext = () => {
-        if (currentStep < 5) setCurrentStep(currentStep + 1);
-    };
-
-    const handleBack = () => {
-        if (currentStep > 1) setCurrentStep(currentStep - 1);
-    };
+    const [mode, setMode] = useState<IntegrationMode>("cli");
 
     const copyCode = (text: string) => {
         navigator.clipboard.writeText(text);
-        alert("Copied!");
-    };
-
-    const renderStepNav = () => {
-        const steps = [
-            { id: 1, label: "Select Service" },
-            { id: 2, label: selectedService === "take_control" ? "Add Your Code" : "Run Example" },
-            { id: 3, label: selectedService === "take_control" ? "Test Transaction" : "Results" },
-            { id: 4, label: "Add Protection" },
-            { id: 5, label: "Complete" }
-        ];
-
-        return (
-            <div className={styles.wizardNav}>
-                {steps.map((s, index) => {
-                    let navClass = styles.navStep;
-                    if (currentStep === s.id) navClass += ` ${styles.active}`;
-                    if (currentStep > s.id) navClass += ` ${styles.completed}`;
-
-                    return (
-                        <React.Fragment key={s.id}>
-                            <div className={navClass}>
-                                <div className={styles.stepCircle}>
-                                    {currentStep > s.id ? "✓" : s.id}
-                                </div>
-                                {s.label}
-                            </div>
-                            {index < steps.length - 1 && <div className={styles.navSeparator}>›</div>}
-                        </React.Fragment>
-                    );
-                })}
-            </div>
-        );
-    };
-
-    const renderCodeBlock = () => {
-        let codeContent = "";
-        if (codeFormat === "Axios") {
-            codeContent = `// npm install @aporto/axios axios
-
-import { withAporto } from '@aporto/axios';
-import axios from 'axios';
-
-// IMPORTANT: Store API keys securely as environment variables
-// e.g., process.env.APORTO_API_KEY, process.env.OPENAI_API_KEY
-
-const aportoClient = withAporto(axios, {
-  apiKey: process.env.APORTO_API_KEY,  // Your Aporto API Key
-  agentName: '${agentName}'  // Your agent name
-});
-
-// Use like regular axios - requests are tracked automatically
-const response = await aportoClient.post('/v1/chat/completions', {
-  model: 'gpt-4',
-  messages: [{ role: 'user', content: 'Hello' }]
-});`;
-        } else {
-            codeContent = `// Using standard fetch with Aporto routing
-
-const response = await fetch('https://api.aporto.tech/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-        'Authorization': \`Bearer \${process.env.APORTO_API_KEY}\`,
-        'Content-Type': 'application/json',
-        'X-Agent-Name': '${agentName}'
-    },
-    body: JSON.stringify({
-        model: 'openai/gpt-4o-mini',
-        messages: [{ role: 'user', content: 'Hello' }]
-    })
-});
-
-const data = await response.json();`;
-        }
-
-        const lines = codeContent.split('\n');
-
-        return (
-            <div className={styles.codeBox}>
-                <div className={styles.codeHeader}>
-                    <div className={styles.windowControls}>
-                        <div className={`${styles.dot} ${styles.red}`}></div>
-                        <div className={`${styles.dot} ${styles.yellow}`}></div>
-                        <div className={`${styles.dot} ${styles.green}`}></div>
-                        <span className={styles.filename}>agentName</span>
-                    </div>
-                    <div className={styles.codeTabs}>
-                        <button className={`${styles.codeTab} ${codeFormat === "Axios" ? styles.active : ""}`} onClick={() => setCodeFormat("Axios")}>Axios</button>
-                        <button className={`${styles.codeTab} ${codeFormat === "Fetch" ? styles.active : ""}`} onClick={() => setCodeFormat("Fetch")}>Fetch</button>
-                        <button className={styles.codeTab}>REST</button>
-                        <button className={styles.copyBtn} onClick={() => copyCode(codeContent)}>⧉ Copy</button>
-                    </div>
-                </div>
-                <div className={styles.codeContent}>
-                    {lines.map((line, i) => {
-                        // Very naive highlighting for visual mockup
-                        let highlighted = line
-                            .replace(/(import|from|const|await|async|class|if|return)/g, '<span class="' + styles.syntaxKeyword + '">$1</span>')
-                            .replace(/('.*?'|".*?"|`.*?`)/g, '<span class="' + styles.syntaxString + '">$1</span>')
-                            .replace(/(\/\/.*)/g, '<span class="' + styles.syntaxComment + '">$1</span>');
-
-                        return (
-                            <div key={i} className={styles.codeLine}>
-                                <div className={styles.lineNumber}>{i + 1}</div>
-                                <div dangerouslySetInnerHTML={{ __html: highlighted || ' ' }} />
-                            </div>
-                        );
-                    })}
-                </div>
-            </div>
-        );
     };
 
     return (
@@ -149,204 +93,131 @@ const data = await response.json();`;
                     <div className={styles.headerLeft}>
                         <div className={styles.mainIcon}>▶</div>
                         <div className={styles.headerText}>
-                            <h1>Interactive Guide</h1>
-                            <p>Experience Aporto in action</p>
+                            <h1>Getting Started</h1>
+                            <p>Start using Aporto in under a minute</p>
                         </div>
                     </div>
-                    <a 
-                        href="https://docs.aporto.tech" 
-                        target="_blank" 
-                        rel="noopener noreferrer" 
+                    <a
+                        href="https://docs.aporto.tech"
+                        target="_blank"
+                        rel="noopener noreferrer"
                         className={styles.docsBtn}
-                        style={{ textDecoration: 'none' }}
+                        style={{ textDecoration: "none" }}
                     >
-                        📄 Docs ⧉
+                        📄 Full Docs ⧉
                     </a>
                 </div>
 
-                {renderStepNav()}
+                <div className={styles.modeTabs}>
+                    <button
+                        className={`${styles.modeTab} ${mode === "cli" ? styles.modeActive : ""}`}
+                        onClick={() => setMode("cli")}
+                    >
+                        CLI
+                    </button>
+                    <button
+                        className={`${styles.modeTab} ${mode === "mcp" ? styles.modeActive : ""}`}
+                        onClick={() => setMode("mcp")}
+                    >
+                        MCP Server
+                    </button>
+                    <button
+                        className={`${styles.modeTab} ${mode === "sdk" ? styles.modeActive : ""}`}
+                        onClick={() => setMode("sdk")}
+                    >
+                        TypeScript SDK
+                    </button>
+                </div>
 
                 <div className={styles.stepContent}>
-                    {currentStep === 1 && (
-                        <div>
-                            <h2 className={styles.stepTitle}>Choose Your Path</h2>
-                            <p className={styles.stepSubtitle}>Try one of our services, or connect your own to see governance in action.</p>
-
-                            <div className={styles.sectionLabel}>
-                                <div className={styles.sectionIcon}>⚡</div>
-                                <div>
-                                    <p>Aporto Services</p>
-                                    <span>Execute live demos with real API calls</span>
-                                </div>
-                            </div>
-
-                            <div className={styles.servicesGrid}>
-                                {SERVICES.map(s => (
-                                    <div
-                                        key={s.id}
-                                        className={`${styles.serviceCard} ${selectedService === s.id ? styles.selected : ""}`}
-                                        onClick={() => setSelectedService(s.id)}
-                                    >
-                                        <div className={`${styles.serviceCardIcon} ${styles[s.color]}`}>{s.icon}</div>
-                                        <div className={styles.serviceCardInfo}>
-                                            <h3>{s.title}</h3>
-                                            <p>{s.desc}</p>
-                                        </div>
-                                        <div className={styles.radioCircle}>
-                                            <div className={styles.radioInner}></div>
+                    {mode === "cli" && (
+                        <div className={styles.cliSteps}>
+                            {CLI_STEPS.map((step, i) => (
+                                <div key={step.title} className={styles.cliStep}>
+                                    <div className={styles.stepNumber}>{i + 1}</div>
+                                    <div className={styles.stepBody}>
+                                        <h3>{step.title}</h3>
+                                        <div className={styles.codeBox}>
+                                            <div className={styles.codeHeader}>
+                                                <span>Terminal</span>
+                                                <button className={styles.copyBtn} onClick={() => copyCode(step.code)}>
+                                                    Copy
+                                                </button>
+                                            </div>
+                                            <pre className={styles.codeContent}>{step.code}</pre>
                                         </div>
                                     </div>
-                                ))}
-                            </div>
-
-                            <div className={styles.divider}>
-                                <span className={styles.dividerText}>OR</span>
-                            </div>
-
-                            <div className={styles.sectionLabel}>
-                                <div className={styles.sectionIcon} style={{ color: '#2dd4bf' }}>🔗</div>
-                                <div>
-                                    <p>Take Control</p>
-                                    <span>Add visibility and limits to your AI spend</span>
                                 </div>
-                            </div>
-
-                            <div
-                                className={`${styles.serviceCard} ${selectedService === "take_control" ? styles.selected : ""}`}
-                                onClick={() => setSelectedService("take_control")}
-                            >
-                                <div className={`${styles.serviceCardIcon} ${styles.cyan}`}>🔗</div>
-                                <div className={styles.serviceCardInfo}>
-                                    <h3>Add Aporto to Your Code</h3>
-                                    <p>Wrap your existing API calls with tracking</p>
-                                </div>
-                                {selectedService === "take_control" && (
-                                    <div className={styles.checkCircle}>✓</div>
-                                )}
-                            </div>
-
-                            {selectedService && (
-                                <div className={styles.footerControls}>
-                                    <button className={styles.continueBtn} onClick={handleNext}>
-                                        Continue →
-                                    </button>
-                                </div>
-                            )}
-                        </div>
-                    )}
-
-                    {currentStep === 2 && (
-                        <div className={styles.stepHeaderLeft}>
-                            <h2 className={styles.stepTitle}>Add Your Code</h2>
-                            <p className={styles.stepSubtitle}>Add the Aporto SDK to your existing code</p>
-
-                            <div className={styles.inputGroup}>
-                                <label>Agent Name</label>
-                                <input
-                                    type="text"
-                                    className={styles.textInput}
-                                    value={agentName}
-                                    onChange={(e) => setAgentName(e.target.value)}
-                                />
-                            </div>
-
-                            {renderCodeBlock()}
-
-                            <div className={styles.apiKeyBlock}>
-                                <div className={styles.apiKeyHeader}>
-                                    <span>Your API Key</span>
-                                    <button className={styles.copyBtn} onClick={() => copyCode(MOCK_API_KEY)}>⧉ Copy</button>
-                                </div>
-                                <div className={styles.apiKeyValue}>{MOCK_API_KEY}</div>
-                            </div>
-
-                            <div className={styles.footerControlsSpaceBetween}>
-                                <button className={styles.backBtn} onClick={handleBack}>← Back</button>
-                                <div className={styles.footerRight}>
-                                    <button className={styles.skipBtn} onClick={handleNext}>Skip for now</button>
-                                    <button className={`${styles.continueBtn} ${styles.cyan}`} onClick={handleNext}>Continue</button>
-                                </div>
+                            ))}
+                            <div className={styles.doneCard}>
+                                <strong>Done!</strong> You can now discover and run any of 1000+ skills from your terminal.
+                                Use <code>aporto discover</code> to search and <code>aporto run</code> to execute.
                             </div>
                         </div>
                     )}
 
-                    {currentStep === 3 && (
-                        <div className={styles.stepHeaderLeft}>
-                            <h2 className={styles.stepTitle}>Test Transaction</h2>
-                            <p className={styles.stepSubtitle}>Execute your code or run the dummy payload below to see tracking in action.</p>
-
-                            <div className={styles.apiKeyBlock}>
-                                <div style={{ textAlign: 'center', padding: '40px 0' }}>
-                                    <p>Listening for API requests...</p>
-                                    <div style={{ color: '#00dc82', marginTop: 16 }}>Send a request using your code to continue</div>
-                                </div>
-                            </div>
-
-                            <div className={styles.footerControlsSpaceBetween}>
-                                <button className={styles.backBtn} onClick={handleBack}>← Back</button>
-                                <div className={styles.footerRight}>
-                                    <button className={styles.skipBtn} onClick={handleNext}>Skip for now</button>
-                                    <button className={`${styles.continueBtn} ${styles.cyan}`} onClick={handleNext}>Simulate Request & Continue</button>
-                                </div>
-                            </div>
-                        </div>
-                    )}
-
-                    {currentStep === 4 && (
-                        <div className={styles.stepHeaderLeft}>
-                            <h2 className={styles.stepTitle} style={{ textAlign: 'center' }}>Protect Your Spending</h2>
-                            <p className={styles.stepSubtitle} style={{ textAlign: 'center' }}>Create a rule to limit spend, then replay the demo to see it block transactions.</p>
-
-                            <div className={styles.ruleCard}>
-                                <div className={styles.ruleHeader}>
-                                    <div className={styles.ruleIcon}>🛡️</div>
-                                    <div>
-                                        <h3 className={styles.ruleTitle}>Add Aporto to Your Code Spend Limit</h3>
-                                        <p className={styles.ruleDesc}>Block transactions when spend exceeds limit</p>
-                                    </div>
-                                </div>
-
-                                <div className={styles.formRow}>
-                                    <div className={styles.formControl}>
-                                        <label>Limit Type</label>
-                                        <select className={styles.selectInput}>
-                                            <option>Spending</option>
-                                        </select>
-                                    </div>
-                                    <div className={styles.formControl}>
-                                        <label>Amount</label>
-                                        <div className={styles.amountInputWrapper}>
-                                            <span>$</span>
-                                            <input type="number" className={styles.amountInput} defaultValue="0.01" step="0.01" />
+                    {mode === "mcp" && (
+                        <div className={styles.cliSteps}>
+                            <div className={styles.cliStep}>
+                                <div className={styles.stepNumber}>1</div>
+                                <div className={styles.stepBody}>
+                                    <h3>Add Aporto MCP server to your AI client</h3>
+                                    <p className={styles.stepDesc}>
+                                        Works with Claude Code, Cursor, Windsurf, Cline, and any MCP-compatible client.
+                                    </p>
+                                    <div className={styles.codeBox}>
+                                        <div className={styles.codeHeader}>
+                                            <span>mcp-config.json</span>
+                                            <button className={styles.copyBtn} onClick={() => copyCode(MCP_CONFIG)}>
+                                                Copy
+                                            </button>
                                         </div>
-                                    </div>
-                                    <div className={styles.formControl}>
-                                        <label>Time Period</label>
-                                        <select className={styles.selectInput}>
-                                            <option>Per Day</option>
-                                        </select>
+                                        <pre className={styles.codeContent}>{MCP_CONFIG}</pre>
                                     </div>
                                 </div>
                             </div>
-
-                            <div className={styles.footerControlsSpaceBetween}>
-                                <button className={styles.backBtn} onClick={handleBack}>← Back</button>
-                                <div className={styles.footerRight}>
-                                    <button className={styles.skipBtn} onClick={handleNext}>Skip for Now</button>
-                                    <button className={`${styles.continueBtn} ${styles.orange}`} onClick={handleNext}>Create Rule →</button>
-                                </div>
+                            <div className={styles.doneCard}>
+                                <strong>Done!</strong> Your AI agent now has access to all Aporto skills via MCP tools.
+                                Ask it to discover and run skills naturally.
                             </div>
                         </div>
                     )}
 
-                    {currentStep === 5 && (
-                        <div className={styles.stepHeaderLeft}>
-                            <div style={{ textAlign: 'center', marginTop: '64px' }}>
-                                <div style={{ fontSize: 64, marginBottom: 24 }}>🎉</div>
-                                <h2 className={styles.stepTitle}>Setup Complete!</h2>
-                                <p className={styles.stepSubtitle}>You have successfully configured and tested your Aporto integration.</p>
-
-                                <button className={styles.continueBtn} style={{ margin: '0 auto' }} onClick={() => window.location.href = '/dashboard'}>Go to Dashboard</button>
+                    {mode === "sdk" && (
+                        <div className={styles.cliSteps}>
+                            <div className={styles.cliStep}>
+                                <div className={styles.stepNumber}>1</div>
+                                <div className={styles.stepBody}>
+                                    <h3>Install the SDK</h3>
+                                    <div className={styles.codeBox}>
+                                        <div className={styles.codeHeader}>
+                                            <span>Terminal</span>
+                                            <button className={styles.copyBtn} onClick={() => copyCode("npm install @aporto-tech/sdk")}>
+                                                Copy
+                                            </button>
+                                        </div>
+                                        <pre className={styles.codeContent}>npm install @aporto-tech/sdk</pre>
+                                    </div>
+                                </div>
+                            </div>
+                            <div className={styles.cliStep}>
+                                <div className={styles.stepNumber}>2</div>
+                                <div className={styles.stepBody}>
+                                    <h3>Use in your code</h3>
+                                    <div className={styles.codeBox}>
+                                        <div className={styles.codeHeader}>
+                                            <span>index.ts</span>
+                                            <button className={styles.copyBtn} onClick={() => copyCode(SDK_CODE)}>
+                                                Copy
+                                            </button>
+                                        </div>
+                                        <pre className={styles.codeContent}>{SDK_CODE}</pre>
+                                    </div>
+                                </div>
+                            </div>
+                            <div className={styles.doneCard}>
+                                <strong>Done!</strong> The SDK provides typed methods for all Aporto capabilities including
+                                skill routing, LLM chat, image generation, TTS, search, and more.
                             </div>
                         </div>
                     )}
