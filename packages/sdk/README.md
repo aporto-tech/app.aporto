@@ -1,315 +1,180 @@
 # @aporto-tech/sdk
 
-The skill marketplace for AI agents. Discover thousands of capabilities by description, execute via smart provider routing, publish your own skills and earn — all through one API key.
+One CLI command — 1000+ paid AI skills. Search, scraping, image generation, TTS, video, verification, automation, and 400+ LLM models. Pay per use. No vendor accounts.
 
-## Install
-
-```bash
-npm install @aporto-tech/sdk
-```
-
-## LLM (OpenAI-compatible)
-
-```typescript
-import { AportoClient } from "@aporto-tech/sdk";
-
-const aporto = new AportoClient({ apiKey: process.env.APORTO_API_KEY });
-
-const chat = await aporto.llm.chat.completions.create({
-  model: "openai/gpt-4o-mini",
-  messages: [{ role: "user", content: "Hello" }],
-});
-```
-
-For local or self-hosted deployments, override the service and LLM base URLs:
-
-```typescript
-const aporto = new AportoClient({
-  apiKey: process.env.APORTO_API_KEY,
-  appBaseUrl: "http://localhost:3000",
-  llmBaseUrl: "https://api.aporto.tech/v1",
-});
-```
-
-Any OpenAI-compatible client works too — just set `baseURL`:
-
-```typescript
-import OpenAI from "openai";
-
-const client = new OpenAI({
-  baseURL: "https://api.aporto.tech/v1",
-  apiKey: "sk-live-YOUR_API_KEY",
-});
-```
-
-## Web Search
-
-```typescript
-const results = await aporto.search.linkup({ query: "AI news" });
-```
-
-## Image Generation
-
-```typescript
-const img = await aporto.images.generate({ prompt: "a cat on the moon" });
-console.log(img.images[0].url); // S3/R2 URL
-console.log(img.images[0].storage_key);
-```
-
-## Text-to-Speech
-
-```typescript
-const audio = await aporto.audio.speech({ text: "Hello from Aporto!" });
-console.log(audio.url); // S3/R2 MP3 URL
-console.log(audio.storage_key);
-```
-
-## SMS
-
-```typescript
-await aporto.sms.send({ to: "+1234567890", type: "sms" });
-await aporto.sms.send({ to: "+1234567890", type: "whatsapp" });
-```
-
----
-
-## Skill Routing
-
-Discover and execute any skill in the Aporto marketplace. The routing layer does semantic search to find matching skills, then automatically selects the best provider by price, latency, and reliability.
-
-```typescript
-// Find skills matching a natural language query
-const { skills } = await aporto.routing.discoverSkills({
-  query: "convert text to speech",
-});
-
-// skills[0] = { id, name, description, category, capabilities, paramsSchema, similarity, ... }
-console.log(skills[0].name);        // "Text to Speech"
-console.log(skills[0].paramsSchema); // { text: "string", voice_id: "string", ... }
-
-// Execute the best match
-const result = await aporto.routing.executeSkill({
-  skillId: skills[0].id,
-  params: { text: "Hello from Aporto!", voice_id: "Rachel" },
-  sessionId: "my-agent-session-123", // optional — enables retry deduplication
-});
-
-console.log(result.result); // Stored artifact URL / JSON depending on skill
-console.log(result.artifact.url); // Full JSON result saved in S3/R2
-console.log(result.provider, result.costUSD);
-```
-
-Filter by category or capability:
-
-```typescript
-const { skills } = await aporto.routing.discoverSkills({
-  query: "generate image",
-  category: "media/image",   // e.g. search/web, llm/chat, communication/sms
-  capability: "generate",    // e.g. search, transcribe, convert, send
-  page: 0,                   // paginate, 5 results per page
-});
-```
-
-The `sessionId` parameter enables smart retry routing — if a provider fails, the next `executeSkill` call with the same `sessionId` will automatically route to a different provider.
-
-### High-level SkillRun lifecycle
-
-For agent workflows, prefer `runSkill`. It matches the MCP `aporto_run_skill` tool: discovery, provider routing, async polling, artifact storage, and billing are handled by Aporto.
-
-```typescript
-const run = await aporto.routing.runSkill({
-  intent: "generate image with nano banana",
-  params: { prompt: "A clean product image on a white background" },
-  providerHint: "kie",        // optional
-  waitForResult: true,
-  maxWaitSeconds: 120,
-});
-
-console.log(run.runId, run.status, run.costUSD);
-console.log(run.artifacts?.[0]?.url);
-```
-
-Poll an existing run:
-
-```typescript
-const run = await aporto.routing.getSkillRun({
-  runId: "skill-run-id",
-  waitForResult: false,
-});
-
-const final = await aporto.routing.waitSkillRun({
-  runId: "skill-run-id",
-  timeoutSeconds: 300,
-});
-```
-
----
-
-## CLI for AI agents
-
-Install the SDK globally to get the `aporto` command:
+## Quick Start
 
 ```bash
 npm install -g @aporto-tech/sdk
-export APORTO_API_KEY=sk-live-YOUR_API_KEY
+export APORTO_API_KEY="sk-live-YOUR_KEY"   # get from https://app.aporto.tech/settings
 ```
 
-### Commands
+## CLI Commands
 
-```
-aporto discover <intent> [--category <value>] [--capability <value>] [--page <n>] [--json]
-aporto run <skillId-or-intent> [--provider <hint>] [--params <file.json>] [--param key=value] [--file key=path] [--wait] [--max-wait <seconds>] [--session <id>] [--json]
-aporto runs get <runId> [--json]
-aporto runs wait <runId> [--max-wait <seconds>] [--timeout <seconds>] [--interval <seconds>] [--json]
-```
-
-### Discover skills
+### `aporto discover` — Find skills
 
 ```bash
-aporto discover "generate a 5 second 720p vertical video" --json
-aporto discover "scrape website" --category data/scraping
+aporto discover "generate image"
+
+# 4    Image Generation              media/image    $0.0040/call
+# 96   Image Generation Nano Banana  media/image    $0.0400/call
+# 67   Image Generation Recraft      media/image    $0.0200/call
+
+aporto discover "scrape website" --category data/scraping --json
 ```
 
-### Run by skill ID
+| Flag | Description |
+|------|-------------|
+| `--category <val>` | Filter by category (e.g. `media/image`, `search/web`, `data/scraping`) |
+| `--capability <val>` | Filter by capability (e.g. `generate`, `search`, `transcribe`) |
+| `--page <n>` | Pagination (5 results per page) |
+| `--json` | Structured JSON output |
+
+### `aporto run` — Execute a skill
 
 ```bash
-aporto run 76 --params params.json --provider auto --wait --json
-```
+# By skill ID
+aporto run 4 --param prompt="a cat on the moon" --wait
 
-### Run by intent
+# By intent (auto-discovery)
+aporto run "generate product video" \
+  --param prompt="clean product launch teaser" \
+  --provider auto \
+  --wait
 
-```bash
-aporto run "generate image with nano banana" \
-  --param prompt="A clean product image on a white background" \
-  --provider kie \
-  --wait \
-  --json
-```
-
-### Attach local files
-
-```bash
+# With a local file
 aporto run 42 \
   --file image=./product.jpg \
   --param prompt="Remove background" \
   --wait
+
+# Complex params from JSON
+aporto run 17 --params params.json --wait --json
 ```
 
-The `--file` flag reads the file, base64-encodes it, and sends it with MIME type metadata. Supported: JPEG, PNG, GIF, WebP, SVG, MP3, WAV, MP4, WebM, PDF, and more.
+| Flag | Description |
+|------|-------------|
+| `--param key=value` | Set a parameter (repeatable) |
+| `--file key=path` | Attach a local file (repeatable, base64-encoded) |
+| `--params <file.json>` | Load all parameters from a JSON file |
+| `--provider <hint>` | Provider preference (name or `auto`) |
+| `--wait` | Wait for completion before returning |
+| `--no-wait` | Return immediately with runId |
+| `--max-wait <sec>` | Max wait time (default: 300) |
+| `--session <id>` | Session ID for retry deduplication |
+| `--json` | Structured JSON output |
 
-### Poll async runs
+### `aporto runs get` / `aporto runs wait` — Poll async results
 
 ```bash
 aporto runs get <runId> --json
 aporto runs wait <runId> --timeout 600 --interval 10 --json
 ```
 
-### Flag reference
+| Flag | Description |
+|------|-------------|
+| `--timeout <sec>` | Total timeout (default: 300) |
+| `--interval <sec>` | Poll interval (default: 30) |
+| `--max-wait <sec>` | Max wait per poll cycle |
+| `--json` | Structured JSON output |
 
-| Flag | Command | Description |
-|------|---------|-------------|
-| `--json` | all | Structured JSON output |
-| `--wait` | run | Wait for completion |
-| `--no-wait` | run | Return immediately |
-| `--max-wait <sec>` | run, runs wait | Max wait time (default: 300) |
-| `--provider <hint>` | run | Provider preference |
-| `--param key=value` | run | Set parameter (repeatable) |
-| `--file key=path` | run | Attach file (repeatable) |
-| `--params <file>` | run | Load params from JSON |
-| `--session <id>` | run | Retry dedup session |
-| `--category <val>` | discover | Filter by category |
-| `--capability <val>` | discover | Filter by capability |
-| `--page <n>` | discover | Pagination (5/page) |
-| `--timeout <sec>` | runs wait | Total timeout |
-| `--interval <sec>` | runs wait | Poll interval |
+### `aporto help`
 
-### Environment
+```bash
+aporto help
+```
+
+---
+
+## Environment Variables
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `APORTO_API_KEY` | Yes | API key from [app.aporto.tech](https://app.aporto.tech/settings) |
+| `APORTO_API_KEY` | Yes | API key from [app.aporto.tech/settings](https://app.aporto.tech/settings) |
 | `APORTO_BASE_URL` | No | Override base URL (default: `https://app.aporto.tech`) |
 
-Full documentation: [docs.aporto.tech/cli-reference](https://docs.aporto.tech/cli-reference)
+---
+
+## TypeScript SDK
+
+For programmatic use in applications:
+
+```bash
+npm install @aporto-tech/sdk
+```
+
+```typescript
+import { AportoClient } from "@aporto-tech/sdk";
+
+const aporto = new AportoClient({ apiKey: process.env.APORTO_API_KEY });
+
+// Discover + run a skill
+const { skills } = await aporto.routing.discoverSkills({ query: "generate image" });
+const run = await aporto.routing.runSkill({
+  intent: "generate image",
+  params: { prompt: "a cat on the moon" },
+  waitForResult: true,
+});
+console.log(run.artifacts?.[0]?.url);
+```
+
+### Convenience modules
+
+```typescript
+// LLM (OpenAI-compatible, 400+ models)
+const chat = await aporto.llm.chat.completions.create({
+  model: "openai/gpt-4o-mini",
+  messages: [{ role: "user", content: "Hello" }],
+});
+
+// Image generation
+const img = await aporto.images.generate({ prompt: "a cat on the moon" });
+
+// Text-to-speech
+const audio = await aporto.audio.speech({ text: "Hello from Aporto!" });
+
+// Web search
+const results = await aporto.search.linkup({ query: "AI news" });
+```
+
+Or use any OpenAI-compatible client:
+
+```typescript
+import OpenAI from "openai";
+const client = new OpenAI({
+  baseURL: "https://api.aporto.tech/v1",
+  apiKey: "sk-live-YOUR_API_KEY",
+});
+```
+
+---
+
+## MCP Server (for AI agents)
+
+Add Aporto to Claude Code, Cursor, Windsurf, or Codex:
+
+```bash
+claude mcp add aporto -- --transport http --url https://app.aporto.tech/api/mcp --header "Authorization: Bearer $APORTO_API_KEY"
+```
 
 ---
 
 ## x402 Agent Payments
 
-`createX402Fetch` lets your AI agent automatically pay for external API calls that require payment via the [x402 protocol](https://x402.org).
-
-When the target API responds with `402 Payment Required` and `X-Payment-Network: aporto`, the SDK pays from your Aporto balance and retries the request. Your agent code doesn't change — just swap `fetch` for `createX402Fetch`.
+Auto-pay for external APIs that support the [x402 protocol](https://x402.org):
 
 ```typescript
 import { createX402Fetch } from "@aporto-tech/sdk";
-
 const fetch = createX402Fetch({ apiKey: process.env.APORTO_API_KEY });
-
-// If this API responds with 402 + x402 headers, the SDK pays automatically
 const res = await fetch("https://some-x402-api.com/data");
-const data = await res.json();
 ```
 
-### Error handling
+When an API responds `402 Payment Required` with `X-Payment-Network: aporto`, the SDK pays from your Aporto balance and retries automatically.
 
-```typescript
-import { createX402Fetch, AportoPaymentError } from "@aporto-tech/sdk";
+---
 
-const fetch = createX402Fetch({ apiKey: process.env.APORTO_API_KEY });
+## Links
 
-try {
-  const res = await fetch("https://some-x402-api.com/data");
-} catch (err) {
-  if (err instanceof AportoPaymentError) {
-    if (err.code === "INSUFFICIENT_BALANCE") {
-      // top up at https://app.aporto.tech/dashboard
-    }
-    if (err.code === "PAY_FAILED") {
-      // unexpected error from payment endpoint
-    }
-  }
-}
-```
-
-### How it works
-
-1. Agent calls `fetch(url)`
-2. API responds `402` with headers:
-   - `X-Payment-Network: aporto`
-   - `X-Payment-Recipient: recipient@example.com`
-   - `X-Payment-Amount: 0.001`
-3. SDK posts to `https://app.aporto.tech/api/x402/pay` — Aporto deducts from your balance
-4. SDK retries the original request with `X-Payment-Proof: v1.{ts}.{exp}.{userId}.{sig}`
-5. External API verifies the proof (see below) and returns the data
-
-Non-aporto 402 responses (e.g. from Stripe, billing systems) are passed through unchanged.
-
-### For API operators: accepting x402 payments
-
-To make your API accept Aporto x402 payments, respond to unauthenticated requests with:
-
-```
-HTTP/1.1 402 Payment Required
-X-Payment-Network: aporto
-X-Payment-Recipient: your-identifier
-X-Payment-Amount: 0.001
-```
-
-Then verify the `X-Payment-Proof` header on the retry using Aporto's public verify endpoint:
-
-```
-GET https://app.aporto.tech/api/x402/verify
-  ?proof=v1.{ts}.{exp}.{userId}.{sig}
-  &network=aporto
-  &recipient=your-identifier
-  &amount=0.001
-```
-
-Response:
-```json
-{ "valid": true, "userId": 42 }
-// or
-{ "valid": false, "reason": "proof expired" }
-```
-
-Proof tokens are valid for 5 minutes and tied to a specific `network + recipient + amount` combination. Reusing a proof for a different amount or recipient will fail.
+- [Dashboard](https://app.aporto.tech) — API keys, balance, usage logs
+- [Full Documentation](https://docs.aporto.tech) — CLI reference, capabilities, integration guides
+- [CLI Reference](https://docs.aporto.tech/cli-reference) — All commands and flags

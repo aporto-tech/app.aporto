@@ -1,6 +1,6 @@
 {
   "name": "@aporto-tech/sdk",
-  "version": "0.5.6",
+  "version": "0.5.7",
   "description": "The skill marketplace for AI agents. Discover thousands of capabilities by description, execute via smart provider routing, publish your own skills and earn — all through one API key.",
   "keywords": [
     "aporto",
