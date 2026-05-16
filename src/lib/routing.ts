@@ -14,7 +14,7 @@
 import { prisma } from "@/lib/prisma";
 import { embedQuery } from "@/lib/embeddings";
 
-const PAGE_SIZE = 5;
+const PAGE_SIZE = 10;
 export const MAX_PROVIDER_ATTEMPTS = Math.min(
     Math.max(Number(process.env.SKILL_MAX_PROVIDER_ATTEMPTS ?? 3) || 3, 1),
     5,
