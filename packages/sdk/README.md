@@ -154,19 +154,29 @@ npm install -g @aporto-tech/sdk
 export APORTO_API_KEY=sk-live-YOUR_API_KEY
 ```
 
-Discover the right skill:
+### Commands
+
+```
+aporto discover <intent> [--category <value>] [--capability <value>] [--page <n>] [--json]
+aporto run <skillId-or-intent> [--provider <hint>] [--params <file.json>] [--param key=value] [--file key=path] [--wait] [--max-wait <seconds>] [--session <id>] [--json]
+aporto runs get <runId> [--json]
+aporto runs wait <runId> [--max-wait <seconds>] [--timeout <seconds>] [--interval <seconds>] [--json]
+```
+
+### Discover skills
 
 ```bash
 aporto discover "generate a 5 second 720p vertical video" --json
+aporto discover "scrape website" --category data/scraping
 ```
 
-Run by skill ID:
+### Run by skill ID
 
 ```bash
 aporto run 76 --params params.json --provider auto --wait --json
 ```
 
-Run by natural-language intent and provider hint:
+### Run by intent
 
 ```bash
 aporto run "generate image with nano banana" \
@@ -176,18 +186,51 @@ aporto run "generate image with nano banana" \
   --json
 ```
 
-Poll async runs:
+### Attach local files
+
+```bash
+aporto run 42 \
+  --file image=./product.jpg \
+  --param prompt="Remove background" \
+  --wait
+```
+
+The `--file` flag reads the file, base64-encodes it, and sends it with MIME type metadata. Supported: JPEG, PNG, GIF, WebP, SVG, MP3, WAV, MP4, WebM, PDF, and more.
+
+### Poll async runs
 
 ```bash
 aporto runs get <runId> --json
-aporto runs wait <runId> --json
+aporto runs wait <runId> --timeout 600 --interval 10 --json
 ```
 
-For local or staging deployments:
+### Flag reference
 
-```bash
-export APORTO_BASE_URL=http://localhost:3000
-```
+| Flag | Command | Description |
+|------|---------|-------------|
+| `--json` | all | Structured JSON output |
+| `--wait` | run | Wait for completion |
+| `--no-wait` | run | Return immediately |
+| `--max-wait <sec>` | run, runs wait | Max wait time (default: 300) |
+| `--provider <hint>` | run | Provider preference |
+| `--param key=value` | run | Set parameter (repeatable) |
+| `--file key=path` | run | Attach file (repeatable) |
+| `--params <file>` | run | Load params from JSON |
+| `--session <id>` | run | Retry dedup session |
+| `--category <val>` | discover | Filter by category |
+| `--capability <val>` | discover | Filter by capability |
+| `--page <n>` | discover | Pagination (5/page) |
+| `--timeout <sec>` | runs wait | Total timeout |
+| `--interval <sec>` | runs wait | Poll interval |
+
+### Environment
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `APORTO_API_KEY` | Yes | API key from [app.aporto.tech](https://app.aporto.tech/settings) |
+| `APORTO_BASE_URL` | No | Override base URL (default: `https://app.aporto.tech`) |
+
+Full documentation: [docs.aporto.tech/cli-reference](https://docs.aporto.tech/cli-reference)
 
 ---
 

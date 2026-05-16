@@ -1,8 +1,18 @@
 #!/usr/bin/env node
 
 import { readFileSync } from "node:fs";
+import { basename, extname } from "node:path";
 import { AportoClient } from "./index";
 import { AportoConfigError } from "./errors";
+
+const MIME_TYPES: Record<string, string> = {
+    ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png",
+    ".gif": "image/gif", ".webp": "image/webp", ".svg": "image/svg+xml",
+    ".mp3": "audio/mpeg", ".wav": "audio/wav", ".ogg": "audio/ogg",
+    ".mp4": "video/mp4", ".webm": "video/webm", ".mov": "video/quicktime",
+    ".pdf": "application/pdf", ".json": "application/json",
+    ".txt": "text/plain", ".csv": "text/csv",
+};
 
 type Flags = Record<string, string | boolean | string[]>;
 
@@ -11,9 +21,25 @@ function usage(): string {
         "Usage:",
         "  aporto discover <intent> [--category <value>] [--capability <value>] [--page <n>] [--json]",
         "  aporto skills search <intent> [--json]",
-        "  aporto run <skillId-or-intent> [--provider <hint>] [--params <file.json>] [--param key=value] [--wait] [--max-wait <seconds>] [--json]",
+        "  aporto run <skillId-or-intent> [--provider <hint>] [--params <file.json>] [--param key=value] [--file key=path] [--wait] [--max-wait <seconds>] [--session <id>] [--json]",
         "  aporto runs get <runId> [--json]",
         "  aporto runs wait <runId> [--max-wait <seconds>] [--timeout <seconds>] [--interval <seconds>] [--json]",
+        "",
+        "Flags:",
+        "  --json             Output as JSON (useful for AI agents and scripting)",
+        "  --wait             Wait for skill execution to complete before returning",
+        "  --no-wait          Do not wait (default for async skills)",
+        "  --max-wait <sec>   Maximum seconds to wait for completion (default: 300)",
+        "  --provider <hint>  Provider preference (name or 'auto')",
+        "  --param key=value  Set a parameter (repeatable)",
+        "  --file key=path    Attach a local file as a parameter (repeatable, base64-encoded)",
+        "  --params <file>    Load parameters from a JSON file",
+        "  --session <id>     Session ID for retry deduplication",
+        "  --category <val>   Filter skills by category (e.g. media/image, search/web)",
+        "  --capability <val> Filter skills by capability (e.g. generate, search)",
+        "  --page <n>         Pagination offset (5 results per page)",
+        "  --timeout <sec>    Timeout for polling (runs wait)",
+        "  --interval <sec>   Poll interval in seconds (runs wait)",
         "",
         "Environment:",
         "  APORTO_API_KEY      required",
@@ -51,9 +77,9 @@ function parseArgs(argv: string[]): { args: string[]; flags: Flags } {
             throw new AportoConfigError(`Missing value for --${key}`);
         }
 
-        if (key === "param") {
-            const existing = flags.param;
-            flags.param = Array.isArray(existing) ? [...existing, value] : existing ? [String(existing), value] : [value];
+        if (key === "param" || key === "file") {
+            const existing = flags[key];
+            flags[key] = Array.isArray(existing) ? [...existing, value] : existing ? [String(existing), value] : [value];
         } else {
             flags[key] = value;
         }
@@ -105,6 +131,19 @@ function readParams(flags: Flags): Record<string, unknown> {
         const key = pair.slice(0, eqIndex);
         const value = pair.slice(eqIndex + 1);
         params[key] = parseScalar(value);
+    }
+
+    const files = flags.file;
+    const fileValues = Array.isArray(files) ? files : files ? [String(files)] : [];
+    for (const pair of fileValues) {
+        const eqIndex = pair.indexOf("=");
+        if (eqIndex <= 0) throw new AportoConfigError("--file must be key=path (e.g. --file image=./photo.jpg)");
+        const key = pair.slice(0, eqIndex);
+        const path = pair.slice(eqIndex + 1);
+        const ext = extname(path).toLowerCase();
+        const mimeType = MIME_TYPES[ext] || "application/octet-stream";
+        const data = readFileSync(path).toString("base64");
+        params[key] = { _file: true, name: basename(path), mimeType, data };
     }
 
     return params;
