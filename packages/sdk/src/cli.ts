@@ -42,7 +42,7 @@ function usage(): string {
         "  --interval <sec>   Poll interval in seconds (runs wait)",
         "",
         "Environment:",
-        "  APORTO_API_KEY      required",
+        "  APORTO_API_KEY      required for run/paid commands; optional for discover",
         "  APORTO_BASE_URL     optional, defaults to https://app.aporto.tech",
     ].join("\n");
 }
@@ -192,6 +192,39 @@ function printRun(result: { status?: string; runId?: string; skillId?: number; s
     }
 }
 
+async function discoverSkills(params: {
+    appBaseUrl: string;
+    apiKey?: string;
+    query: string;
+    category?: string;
+    capability?: string;
+    page: number;
+}): Promise<{ skills: Array<{ id?: number; skillId?: number; name?: string; category?: string | null; similarity?: number; priceUSD?: number | null }>; page: number }> {
+    const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+        "X-Agent-Name": "aporto-cli",
+    };
+    if (params.apiKey) headers.Authorization = `Bearer ${params.apiKey}`;
+
+    const res = await fetch(`${params.appBaseUrl.replace(/\/$/, "")}/api/routing/skills`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+            query: params.query,
+            category: params.category,
+            capability: params.capability,
+            page: params.page,
+        }),
+    });
+
+    if (!res.ok) {
+        const text = await res.text().catch(() => "");
+        throw new AportoConfigError(`Discovery failed: ${res.status} ${res.statusText}${text ? ` - ${text}` : ""}`);
+    }
+
+    return res.json() as Promise<{ skills: Array<{ id?: number; skillId?: number; name?: string; category?: string | null; similarity?: number; priceUSD?: number | null }>; page: number }>;
+}
+
 async function main() {
     const { args, flags } = parseArgs(process.argv.slice(2));
     const command = args[0];
@@ -202,22 +235,16 @@ async function main() {
     }
 
     const apiKey = process.env.APORTO_API_KEY;
-    if (!apiKey) {
-        throw new AportoConfigError("APORTO_API_KEY is required");
-    }
-
-    const client = new AportoClient({
-        apiKey,
-        agentName: "aporto-cli",
-        appBaseUrl: process.env.APORTO_BASE_URL,
-    });
+    const appBaseUrl = process.env.APORTO_BASE_URL ?? "https://app.aporto.tech";
     const asJson = flags.json === true;
 
     if (command === "discover" || (command === "skills" && args[1] === "search")) {
         const offset = command === "skills" ? 2 : 1;
         const query = args.slice(offset).join(" ").trim();
         if (!query) throw new AportoConfigError("discover requires an intent");
-        const result = await client.routing.discoverSkills({
+        const result = await discoverSkills({
+            appBaseUrl,
+            apiKey,
             query,
             category: flagString(flags, "category"),
             capability: flagString(flags, "capability"),
@@ -227,6 +254,16 @@ async function main() {
         else printSkills(result);
         return;
     }
+
+    if (!apiKey) {
+        throw new AportoConfigError("APORTO_API_KEY is required for this command");
+    }
+
+    const client = new AportoClient({
+        apiKey,
+        agentName: "aporto-cli",
+        appBaseUrl,
+    });
 
     if (command === "run" || (command === "skill" && args[1] === "run")) {
         const target = args.slice(command === "skill" ? 2 : 1).join(" ").trim();
