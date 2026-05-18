@@ -151,6 +151,76 @@
     padding: 12px;
 }
 
+.promoRedeem {
+    padding: 10px 12px 4px;
+    border-top: 1px solid #222222;
+    margin-top: 8px;
+}
+
+.promoRedeem label {
+    display: block;
+    color: #777777;
+    font-size: 11px;
+    font-weight: 600;
+    margin-bottom: 6px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.promoRedeemRow {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 6px;
+}
+
+.promoRedeemRow input {
+    min-width: 0;
+    height: 32px;
+    border-radius: 6px;
+    border: 1px solid #2a2a2a;
+    background: #080808;
+    color: #ffffff;
+    padding: 0 8px;
+    font-size: 12px;
+    outline: none;
+}
+
+.promoRedeemRow input:focus {
+    border-color: #00dc82;
+}
+
+.promoRedeemRow button {
+    height: 32px;
+    border: 0;
+    border-radius: 6px;
+    background: #00dc82;
+    color: #000000;
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 700;
+    padding: 0 10px;
+}
+
+.promoRedeemRow button:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+}
+
+.promoSuccess,
+.promoError {
+    font-size: 11px;
+    line-height: 1.35;
+    margin: 7px 0 0;
+}
+
+.promoSuccess {
+    color: #00dc82;
+}
+
+.promoError {
+    color: #f87171;
+}
+
 /* Context switcher pill */
 .contextSwitcher {
     display: flex;

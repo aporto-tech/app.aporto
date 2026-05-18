@@ -1,5 +1,6 @@
 import { createHash } from "crypto";
-import { adjustUserQuota, deductUserQuota, logServiceUsage } from "@/lib/serviceProxy";
+import { logServiceUsage } from "@/lib/serviceProxy";
+import { deductSkillUsage, refundSkillUsage, type SkillCharge } from "@/lib/promoGrants";
 import { prisma } from "@/lib/prisma";
 import { storeSkillResultArtifacts, type StoredArtifact } from "@/lib/artifacts";
 import {
@@ -17,7 +18,6 @@ import {
     type DiscoveredSkill,
 } from "@/lib/routing";
 
-const QUOTA_PER_DOLLAR = 500_000;
 const KIE_CREDIT_TO_USD = 0.005;
 function waitSecondsFromEnv(name: string, fallback: number): number {
     const value = Number(process.env[name]);
@@ -140,6 +140,9 @@ type SkillRunRow = {
     error: unknown;
     artifactJson: unknown;
     costUSD: number | null;
+    promoRedemptionId: string | null;
+    promoCoveredUSD: number | null;
+    balanceChargedUSD: number | null;
 };
 
 type ProviderLookupRow = {
@@ -327,15 +330,6 @@ function providerFromRow(row: ProviderLookupRow): ScoredProvider {
     };
 }
 
-async function refundQuota(newApiUserId: number, costUSD: number) {
-    if (costUSD <= 0) return;
-    await prisma.$executeRawUnsafe(
-        `UPDATE users SET quota = quota + $1, used_quota = used_quota - $1 WHERE id = $2`,
-        Math.ceil(costUSD * QUOTA_PER_DOLLAR),
-        newApiUserId,
-    );
-}
-
 async function createRun(input: {
     newApiUserId: number;
     sessionId: string;
@@ -349,6 +343,9 @@ async function createRun(input: {
     result?: unknown;
     error?: unknown;
     costUSD?: number;
+    promoRedemptionId?: string | null;
+    promoCoveredUSD?: number;
+    balanceChargedUSD?: number | null;
     nextPollAt?: Date | null;
     expiresAt?: Date | null;
 }): Promise<string> {
@@ -356,9 +353,9 @@ async function createRun(input: {
         `INSERT INTO "SkillRun" (
             "newApiUserId", "sessionId", "skillId", "providerId", status,
             "lifecycleMode", "paramsHash", "providerTaskId", "providerRaw",
-            result, error, "costUSD", "nextPollAt", "expiresAt", "createdAt", "updatedAt"
+            result, error, "costUSD", "promoRedemptionId", "promoCoveredUSD", "balanceChargedUSD", "nextPollAt", "expiresAt", "createdAt", "updatedAt"
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10::jsonb, $11::jsonb, $12, $13, $14, NOW(), NOW())
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10::jsonb, $11::jsonb, $12, $13, $14, $15, $16, $17, NOW(), NOW())
         RETURNING id`,
         input.newApiUserId,
         input.sessionId,
@@ -372,6 +369,9 @@ async function createRun(input: {
         input.result === undefined ? null : JSON.stringify(input.result),
         input.error === undefined ? null : JSON.stringify(input.error),
         input.costUSD ?? null,
+        input.promoRedemptionId ?? null,
+        input.promoCoveredUSD ?? 0,
+        input.balanceChargedUSD ?? null,
         input.nextPollAt ?? null,
         input.expiresAt ?? null,
     );
@@ -445,12 +445,32 @@ async function storeFinalResult(input: {
     provider: ScoredProvider;
     estimatedCostUSD: number;
     actualCostUSD: number;
+    charge: Pick<SkillCharge, "promoRedemptionId" | "promoCoveredUSD" | "balanceChargedUSD">;
     params: Record<string, unknown>;
     result: unknown;
 }) {
     const deltaUSD = input.actualCostUSD - input.estimatedCostUSD;
-    if (deltaUSD !== 0) {
-        await adjustUserQuota(input.userId, deltaUSD);
+    if (deltaUSD > 0) {
+        const extraCharge = await deductSkillUsage(input.userId, input.skillId, deltaUSD);
+        if (extraCharge.error) {
+            console.error("[storeFinalResult] extra charge failed after provider success", {
+                runId: input.runId,
+                userId: input.userId,
+                skillId: input.skillId,
+                deltaUSD,
+            });
+        }
+    } else if (deltaUSD < 0) {
+        const refundUSD = Math.abs(deltaUSD);
+        const balanceRefundUSD = Math.min(input.charge.balanceChargedUSD, refundUSD);
+        const promoRefundUSD = Math.min(input.charge.promoCoveredUSD, Math.max(0, refundUSD - balanceRefundUSD));
+        if (balanceRefundUSD > 0 || promoRefundUSD > 0) {
+            await refundSkillUsage(input.userId, {
+                promoRedemptionId: input.charge.promoRedemptionId,
+                promoCoveredUSD: promoRefundUSD,
+                balanceChargedUSD: balanceRefundUSD,
+            });
+        }
     }
 
     const artifactResult = await storeSkillResultArtifacts({
@@ -513,6 +533,7 @@ async function waitForProviderResult(input: {
     estimatedCostUSD: number;
     maxWaitSeconds: number;
     internalBaseUrl?: string;
+    charge: Pick<SkillCharge, "promoRedemptionId" | "promoCoveredUSD" | "balanceChargedUSD">;
 }): Promise<RunSkillResult> {
     const deadline = Date.now() + Math.max(1, input.maxWaitSeconds) * 1000;
     let lastData: unknown = null;
@@ -543,6 +564,7 @@ async function waitForProviderResult(input: {
                 provider: input.provider,
                 estimatedCostUSD: input.estimatedCostUSD,
                 actualCostUSD,
+                charge: input.charge,
                 params: input.params,
                 result: normalized.data,
             });
@@ -581,6 +603,9 @@ async function waitForProviderResult(input: {
         }
 
         if (normalized.status === "failed") {
+            await refundSkillUsage(input.newApiUserId, input.charge).catch((error) => {
+                console.error("[waitForProviderResult] refund failed:", error);
+            });
             await updateRun(input.runId, {
                 status: "failed",
                 error: normalized.error,
@@ -719,8 +744,8 @@ export async function runSkill(input: RunSkillInput): Promise<RunSkillResult> {
     const estimatedCostUSD = provider.costPerChar != null && typeof params.text === "string"
         ? Math.max(0.0001, params.text.length * provider.costPerChar)
         : provider.pricePerCall;
-    const balanceError = await deductUserQuota(input.newApiUserId, estimatedCostUSD);
-    if (balanceError) {
+    const charge = await deductSkillUsage(input.newApiUserId, skillId, estimatedCostUSD);
+    if (charge.error) {
         const runId = await createRun({
             newApiUserId: input.newApiUserId,
             sessionId,
@@ -757,6 +782,9 @@ export async function runSkill(input: RunSkillInput): Promise<RunSkillResult> {
         providerTaskId,
         providerRaw: executed.data,
         costUSD: estimatedCostUSD,
+        promoRedemptionId: charge.promoRedemptionId,
+        promoCoveredUSD: charge.promoCoveredUSD,
+        balanceChargedUSD: charge.balanceChargedUSD,
         nextPollAt: lifecycleMode === "async_poll" ? new Date(Date.now() + 2000) : null,
         expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
     });
@@ -769,6 +797,8 @@ export async function runSkill(input: RunSkillInput): Promise<RunSkillResult> {
         latencyMs: executed.latencyMs,
         success: executed.success,
         costUSD: executed.success ? estimatedCostUSD : 0,
+        promoCoveredUSD: executed.success ? charge.promoCoveredUSD : 0,
+        balanceChargedUSD: executed.success ? charge.balanceChargedUSD : 0,
         paramsHash,
         errorType: executed.errorType,
     });
@@ -778,7 +808,7 @@ export async function runSkill(input: RunSkillInput): Promise<RunSkillResult> {
         .catch((error) => console.error("[runSkill] updateProviderStats:", error));
 
     if (!executed.success) {
-        void refundQuota(input.newApiUserId, estimatedCostUSD).catch((error) => console.error("[runSkill] refund failed:", error));
+        void refundSkillUsage(input.newApiUserId, charge).catch((error) => console.error("[runSkill] refund failed:", error));
         const error = {
             code: executed.errorType.toUpperCase(),
             message: "Provider submit failed.",
@@ -831,6 +861,7 @@ export async function runSkill(input: RunSkillInput): Promise<RunSkillResult> {
                 maxWaitSeconds,
                 internalBaseUrl: input.internalBaseUrl,
                 skillCallId,
+                charge,
             })),
         };
     }
@@ -845,6 +876,7 @@ export async function runSkill(input: RunSkillInput): Promise<RunSkillResult> {
         provider,
         estimatedCostUSD,
         actualCostUSD,
+        charge,
         params,
         result: executed.data,
     });
@@ -893,7 +925,7 @@ export async function getSkillRun(input: {
     const rows = await prisma.$queryRawUnsafe<SkillRunRow[]>(
         `SELECT id, "newApiUserId", "sessionId", "skillId", "providerId", "skillCallId",
                 status, "lifecycleMode", "providerTaskId", result, error,
-                "artifactJson", "costUSD"
+                "artifactJson", "costUSD", "promoRedemptionId", "promoCoveredUSD", "balanceChargedUSD"
          FROM "SkillRun"
          WHERE id = $1 AND "newApiUserId" = $2
          LIMIT 1`,
@@ -972,10 +1004,16 @@ export async function getSkillRun(input: {
         skillId: run.skillId,
         provider,
         providerTaskId: run.providerTaskId,
+        skillCallId: run.skillCallId,
         params: {},
         estimatedCostUSD: run.costUSD ?? 0,
         maxWaitSeconds: Math.min(input.maxWaitSeconds ?? DEFAULT_WAIT_SECONDS, MAX_WAIT_SECONDS),
         internalBaseUrl: input.internalBaseUrl,
+        charge: {
+            promoRedemptionId: run.promoRedemptionId,
+            promoCoveredUSD: Number(run.promoCoveredUSD ?? 0),
+            balanceChargedUSD: Number(run.balanceChargedUSD ?? 0),
+        },
     });
 }
 
@@ -988,7 +1026,7 @@ export async function pollSkillRunById(input: {
     const rows = await prisma.$queryRawUnsafe<SkillRunRow[]>(
         `SELECT id, "newApiUserId", "sessionId", "skillId", "providerId", "skillCallId",
                 status, "lifecycleMode", "providerTaskId", result, error,
-                "artifactJson", "costUSD"
+                "artifactJson", "costUSD", "promoRedemptionId", "promoCoveredUSD", "balanceChargedUSD"
          FROM "SkillRun"
          WHERE id = $1
          LIMIT 1`,
@@ -1039,10 +1077,16 @@ export async function pollSkillRunById(input: {
         skillId: run.skillId,
         provider: providerFromRow(row),
         providerTaskId: run.providerTaskId,
+        skillCallId: run.skillCallId,
         params: {},
         estimatedCostUSD: run.costUSD ?? 0,
         maxWaitSeconds: Math.min(input.maxWaitSeconds ?? 5, MAX_WAIT_SECONDS),
         internalBaseUrl: input.internalBaseUrl,
+        charge: {
+            promoRedemptionId: run.promoRedemptionId,
+            promoCoveredUSD: Number(run.promoCoveredUSD ?? 0),
+            balanceChargedUSD: Number(run.balanceChargedUSD ?? 0),
+        },
     });
 }
 

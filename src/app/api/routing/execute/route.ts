@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createHash } from "crypto";
-import { validateApiKeyOrSession, deductUserQuota, logServiceUsage } from "@/lib/serviceProxy";
+import { validateApiKeyOrSession, logServiceUsage } from "@/lib/serviceProxy";
 import {
     MAX_PROVIDER_ATTEMPTS,
     createSkillRevenue,
@@ -12,6 +12,7 @@ import {
 } from "@/lib/routing";
 import { prisma } from "@/lib/prisma";
 import { storeSkillResultArtifacts } from "@/lib/artifacts";
+import { deductSkillUsage, refundSkillUsage } from "@/lib/promoGrants";
 
 export const dynamic = "force-dynamic";
 // Note: uses Node.js crypto — this route must NOT be configured as Edge runtime
@@ -25,8 +26,6 @@ function computeParamsHash(skillId: number, params: Record<string, unknown>): st
     });
     return createHash("sha256").update(`${skillId}:${canonical}`).digest("hex");
 }
-
-const QUOTA_PER_DOLLAR = 500_000;
 
 export async function POST(req: NextRequest) {
     const auth = await validateApiKeyOrSession(req);
@@ -125,9 +124,9 @@ export async function POST(req: NextRequest) {
                     ? Math.max(0.0001, textLen * provider.costPerChar)
                     : provider.pricePerCall;
 
-            // Deduct balance before calling provider — returns 402 if insufficient
-            const balanceError = await deductUserQuota(auth.newApiUserId, actualCost);
-            if (balanceError) return balanceError;
+            // Charge promo grants first, then the user's regular balance.
+            const charge = await deductSkillUsage(auth.newApiUserId, skillId, actualCost);
+            if (charge.error) return charge.error;
 
             const { success, data, latencyMs, errorType } = await executeSkillViaProvider(
                 provider,
@@ -139,11 +138,8 @@ export async function POST(req: NextRequest) {
 
             // Refund if provider failed
             if (!success) {
-                void prisma.$executeRawUnsafe(
-                    `UPDATE users SET quota = quota + $1, used_quota = used_quota - $1 WHERE id = $2`,
-                    Math.ceil(actualCost * QUOTA_PER_DOLLAR),
-                    auth.newApiUserId,
-                ).catch((e) => console.error("[routing/execute] refund failed:", e));
+                void refundSkillUsage(auth.newApiUserId, charge)
+                    .catch((e) => console.error("[routing/execute] refund failed:", e));
             }
 
             let artifactResult: Awaited<ReturnType<typeof storeSkillResultArtifacts>> | null = null;
@@ -166,11 +162,8 @@ export async function POST(req: NextRequest) {
                 } catch (storageError) {
                     recordedSuccess = false;
                     recordedErrorType = "storage_error";
-                    void prisma.$executeRawUnsafe(
-                        `UPDATE users SET quota = quota + $1, used_quota = used_quota - $1 WHERE id = $2`,
-                        Math.ceil(actualCost * QUOTA_PER_DOLLAR),
-                        auth.newApiUserId,
-                    ).catch((e) => console.error("[routing/execute] storage refund failed:", e));
+                    void refundSkillUsage(auth.newApiUserId, charge)
+                        .catch((e) => console.error("[routing/execute] storage refund failed:", e));
                     lastFailure = {
                         provider: provider.name,
                         latencyMs,
@@ -190,6 +183,8 @@ export async function POST(req: NextRequest) {
                 latencyMs,
                 success: recordedSuccess,
                 costUSD: recordedSuccess ? actualCost : 0,
+                promoCoveredUSD: recordedSuccess ? charge.promoCoveredUSD : 0,
+                balanceChargedUSD: recordedSuccess ? charge.balanceChargedUSD : 0,
                 paramsHash,
                 errorType: recordedErrorType,
             });
@@ -217,6 +212,8 @@ export async function POST(req: NextRequest) {
                     provider: provider.name,
                     latencyMs,
                     costUSD: actualCost,
+                    promoCoveredUSD: charge.promoCoveredUSD,
+                    balanceChargedUSD: charge.balanceChargedUSD,
                     errorType: recordedErrorType,
                     attempts: attempt,
                     artifact: artifactResult.artifact,

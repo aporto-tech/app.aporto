@@ -12,6 +12,10 @@ const ADMIN_EMAILS = new Set(["pevzner@aporto.tech", "it@aporto.tech"]);
 interface Redemption {
     userId: string;
     redeemedAt: string;
+    skillIds: number[];
+    creditLimitUSD: number | null;
+    creditUsedUSD: number;
+    expiresAt: string | null;
     email: string | null;
     name: string | null;
 }
@@ -19,6 +23,9 @@ interface PromoCode {
     id: string;
     code: string;
     creditUSD: number;
+    skillIds: number[];
+    grantLimitUSD: number | null;
+    grantExpiresAt: string | null;
     maxUses: number;
     usedCount: number;
     expiresAt: string | null;
@@ -171,9 +178,12 @@ function PromoTab() {
     const [loading, setLoading] = useState(true);
     const [showModal, setShowModal] = useState(false);
     const [formCode, setFormCode] = useState("");
-    const [formCredit, setFormCredit] = useState("60");
+    const [formCredit, setFormCredit] = useState("0");
+    const [formGrantLimit, setFormGrantLimit] = useState("10");
+    const [formSkillIds, setFormSkillIds] = useState("");
     const [formMaxUses, setFormMaxUses] = useState("1");
     const [formExpires, setFormExpires] = useState("");
+    const [formGrantExpires, setFormGrantExpires] = useState("");
     const [formError, setFormError] = useState("");
     const [submitting, setSubmitting] = useState(false);
 
@@ -196,19 +206,31 @@ function PromoTab() {
     async function handleGenerate(e: React.FormEvent) {
         e.preventDefault();
         setFormError("");
-        const credit = parseFloat(formCredit);
-        if (!credit || credit <= 0) { setFormError("Credit must be greater than 0."); return; }
+        const credit = formCredit ? parseFloat(formCredit) : 0;
+        const grantLimit = formGrantLimit ? parseFloat(formGrantLimit) : 0;
+        if (credit < 0) { setFormError("Balance credit cannot be negative."); return; }
+        if (grantLimit < 0) { setFormError("Skill grant limit cannot be negative."); return; }
+        if (credit <= 0 && grantLimit <= 0) { setFormError("Set balance credit or skill grant limit."); return; }
+        const skillIds = formSkillIds.split(",").map(v => parseInt(v.trim(), 10)).filter(v => Number.isInteger(v) && v > 0);
         setSubmitting(true);
         const res = await fetch("/api/admin/promo", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ code: formCode.trim() || undefined, creditUSD: credit, maxUses: parseInt(formMaxUses) || 1, expiresAt: formExpires || undefined }),
+            body: JSON.stringify({
+                code: formCode.trim() || undefined,
+                creditUSD: credit,
+                grantLimitUSD: grantLimit || undefined,
+                skillIds,
+                maxUses: parseInt(formMaxUses) || 1,
+                expiresAt: formExpires || undefined,
+                grantExpiresAt: formGrantExpires || undefined,
+            }),
         });
         const data = await res.json();
         setSubmitting(false);
         if (!res.ok) { setFormError(data.error ?? "Failed to create code."); return; }
         setShowModal(false);
-        setFormCode(""); setFormCredit("60"); setFormMaxUses("1"); setFormExpires("");
+        setFormCode(""); setFormCredit("0"); setFormGrantLimit("10"); setFormSkillIds(""); setFormMaxUses("1"); setFormExpires(""); setFormGrantExpires("");
         fetchCodes();
     }
 
@@ -216,6 +238,10 @@ function PromoTab() {
         .flatMap(c => c.redemptions.map(r => ({ ...r, code: c.code, creditUSD: c.creditUSD })))
         .sort((a, b) => new Date(b.redeemedAt).getTime() - new Date(a.redeemedAt).getTime())
         .slice(0, 20);
+
+    const formatSkillIds = (skillIds: number[]) => skillIds.length === 0 ? "All skills" : skillIds.join(", ");
+    const formatGrant = (code: PromoCode) => code.grantLimitUSD ? `$${code.grantLimitUSD.toFixed(2)}` : "—";
+    const formatRedemptionGrant = (r: Redemption) => r.creditLimitUSD ? `$${r.creditUsedUSD.toFixed(2)} / $${r.creditLimitUSD.toFixed(2)}` : "—";
 
     if (loading) return <div className={styles.tabLoading}>Loading...</div>;
 
@@ -230,16 +256,19 @@ function PromoTab() {
                 <p className={styles.sectionTitle}>Active Codes</p>
                 <div className={styles.tableWrapper}>
                     <table className={styles.table}>
-                        <thead><tr><th>Code</th><th>Credit</th><th>Uses</th><th>Expires</th><th>Created</th><th></th></tr></thead>
+                        <thead><tr><th>Code</th><th>Balance</th><th>Skill Grant</th><th>Skills</th><th>Uses</th><th>Redeem Expires</th><th>Grant Expires</th><th>Created</th><th></th></tr></thead>
                         <tbody>
                             {codes.length === 0
-                                ? <tr className={styles.emptyRow}><td colSpan={6}>No promo codes yet.</td></tr>
+                                ? <tr className={styles.emptyRow}><td colSpan={9}>No promo codes yet.</td></tr>
                                 : codes.map(c => (
                                     <tr key={c.id}>
                                         <td><span className={styles.codeBadge}>{c.code}</span></td>
                                         <td>${c.creditUSD.toFixed(2)}</td>
+                                        <td>{formatGrant(c)}</td>
+                                        <td>{formatSkillIds(c.skillIds)}</td>
                                         <td>{c.usedCount}/{c.maxUses}</td>
                                         <td>{c.expiresAt ? new Date(c.expiresAt).toLocaleDateString() : "—"}</td>
+                                        <td>{c.grantExpiresAt ? new Date(c.grantExpiresAt).toLocaleDateString() : "—"}</td>
                                         <td>{new Date(c.createdAt).toLocaleDateString()}</td>
                                         <td><button className={styles.deleteBtn} onClick={() => handleDelete(c.id, c.code)}>Delete</button></td>
                                     </tr>
@@ -254,15 +283,18 @@ function PromoTab() {
                 <p className={styles.sectionTitle}>Recent Redemptions</p>
                 <div className={styles.tableWrapper}>
                     <table className={styles.table}>
-                        <thead><tr><th>Email</th><th>Code</th><th>Credit</th><th>Redeemed At</th></tr></thead>
+                        <thead><tr><th>Email</th><th>Code</th><th>Balance</th><th>Grant Used</th><th>Skills</th><th>Grant Expires</th><th>Redeemed At</th></tr></thead>
                         <tbody>
                             {allRedemptions.length === 0
-                                ? <tr className={styles.emptyRow}><td colSpan={4}>No redemptions yet.</td></tr>
+                                ? <tr className={styles.emptyRow}><td colSpan={7}>No redemptions yet.</td></tr>
                                 : allRedemptions.map((r, i) => (
                                     <tr key={i}>
                                         <td>{r.email ?? r.userId}</td>
                                         <td><span className={styles.codeBadge}>{r.code}</span></td>
                                         <td>${r.creditUSD.toFixed(2)}</td>
+                                        <td>{formatRedemptionGrant(r)}</td>
+                                        <td>{formatSkillIds(r.skillIds)}</td>
+                                        <td>{r.expiresAt ? new Date(r.expiresAt).toLocaleDateString() : "—"}</td>
                                         <td>{new Date(r.redeemedAt).toLocaleString()}</td>
                                     </tr>
                                 ))
@@ -282,16 +314,28 @@ function PromoTab() {
                                 <input className={styles.formInput} type="text" placeholder="e.g. BETA-A7K3M2" value={formCode} onChange={e => setFormCode(e.target.value.toUpperCase())} style={{ textTransform: "uppercase" }} />
                             </div>
                             <div className={styles.formGroup}>
-                                <label>Credit (USD)</label>
-                                <input className={styles.formInput} type="number" min="0.01" step="0.01" placeholder="60" value={formCredit} onChange={e => setFormCredit(e.target.value)} required />
+                                <label>Balance Credit (USD) <span className={styles.hint}>(optional)</span></label>
+                                <input className={styles.formInput} type="number" min="0" step="0.01" placeholder="0" value={formCredit} onChange={e => setFormCredit(e.target.value)} />
+                            </div>
+                            <div className={styles.formGroup}>
+                                <label>Free Skill Usage Limit (USD) <span className={styles.hint}>(per redeemed user)</span></label>
+                                <input className={styles.formInput} type="number" min="0" step="0.01" placeholder="10" value={formGrantLimit} onChange={e => setFormGrantLimit(e.target.value)} />
+                            </div>
+                            <div className={styles.formGroup}>
+                                <label>Skill IDs <span className={styles.hint}>(comma-separated, blank = all skills)</span></label>
+                                <input className={styles.formInput} type="text" placeholder="5, 96" value={formSkillIds} onChange={e => setFormSkillIds(e.target.value)} />
                             </div>
                             <div className={styles.formGroup}>
                                 <label>Max Uses</label>
                                 <input className={styles.formInput} type="number" min="1" placeholder="1" value={formMaxUses} onChange={e => setFormMaxUses(e.target.value)} />
                             </div>
                             <div className={styles.formGroup}>
-                                <label>Expires <span className={styles.hint}>(optional)</span></label>
+                                <label>Redeem Expires <span className={styles.hint}>(optional)</span></label>
                                 <input className={styles.formInput} type="date" value={formExpires} onChange={e => setFormExpires(e.target.value)} style={{ colorScheme: "dark" }} />
+                            </div>
+                            <div className={styles.formGroup}>
+                                <label>Grant Expires <span className={styles.hint}>(optional; defaults to redeem expiry)</span></label>
+                                <input className={styles.formInput} type="date" value={formGrantExpires} onChange={e => setFormGrantExpires(e.target.value)} style={{ colorScheme: "dark" }} />
                             </div>
                             {formError && <p className={styles.error}>{formError}</p>}
                             <div className={styles.modalFooter}>

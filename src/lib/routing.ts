@@ -663,12 +663,14 @@ export async function recordSkillCall(data: {
     latencyMs?: number;
     success?: boolean;
     costUSD?: number;
+    promoCoveredUSD?: number;
+    balanceChargedUSD?: number;
     paramsHash?: string;
     errorType?: string;
 }): Promise<number> {
     const row = await prisma.$queryRawUnsafe<{ id: number }[]>(
-        `INSERT INTO "SkillCall" ("sessionId", "newApiUserId", "skillId", "providerId", "isRetry", "retryAttempt", "latencyMs", "success", "costUSD", "paramsHash", "errorType", "createdAt")
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW())
+        `INSERT INTO "SkillCall" ("sessionId", "newApiUserId", "skillId", "providerId", "isRetry", "retryAttempt", "latencyMs", "success", "costUSD", "promoCoveredUSD", "balanceChargedUSD", "paramsHash", "errorType", "createdAt")
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, NOW())
          RETURNING id`,
         data.sessionId,
         data.newApiUserId,
@@ -679,6 +681,8 @@ export async function recordSkillCall(data: {
         data.latencyMs ?? null,
         data.success ?? null,
         data.costUSD ?? null,
+        data.promoCoveredUSD ?? 0,
+        data.balanceChargedUSD ?? null,
         data.paramsHash ?? null,
         data.errorType ?? null,
     );
