@@ -197,7 +197,7 @@ export default function ActivityPage() {
                             </select>
                         </div>
                         <div className={styles.filterGroup}>
-                            <span className={styles.filterLabel}>MODEL</span>
+                            <span className={styles.filterLabel}>MODEL / SKILL</span>
                             <select 
                                 className={styles.filterSelect}
                                 value={filterModel}
@@ -286,7 +286,7 @@ export default function ActivityPage() {
                                             <th>Type</th>
                                             <th>Amount</th>
                                             <th>Tokens (In / Out)</th>
-                                            <th>Model / Details</th>
+                                            <th>Model / Skill / Details</th>
                                         </tr>
                                     </thead>
                                     <tbody>

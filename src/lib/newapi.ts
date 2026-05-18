@@ -278,13 +278,19 @@ export async function newApiGetLogs(opts: {
 
         // ── ServiceUsage (non-LLM: search, TTS, SMS, image) ──────────────────
         const svConditions: string[] = [`"newApiUserId" = $1`];
+        const skillConditions: string[] = [`sc."newApiUserId" = $1`];
+        const skillRunConditions: string[] = [`sr."newApiUserId" = $1`, `sr."skillCallId" IS NULL`];
         // Exclude service_usages when filter only matches logs
         let excludeSv = false;
+        let excludeSkillCalls = false;
+        let excludeSkillRuns = false;
 
         if (opts.model_name && opts.model_name !== "All Models") {
             p++;
             logsConditions.push(`model_name = $${p}`);
             svConditions.push(`service = $${p}`);
+            skillConditions.push(`s.name = $${p}`);
+            skillRunConditions.push(`s.name = $${p}`);
             params.push(opts.model_name);
         }
         if (opts.token_name && opts.token_name !== "All Agents") {
@@ -292,29 +298,41 @@ export async function newApiGetLogs(opts: {
             logsConditions.push(`token_name = $${p}`);
             params.push(opts.token_name);
             excludeSv = true; // ServiceUsage has no token info
+            excludeSkillCalls = true; // SkillCall has no originating token name
+            excludeSkillRuns = true;
         }
         if (opts.log_type && opts.log_type !== "All Types") {
             if (opts.log_type === "Consume") {
                 logsConditions.push(`type = 2 AND (content = '' OR content IS NULL)`);
                 // service_usages are always "Consume" — keep them
+                skillConditions.push(`sc.success = true`);
+                skillRunConditions.push(`sr.status = 'succeeded'`);
             } else if (opts.log_type === "Error") {
                 logsConditions.push(`type = 2 AND content != '' AND content IS NOT NULL`);
                 excludeSv = true; // service_usages are never errors
+                skillConditions.push(`sc.success = false`);
+                skillRunConditions.push(`sr.status = 'failed'`);
             } else if (opts.log_type === "Top-up") {
                 logsConditions.push(`type = 1`);
                 excludeSv = true; // service_usages are never top-ups
+                excludeSkillCalls = true;
+                excludeSkillRuns = true;
             }
         }
         if (opts.start_date) {
             p++;
             logsConditions.push(`created_at >= $${p}`);
             svConditions.push(`EXTRACT(EPOCH FROM "createdAt") >= $${p}`);
+            skillConditions.push(`EXTRACT(EPOCH FROM sc."createdAt") >= $${p}`);
+            skillRunConditions.push(`EXTRACT(EPOCH FROM sr."createdAt") >= $${p}`);
             params.push(opts.start_date);
         }
         if (opts.end_date) {
             p++;
             logsConditions.push(`created_at <= $${p}`);
             svConditions.push(`EXTRACT(EPOCH FROM "createdAt") <= $${p}`);
+            skillConditions.push(`EXTRACT(EPOCH FROM sc."createdAt") <= $${p}`);
+            skillRunConditions.push(`EXTRACT(EPOCH FROM sr."createdAt") <= $${p}`);
             params.push(opts.end_date);
         }
 
@@ -344,11 +362,57 @@ export async function newApiGetLogs(opts: {
                 0                                          AS prompt_tokens,
                 0                                          AS completion_tokens
             FROM "ServiceUsage"
-            WHERE ${svConditions.join(" AND ")}`;
+            WHERE ${svConditions.join(" AND ")}
+              AND service != 'skill'`;
 
-        const combined = excludeSv
-            ? logsSubquery
-            : `${logsSubquery} UNION ALL ${svSubquery}`;
+        const skillCallSubquery = `
+            SELECT
+                ('skillcall-' || sc.id::text)               AS id,
+                EXTRACT(EPOCH FROM sc."createdAt")::bigint  AS created_at,
+                2                                          AS type,
+                CASE
+                    WHEN sc.success = false THEN CONCAT_WS(': ',
+                        NULLIF(sc."errorType", ''),
+                        NULLIF(COALESCE(sr.error->>'message', sr.error->>'code', sr.error::text), '')
+                    )
+                    ELSE ''
+                END                                        AS content,
+                s.name                                     AS model_name,
+                ''                                         AS token_name,
+                (COALESCE(sc."costUSD", 0) * 500000)::bigint AS quota,
+                0                                          AS prompt_tokens,
+                0                                          AS completion_tokens
+            FROM "SkillCall" sc
+            JOIN "Skill" s ON s.id = sc."skillId"
+            LEFT JOIN "SkillRun" sr ON sr."skillCallId" = sc.id
+            WHERE ${skillConditions.join(" AND ")}`;
+
+        const skillRunSubquery = `
+            SELECT
+                ('skillrun-' || sr.id)                      AS id,
+                EXTRACT(EPOCH FROM sr."createdAt")::bigint  AS created_at,
+                2                                          AS type,
+                CASE
+                    WHEN sr.status = 'failed' THEN CONCAT_WS(': ',
+                        NULLIF(COALESCE(sr.error->>'code', 'failed'), ''),
+                        NULLIF(COALESCE(sr.error->>'message', sr.error::text), '')
+                    )
+                    ELSE ''
+                END                                        AS content,
+                COALESCE(s.name, 'Skill')                  AS model_name,
+                ''                                         AS token_name,
+                (COALESCE(sr."costUSD", 0) * 500000)::bigint AS quota,
+                0                                          AS prompt_tokens,
+                0                                          AS completion_tokens
+            FROM "SkillRun" sr
+            LEFT JOIN "Skill" s ON s.id = sr."skillId"
+            WHERE ${skillRunConditions.join(" AND ")}`;
+
+        const combinedParts = [logsSubquery];
+        if (!excludeSv) combinedParts.push(svSubquery);
+        if (!excludeSkillCalls) combinedParts.push(skillCallSubquery);
+        if (!excludeSkillRuns) combinedParts.push(skillRunSubquery);
+        const combined = combinedParts.join(" UNION ALL ");
 
         const totalResult = await prisma.$queryRawUnsafe<any[]>(
             `SELECT COUNT(*) AS count,
@@ -396,7 +460,24 @@ export async function newApiGetLogs(opts: {
 export async function newApiGetFilterOptions(userId: number) {
     try {
         const models = await prisma.$queryRawUnsafe<any[]>(
-            `SELECT DISTINCT model_name FROM logs WHERE user_id = $1 AND model_name != '' AND model_name IS NOT NULL`,
+            `SELECT DISTINCT model_name
+             FROM (
+               SELECT model_name FROM logs WHERE user_id = $1 AND model_name != '' AND model_name IS NOT NULL
+               UNION
+               SELECT service AS model_name FROM "ServiceUsage" WHERE "newApiUserId" = $1 AND service != 'skill'
+               UNION
+               SELECT s.name AS model_name
+               FROM "SkillCall" sc
+               JOIN "Skill" s ON s.id = sc."skillId"
+               WHERE sc."newApiUserId" = $1
+               UNION
+               SELECT s.name AS model_name
+               FROM "SkillRun" sr
+               JOIN "Skill" s ON s.id = sr."skillId"
+               WHERE sr."newApiUserId" = $1 AND sr."skillCallId" IS NULL
+             ) _models
+             WHERE model_name != '' AND model_name IS NOT NULL
+             ORDER BY model_name`,
             userId
         );
         const tokens = await prisma.$queryRawUnsafe<any[]>(

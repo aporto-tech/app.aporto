@@ -42,7 +42,7 @@ export async function GET(req: NextRequest) {
             end_date,
         });
 
-        const header = ["Time", "Agent (API Key)", "Type", "Amount (USD)", "Tokens In", "Tokens Out", "Model", "Details"];
+        const header = ["Time", "Agent (API Key)", "Type", "Amount (USD)", "Tokens In", "Tokens Out", "Model / Skill", "Details"];
         const rows = logs.map(log => {
             const time = new Date(log.created_at * 1000).toISOString();
             const isError = log.type === 2 && log.content !== "";
