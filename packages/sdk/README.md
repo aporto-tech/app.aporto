@@ -90,7 +90,7 @@ aporto help
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `APORTO_API_KEY` | Yes | API key from [app.aporto.tech/settings](https://app.aporto.tech/settings) |
+| `APORTO_API_KEY` | For `run` and paid commands. Optional for `discover`. | API key from [app.aporto.tech/settings](https://app.aporto.tech/settings) |
 | `APORTO_BASE_URL` | No | Override base URL (default: `https://app.aporto.tech`) |
 
 ---
@@ -154,7 +154,8 @@ const client = new OpenAI({
 Add Aporto to Claude Code, Cursor, Windsurf, or Codex:
 
 ```bash
-claude mcp add aporto -- --transport http --url https://app.aporto.tech/api/mcp --header "Authorization: Bearer $APORTO_API_KEY"
+claude mcp add --transport http aporto https://app.aporto.tech/api/mcp \
+  --header "Authorization: Bearer $APORTO_API_KEY"
 ```
 
 ---

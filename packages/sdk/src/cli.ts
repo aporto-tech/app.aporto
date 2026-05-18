@@ -199,30 +199,46 @@ async function discoverSkills(params: {
     category?: string;
     capability?: string;
     page: number;
-}): Promise<{ skills: Array<{ id?: number; skillId?: number; name?: string; category?: string | null; similarity?: number; priceUSD?: number | null }>; page: number }> {
+}): Promise<{ skills: Array<{ id?: number; skillId?: number; name?: string; category?: string | null; similarity?: number; priceUSD?: number | null }>; page: number; authWarning?: string }> {
     const headers: Record<string, string> = {
         "Content-Type": "application/json",
         "X-Agent-Name": "aporto-cli",
     };
     if (params.apiKey) headers.Authorization = `Bearer ${params.apiKey}`;
 
-    const res = await fetch(`${params.appBaseUrl.replace(/\/$/, "")}/api/routing/skills`, {
+    const url = `${params.appBaseUrl.replace(/\/$/, "")}/api/routing/skills`;
+    const body = JSON.stringify({
+        query: params.query,
+        category: params.category,
+        capability: params.capability,
+        page: params.page,
+    });
+
+    let res = await fetch(url, {
         method: "POST",
         headers,
-        body: JSON.stringify({
-            query: params.query,
-            category: params.category,
-            capability: params.capability,
-            page: params.page,
-        }),
+        body,
     });
+
+    let authWarning: string | undefined;
+    if (res.status === 401 && params.apiKey) {
+        authWarning = "APORTO_API_KEY was rejected by app.aporto.tech. Discovery was retried without auth; run commands will still fail until you use a valid key.";
+        const publicHeaders = { ...headers };
+        delete publicHeaders.Authorization;
+        res = await fetch(url, {
+            method: "POST",
+            headers: publicHeaders,
+            body,
+        });
+    }
 
     if (!res.ok) {
         const text = await res.text().catch(() => "");
         throw new AportoConfigError(`Discovery failed: ${res.status} ${res.statusText}${text ? ` - ${text}` : ""}`);
     }
 
-    return res.json() as Promise<{ skills: Array<{ id?: number; skillId?: number; name?: string; category?: string | null; similarity?: number; priceUSD?: number | null }>; page: number }>;
+    const data = await res.json() as { skills: Array<{ id?: number; skillId?: number; name?: string; category?: string | null; similarity?: number; priceUSD?: number | null }>; page: number };
+    return { ...data, authWarning };
 }
 
 async function main() {
@@ -251,7 +267,10 @@ async function main() {
             page: flagNumber(flags, "page") ?? 0,
         });
         if (asJson) printJson({ success: true, query, ...result });
-        else printSkills(result);
+        else {
+            if (result.authWarning) process.stderr.write(`warning: ${result.authWarning}\n`);
+            printSkills(result);
+        }
         return;
     }
 
