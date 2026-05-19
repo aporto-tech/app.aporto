@@ -3,6 +3,7 @@
 import React from "react";
 import Sidebar from "./Sidebar";
 import Header from "./Header";
+import HelloBar from "./HelloBar";
 import styles from "./layout.module.css";
 
 interface DashboardLayoutProps {
@@ -14,6 +15,7 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) => {
         <div className={styles.layout}>
             <Sidebar />
             <main className={styles.mainContent}>
+                <HelloBar />
                 <Header />
                 <div className={styles.contentBody}>{children}</div>
             </main>

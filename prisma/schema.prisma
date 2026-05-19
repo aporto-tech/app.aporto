@@ -129,6 +129,20 @@ model PromoRedemption {
   @@index([userId, expiresAt])
 }
 
+model HelloBarAnnouncement {
+  id              String   @id @default(cuid())
+  text            String
+  href            String?
+  backgroundColor String  @default("#00dc82")
+  textColor       String  @default("#000000")
+  isActive        Boolean @default(false)
+  sortOrder       Int     @default(0)
+  createdAt       DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt       DateTime @updatedAt @db.Timestamptz(6)
+
+  @@index([isActive, sortOrder])
+}
+
 model ServiceUsage {
   id           String   @id @default(cuid())
   newApiUserId Int

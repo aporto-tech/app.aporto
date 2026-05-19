@@ -32,6 +32,17 @@ interface PromoCode {
     createdAt: string;
     redemptions: Redemption[];
 }
+interface HelloBarAnnouncement {
+    id: string;
+    text: string;
+    href: string | null;
+    backgroundColor: string;
+    textColor: string;
+    isActive: boolean;
+    sortOrder: number;
+    createdAt: string;
+    updatedAt: string;
+}
 interface Skill {
     id: number;
     name: string;
@@ -119,7 +130,7 @@ interface StatsData {
     };
 }
 
-type Tab = "promo" | "skills" | "stats" | "runs" | "pending" | "publishers";
+type Tab = "promo" | "hello" | "skills" | "stats" | "runs" | "pending" | "publishers";
 
 // ── Main Component ────────────────────────────────────────────────────────────
 
@@ -150,18 +161,19 @@ export default function AdminPage() {
 
             {/* Tab bar */}
             <div className={styles.tabBar}>
-                {(["promo", "skills", "stats", "runs", "pending", "publishers"] as Tab[]).map((t) => (
+                {(["promo", "hello", "skills", "stats", "runs", "pending", "publishers"] as Tab[]).map((t) => (
                     <button
                         key={t}
                         className={`${styles.tabBtn} ${activeTab === t ? styles.tabBtnActive : ""}`}
                         onClick={() => setActiveTab(t)}
                     >
-                        {t === "promo" ? "Promo Codes" : t === "skills" ? "Skills & Providers" : t === "stats" ? "Stats" : t === "runs" ? "Skill Runs" : t === "pending" ? "Pending Review" : "Publishers"}
+                        {t === "promo" ? "Promo Codes" : t === "hello" ? "Hello Bar" : t === "skills" ? "Skills & Providers" : t === "stats" ? "Stats" : t === "runs" ? "Skill Runs" : t === "pending" ? "Pending Review" : "Publishers"}
                     </button>
                 ))}
             </div>
 
             {activeTab === "promo" && <PromoTab />}
+            {activeTab === "hello" && <HelloBarTab />}
             {activeTab === "skills" && <SkillsTab />}
             {activeTab === "stats" && <StatsTab />}
             {activeTab === "runs" && <SkillRunsTab />}
@@ -347,6 +359,190 @@ function PromoTab() {
                 </div>
             )}
         </>
+    );
+}
+
+// ── Hello Bar Tab ─────────────────────────────────────────────────────────────
+
+function HelloBarTab() {
+    const [items, setItems] = useState<HelloBarAnnouncement[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [submitting, setSubmitting] = useState(false);
+    const [error, setError] = useState("");
+    const [formText, setFormText] = useState("");
+    const [formHref, setFormHref] = useState("");
+    const [formBg, setFormBg] = useState("#00dc82");
+    const [formTextColor, setFormTextColor] = useState("#000000");
+    const [formSort, setFormSort] = useState("0");
+    const [formActive, setFormActive] = useState(true);
+
+    const load = useCallback(() => {
+        setLoading(true);
+        fetch("/api/admin/hello-bar", { cache: "no-store" })
+            .then(r => r.json())
+            .then(d => { if (d.success) setItems(d.announcements ?? []); })
+            .finally(() => setLoading(false));
+    }, []);
+
+    useEffect(() => { load(); }, [load]);
+
+    async function create(e: React.FormEvent) {
+        e.preventDefault();
+        setError("");
+        if (formText.trim().length < 3) {
+            setError("Text must be at least 3 characters.");
+            return;
+        }
+        setSubmitting(true);
+        const res = await fetch("/api/admin/hello-bar", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                text: formText,
+                href: formHref,
+                backgroundColor: formBg,
+                textColor: formTextColor,
+                sortOrder: Number(formSort) || 0,
+                isActive: formActive,
+            }),
+        });
+        const data = await res.json();
+        setSubmitting(false);
+        if (!res.ok) {
+            setError(data.error ?? "Failed to create announcement.");
+            return;
+        }
+        setFormText("");
+        setFormHref("");
+        setFormSort("0");
+        setFormActive(true);
+        load();
+    }
+
+    async function patch(id: string, data: Partial<HelloBarAnnouncement>) {
+        await fetch(`/api/admin/hello-bar/${id}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(data),
+        });
+        load();
+    }
+
+    async function remove(id: string) {
+        if (!confirm("Delete this hello bar announcement?")) return;
+        await fetch(`/api/admin/hello-bar/${id}`, { method: "DELETE" });
+        load();
+    }
+
+    if (loading) return <div className={styles.tabLoading}>Loading...</div>;
+
+    return (
+        <div>
+            <div className={styles.section}>
+                <p className={styles.sectionTitle}>Create Announcement</p>
+                <form onSubmit={create} style={{ display: "grid", gap: 12, background: "#0f172a", border: "1px solid #1e293b", borderRadius: 8, padding: 16 }}>
+                    <div className={styles.formGroup}>
+                        <label>Text</label>
+                        <input className={styles.formInput} value={formText} onChange={e => setFormText(e.target.value)} placeholder="New skill routing is live today" />
+                    </div>
+                    <div className={styles.formGroup}>
+                        <label>Link <span className={styles.hint}>(optional)</span></label>
+                        <input className={styles.formInput} value={formHref} onChange={e => setFormHref(e.target.value)} placeholder="https://docs.aporto.tech or /services" />
+                    </div>
+                    <div style={{ display: "grid", gridTemplateColumns: "160px 160px 120px 1fr", gap: 12, alignItems: "end" }}>
+                        <div className={styles.formGroup} style={{ marginBottom: 0 }}>
+                            <label>Background</label>
+                            <input className={styles.formInput} type="color" value={formBg} onChange={e => setFormBg(e.target.value)} />
+                        </div>
+                        <div className={styles.formGroup} style={{ marginBottom: 0 }}>
+                            <label>Text Color</label>
+                            <input className={styles.formInput} type="color" value={formTextColor} onChange={e => setFormTextColor(e.target.value)} />
+                        </div>
+                        <div className={styles.formGroup} style={{ marginBottom: 0 }}>
+                            <label>Order</label>
+                            <input className={styles.formInput} type="number" value={formSort} onChange={e => setFormSort(e.target.value)} />
+                        </div>
+                        <label style={{ color: "#cbd5e1", display: "flex", gap: 8, alignItems: "center", fontSize: 13, paddingBottom: 10 }}>
+                            <input type="checkbox" checked={formActive} onChange={e => setFormActive(e.target.checked)} />
+                            Active
+                        </label>
+                    </div>
+                    <div style={{ background: formBg, color: formTextColor, borderRadius: 6, padding: "9px 12px", textAlign: "center", fontWeight: 700, fontSize: 13 }}>
+                        {formText || "Preview announcement"}
+                        {formHref && <span style={{ marginLeft: 10, textDecoration: "underline" }}>Learn more</span>}
+                    </div>
+                    {error && <p className={styles.error}>{error}</p>}
+                    <div>
+                        <button className={styles.submitBtn} disabled={submitting}>{submitting ? "Creating..." : "Create Announcement"}</button>
+                    </div>
+                </form>
+            </div>
+
+            <div className={styles.section}>
+                <p className={styles.sectionTitle}>Announcements</p>
+                <div className={styles.tableWrapper}>
+                    <table className={styles.table}>
+                        <thead>
+                            <tr>
+                                <th>Preview</th>
+                                <th>Link</th>
+                                <th>Colors</th>
+                                <th>Order</th>
+                                <th>Status</th>
+                                <th>Updated</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {items.length === 0 ? (
+                                <tr className={styles.emptyRow}><td colSpan={7}>No announcements yet.</td></tr>
+                            ) : items.map(item => (
+                                <tr key={item.id}>
+                                    <td>
+                                        <div style={{ background: item.backgroundColor, color: item.textColor, borderRadius: 6, padding: "7px 10px", fontWeight: 700, fontSize: 12, textAlign: "center" }}>
+                                            {item.text}
+                                        </div>
+                                    </td>
+                                    <td style={{ color: item.href ? "#cbd5e1" : "#64748b", maxWidth: 240, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.href ?? "—"}</td>
+                                    <td>
+                                        <div style={{ display: "flex", gap: 8 }}>
+                                            <input title="Background color" type="color" value={item.backgroundColor} onChange={e => patch(item.id, { backgroundColor: e.target.value })} />
+                                            <input title="Text color" type="color" value={item.textColor} onChange={e => patch(item.id, { textColor: e.target.value })} />
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <input
+                                            className={styles.formInput}
+                                            type="number"
+                                            defaultValue={item.sortOrder}
+                                            onBlur={e => patch(item.id, { sortOrder: Number(e.target.value) || 0 })}
+                                            style={{ width: 76, padding: "5px 8px" }}
+                                        />
+                                    </td>
+                                    <td>
+                                        <button className={item.isActive ? styles.toggleOn : styles.toggleOff} onClick={() => patch(item.id, { isActive: !item.isActive })}>
+                                            {item.isActive ? "Active" : "Inactive"}
+                                        </button>
+                                    </td>
+                                    <td>{new Date(item.updatedAt).toLocaleString()}</td>
+                                    <td style={{ display: "flex", gap: 8 }}>
+                                        <button className={styles.actionBtn} onClick={() => {
+                                            const text = prompt("Announcement text", item.text);
+                                            if (text != null) patch(item.id, { text });
+                                        }}>Edit Text</button>
+                                        <button className={styles.actionBtn} onClick={() => {
+                                            const href = prompt("Link URL, blank for none", item.href ?? "");
+                                            if (href != null) patch(item.id, { href });
+                                        }}>Edit Link</button>
+                                        <button className={styles.deleteBtn} onClick={() => remove(item.id)}>Delete</button>
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
     );
 }
 
