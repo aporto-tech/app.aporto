@@ -1490,6 +1490,7 @@ interface SkillRunRow {
     updated_at: string;
     status: string;
     lifecycle_mode: string;
+    skill_id: number;
     skill_name: string;
     skill_category: string | null;
     provider_name: string | null;
@@ -1507,18 +1508,39 @@ interface SkillRunRow {
 
 function SkillRunsTab() {
     const [runs, setRuns] = useState<SkillRunRow[]>([]);
+    const [total, setTotal] = useState(0);
     const [loading, setLoading] = useState(true);
     const [working, setWorking] = useState(false);
+    const [expandedId, setExpandedId] = useState<string | null>(null);
+    const [statusFilter, setStatusFilter] = useState("all");
+    const [skillFilter, setSkillFilter] = useState("");
+    const [providerFilter, setProviderFilter] = useState("");
+    const [userFilter, setUserFilter] = useState("");
+    const [pageSize, setPageSize] = useState(25);
+    const [page, setPage] = useState(0);
 
     const load = useCallback(() => {
         setLoading(true);
-        fetch("/api/admin/skill-runs?status=failed&limit=30", { cache: "no-store" })
+        const params = new URLSearchParams({
+            status: statusFilter,
+            limit: String(pageSize),
+            offset: String(page * pageSize),
+        });
+        if (skillFilter.trim()) params.set("skill", skillFilter.trim());
+        if (providerFilter.trim()) params.set("provider", providerFilter.trim());
+        if (userFilter.trim()) params.set("userId", userFilter.trim());
+        fetch(`/api/admin/skill-runs?${params.toString()}`, { cache: "no-store" })
             .then((r) => r.json())
-            .then((d) => { if (d.success) setRuns(d.runs ?? []); })
+            .then((d) => {
+                if (d.success) {
+                    setRuns(d.runs ?? []);
+                    setTotal(Number(d.total ?? 0));
+                }
+            })
             .finally(() => setLoading(false));
-    }, []);
+    }, [statusFilter, skillFilter, providerFilter, userFilter, pageSize, page]);
 
-    useEffect(() => { load(); }, []);
+    useEffect(() => { load(); }, [load]);
 
     const resolve = async (id: string) => {
         setWorking(true);
@@ -1534,60 +1556,192 @@ function SkillRunsTab() {
         }
     };
 
-    if (loading) return <div style={{ color: "#64748b", padding: "24px 0" }}>Loading...</div>;
+    const formatJson = (value: unknown) => {
+        if (value == null) return "null";
+        if (typeof value === "string") return value;
+        try {
+            return JSON.stringify(value, null, 2);
+        } catch {
+            return String(value);
+        }
+    };
+
+    const statusColor = (status: string) => {
+        if (status === "succeeded") return "#10b981";
+        if (status === "failed") return "#ef4444";
+        if (status === "running" || status === "waiting") return "#f59e0b";
+        return "#94a3b8";
+    };
+
+    const statusBg = (status: string) => {
+        if (status === "succeeded") return "rgba(16, 185, 129, 0.12)";
+        if (status === "failed") return "rgba(239, 68, 68, 0.12)";
+        if (status === "running" || status === "waiting") return "rgba(245, 158, 11, 0.12)";
+        return "rgba(148, 163, 184, 0.12)";
+    };
+
+    const pageCount = Math.max(1, Math.ceil(total / pageSize));
+    const from = total === 0 ? 0 : page * pageSize + 1;
+    const to = Math.min(total, (page + 1) * pageSize);
 
     return (
         <div>
-            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 16 }}>
-                <h2 style={{ margin: 0, fontSize: 18 }}>Failed Skill Runs ({runs.length})</h2>
+            <div style={{ display: "flex", justifyContent: "space-between", gap: 16, alignItems: "center", marginBottom: 16 }}>
+                <h2 style={{ margin: 0, fontSize: 18 }}>Skill Runs ({total})</h2>
                 <button onClick={load} style={{ padding: "6px 12px", borderRadius: 6, border: "1px solid #334155", background: "transparent", color: "#cbd5e1", cursor: "pointer" }}>Refresh</button>
             </div>
-            {runs.length === 0 && <div style={{ color: "#64748b" }}>No failed runs in the current window.</div>}
-            {runs.map((run) => {
-                const error = run.error && typeof run.error === "object" ? run.error as { code?: string; message?: string; cause?: string; retryable?: boolean } : null;
-                return (
-                    <div key={run.id} style={{ border: "1px solid #1e293b", borderRadius: 8, padding: 16, marginBottom: 12, background: "#0f172a" }}>
-                        <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "flex-start" }}>
-                            <div style={{ minWidth: 0 }}>
-                                <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-                                    <div style={{ fontWeight: 600, fontSize: 15 }}>{run.skill_name}</div>
-                                    <span className={styles.codeBadge}>{run.status}</span>
-                                    <span style={{ color: "#94a3b8", fontSize: 12 }}>{run.skill_category ?? "unknown"}</span>
-                                    <span style={{ color: "#94a3b8", fontSize: 12 }}>{run.lifecycle_mode}</span>
-                                    {run.resolved_at && <span style={{ color: "#10b981", fontSize: 12 }}>resolved</span>}
-                                </div>
-                                <div style={{ color: "#64748b", fontSize: 12, marginTop: 6 }}>
-                                    provider: {run.provider_name ?? "n/a"} · task: {run.provider_task_id ?? "n/a"} · attempts: {run.attempts}
-                                </div>
-                                <div style={{ color: "#64748b", fontSize: 12, marginTop: 4 }}>
-                                    user {run.new_api_user_id} · session {run.session_id} · created {new Date(run.created_at).toLocaleString()}
-                                </div>
-                                {run.resolved_at && (
-                                    <div style={{ color: "#10b981", fontSize: 12, marginTop: 4 }}>
-                                        resolved by {run.resolved_by ?? "admin"} at {new Date(run.resolved_at).toLocaleString()}
-                                        {run.resolution_note ? ` · ${run.resolution_note}` : ""}
-                                    </div>
-                                )}
-                                {error && (
-                                    <div style={{ marginTop: 10, color: "#fecaca", fontSize: 13 }}>
-                                        <div><strong>{error.code ?? "ERROR"}</strong>: {error.message ?? "Unknown error"}</div>
-                                        {error.cause && <div style={{ marginTop: 4, color: "#fca5a5", whiteSpace: "pre-wrap" }}>{error.cause}</div>}
-                                    </div>
-                                )}
-                            </div>
-                            <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
-                                <button
-                                    onClick={() => resolve(run.id)}
-                                    disabled={working}
-                                    style={{ padding: "5px 12px", borderRadius: 6, border: "none", background: "#10b981", color: "#fff", cursor: "pointer", fontSize: 12 }}
-                                >
-                                    Resolve
-                                </button>
-                            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "150px 1fr 1fr 120px 130px", gap: 10, marginBottom: 16, alignItems: "end" }}>
+                <div className={styles.formGroup} style={{ marginBottom: 0 }}>
+                    <label>Status</label>
+                    <select className={styles.formInput} value={statusFilter} onChange={e => { setStatusFilter(e.target.value); setPage(0); }}>
+                        <option value="all">All</option>
+                        <option value="succeeded">Succeeded</option>
+                        <option value="failed">Failed</option>
+                        <option value="running">Running</option>
+                        <option value="waiting">Waiting</option>
+                        <option value="needs_selection">Needs Selection</option>
+                    </select>
+                </div>
+                <div className={styles.formGroup} style={{ marginBottom: 0 }}>
+                    <label>Skill</label>
+                    <input className={styles.formInput} value={skillFilter} onChange={e => { setSkillFilter(e.target.value); setPage(0); }} placeholder="Search skill name" />
+                </div>
+                <div className={styles.formGroup} style={{ marginBottom: 0 }}>
+                    <label>Provider</label>
+                    <input className={styles.formInput} value={providerFilter} onChange={e => { setProviderFilter(e.target.value); setPage(0); }} placeholder="Search provider" />
+                </div>
+                <div className={styles.formGroup} style={{ marginBottom: 0 }}>
+                    <label>User ID</label>
+                    <input className={styles.formInput} value={userFilter} onChange={e => { setUserFilter(e.target.value.replace(/\D/g, "")); setPage(0); }} placeholder="51" />
+                </div>
+                <div className={styles.formGroup} style={{ marginBottom: 0 }}>
+                    <label>Rows</label>
+                    <select className={styles.formInput} value={pageSize} onChange={e => { setPageSize(Number(e.target.value)); setPage(0); }}>
+                        <option value={10}>10</option>
+                        <option value={25}>25</option>
+                        <option value={50}>50</option>
+                        <option value={100}>100</option>
+                    </select>
+                </div>
+            </div>
+
+            {loading ? (
+                <div style={{ color: "#64748b", padding: "24px 0" }}>Loading...</div>
+            ) : (
+                <>
+                    <div className={styles.tableWrapper}>
+                        <table className={styles.table}>
+                            <thead>
+                                <tr>
+                                    <th style={{ width: 34 }}></th>
+                                    <th>Time</th>
+                                    <th>Status</th>
+                                    <th>Skill</th>
+                                    <th>Provider</th>
+                                    <th>User</th>
+                                    <th>Cost</th>
+                                    <th>Attempts</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {runs.length === 0 ? (
+                                    <tr className={styles.emptyRow}><td colSpan={9}>No skill runs match these filters.</td></tr>
+                                ) : runs.map((run) => {
+                                    const expanded = expandedId === run.id;
+                                    const error = run.error && typeof run.error === "object" ? run.error as { code?: string; message?: string; cause?: string; retryable?: boolean } : null;
+                                    return (
+                                        <Fragment key={run.id}>
+                                            <tr onClick={() => setExpandedId(expanded ? null : run.id)} style={{ cursor: "pointer" }}>
+                                                <td style={{ color: "#64748b", fontSize: 14 }}>{expanded ? "▾" : "▸"}</td>
+                                                <td style={{ whiteSpace: "nowrap", color: "#94a3b8", fontSize: 13 }}>{new Date(run.created_at).toLocaleString()}</td>
+                                                <td>
+                                                    <span style={{
+                                                        background: statusBg(run.status),
+                                                        color: statusColor(run.status),
+                                                        padding: "4px 8px",
+                                                        borderRadius: 4,
+                                                        fontSize: 12,
+                                                        fontWeight: 600,
+                                                    }}>{run.status}</span>
+                                                    {run.resolved_at && <span style={{ color: "#10b981", marginLeft: 8, fontSize: 12 }}>resolved</span>}
+                                                </td>
+                                                <td>
+                                                    <div style={{ fontWeight: 600 }}>{run.skill_name}</div>
+                                                    <div style={{ color: "#64748b", fontSize: 12 }}>#{run.skill_id} · {run.skill_category ?? "unknown"} · {run.lifecycle_mode}</div>
+                                                </td>
+                                                <td style={{ color: run.provider_name ? "#cbd5e1" : "#64748b" }}>{run.provider_name ?? "n/a"}</td>
+                                                <td>{run.new_api_user_id}</td>
+                                                <td>{run.cost_usd == null ? "—" : `$${Number(run.cost_usd).toFixed(4)}`}</td>
+                                                <td>{run.attempts}</td>
+                                                <td>
+                                                    {run.status === "failed" && !run.resolved_at && (
+                                                        <button
+                                                            onClick={(e) => { e.stopPropagation(); resolve(run.id); }}
+                                                            disabled={working}
+                                                            style={{ padding: "5px 12px", borderRadius: 6, border: "none", background: "#10b981", color: "#fff", cursor: "pointer", fontSize: 12 }}
+                                                        >
+                                                            Resolve
+                                                        </button>
+                                                    )}
+                                                </td>
+                                            </tr>
+                                            {expanded && (
+                                                <tr>
+                                                    <td colSpan={9} style={{ background: "#0b1220", padding: 16 }}>
+                                                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+                                                            <div>
+                                                                <div style={{ color: "#94a3b8", fontSize: 12, marginBottom: 6 }}>Run</div>
+                                                                <pre style={{ margin: 0, whiteSpace: "pre-wrap", wordBreak: "break-word", color: "#cbd5e1", fontSize: 12 }}>
+{`id: ${run.id}
+session: ${run.session_id}
+provider task: ${run.provider_task_id ?? "n/a"}
+created: ${new Date(run.created_at).toLocaleString()}
+updated: ${new Date(run.updated_at).toLocaleString()}`}
+                                                                </pre>
+                                                                {run.resolved_at && (
+                                                                    <div style={{ color: "#10b981", fontSize: 12, marginTop: 10 }}>
+                                                                        resolved by {run.resolved_by ?? "admin"} at {new Date(run.resolved_at).toLocaleString()}
+                                                                        {run.resolution_note ? ` · ${run.resolution_note}` : ""}
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                            <div>
+                                                                <div style={{ color: error ? "#fca5a5" : "#94a3b8", fontSize: 12, marginBottom: 6 }}>
+                                                                    {error ? "Error" : "Result"}
+                                                                </div>
+                                                                {error ? (
+                                                                    <div style={{ color: "#fecaca", fontSize: 13 }}>
+                                                                        <div><strong>{error.code ?? "ERROR"}</strong>: {error.message ?? "Unknown error"}</div>
+                                                                        {error.cause && <pre style={{ marginTop: 8, color: "#fca5a5", whiteSpace: "pre-wrap", wordBreak: "break-word", fontSize: 12 }}>{error.cause}</pre>}
+                                                                    </div>
+                                                                ) : (
+                                                                    <pre style={{ margin: 0, maxHeight: 260, overflow: "auto", whiteSpace: "pre-wrap", wordBreak: "break-word", color: "#cbd5e1", fontSize: 12 }}>
+                                                                        {formatJson(run.result)}
+                                                                    </pre>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            )}
+                                        </Fragment>
+                                    );
+                                })}
+                            </tbody>
+                        </table>
+                    </div>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 14, color: "#94a3b8", fontSize: 13 }}>
+                        <span>Showing {from}-{to} of {total}</span>
+                        <div style={{ display: "flex", gap: 8 }}>
+                            <button className={styles.actionBtn} disabled={page === 0} onClick={() => setPage(p => Math.max(0, p - 1))}>Prev</button>
+                            <span style={{ padding: "6px 8px" }}>Page {page + 1} / {pageCount}</span>
+                            <button className={styles.actionBtn} disabled={page + 1 >= pageCount} onClick={() => setPage(p => p + 1)}>Next</button>
                         </div>
                     </div>
-                );
-            })}
+                </>
+            )}
         </div>
     );
 }
