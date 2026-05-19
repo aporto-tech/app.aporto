@@ -17,7 +17,7 @@ export async function sendWelcomeEmail(email: string, name: string | null): Prom
                 Your email is verified and your account is ready. We've added <strong style="color:#00dc82;">$3 free credit</strong> to get you started.
             </p>
             <p style="margin:0 0 20px;color:#94a3b8;font-size:14px;">
-                Aporto gives your AI agents access to real-world tools — SMS, web search, text-to-speech, image generation — at prices 30% cheaper than official API rates.
+                Aporto gives your AI agents access to real-world tools — SMS, web search, text-to-speech, image generation — with prepaid usage controls.
             </p>
             <a href="${APP_URL}/dashboard" style="display:inline-block;padding:10px 20px;background:#00dc82;color:#000;border-radius:8px;text-decoration:none;font-weight:600;font-size:14px;">
                 Go to Dashboard →
@@ -48,7 +48,7 @@ export async function sendTopUpConfirmationEmail(opts: {
                     <td style="padding:8px 0;color:#e2e8f0;text-align:right;border-bottom:1px solid #1e293b;">$${opts.usdPaid.toFixed(2)}</td>
                 </tr>
                 <tr>
-                    <td style="padding:8px 0;color:#64748b;border-bottom:1px solid #1e293b;">API credit (30% discount)</td>
+                    <td style="padding:8px 0;color:#64748b;border-bottom:1px solid #1e293b;">API credit</td>
                     <td style="padding:8px 0;color:#00dc82;text-align:right;border-bottom:1px solid #1e293b;">$${opts.creditedUSD.toFixed(2)}</td>
                 </tr>
                 <tr>

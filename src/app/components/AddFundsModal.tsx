@@ -19,13 +19,6 @@ const PACKAGES = [
 
 const STRIPE_MIN = 5;
 
-const officialValue = (deposit: number) => deposit / 0.7;
-const savings = (deposit: number) => officialValue(deposit) - deposit;
-const officialValueAfterCardFee = (deposit: number) => {
-    const net = deposit * (1 - 0.029) - 0.30;
-    return net > 0 ? officialValue(net) : 0;
-};
-
 type PaymentMethod = "crypto" | "card" | "saved_card";
 
 interface SavedCardInfo {
@@ -213,7 +206,7 @@ export default function AddFundsModal({ onClose }: AddFundsModalProps) {
                     return;
                 }
 
-                setSuccessMessage(`+$${officialValueAfterCardFee(activeAmount).toFixed(2)} in API credits added to your balance!`);
+                setSuccessMessage("Payment succeeded. Your balance has been updated.");
                 const mp = (window as any).mixpanel;
                 if (mp) mp.track("payment_initiated", { method: "saved_card", amount_usd: activeAmount });
             } catch {
@@ -260,7 +253,6 @@ export default function AddFundsModal({ onClose }: AddFundsModalProps) {
                             className={`${styles.packageCard} ${selectedPackage === pkg.id && !isCustomActive ? styles.selected : ""}`}
                             onClick={() => handleSelectPackage(pkg.id)}
                         >
-                            <div className={styles.saveBadge}>+${savings(pkg.price).toFixed(0)} value</div>
                             <div className={styles.price}>${pkg.price}</div>
                         </div>
                     ))}
@@ -328,26 +320,6 @@ export default function AddFundsModal({ onClose }: AddFundsModalProps) {
                     )}
                 </div>
 
-                {activeAmount > 0 && !cardMinError && !successMessage && (
-                    <div className={styles.savingsCallout}>
-                        <span className={styles.savingsLabel}>You get</span>
-                        <span className={styles.savingsValue}>
-                            {(paymentMethod === "card" || paymentMethod === "saved_card")
-                                ? `$${officialValueAfterCardFee(activeAmount).toFixed(2)}`
-                                : `$${officialValue(activeAmount).toFixed(2)}`}
-                        </span>
-                        <span className={styles.savingsLabel}>worth of official API usage</span>
-                        {paymentMethod === "crypto" && (
-                            <span className={styles.savingsPill}>Save ${savings(activeAmount).toFixed(2)}</span>
-                        )}
-                        <span className={styles.savingsSubtext}>
-                            {(paymentMethod === "card" || paymentMethod === "saved_card")
-                                ? "30% off official LLM prices (after 2.9% card processing fee)"
-                                : "30% off official LLM prices"}
-                        </span>
-                    </div>
-                )}
-
                 {successMessage && (
                     <div style={{
                         background: "rgba(0,220,130,0.1)",
@@ -384,4 +356,3 @@ export default function AddFundsModal({ onClose }: AddFundsModalProps) {
         </div>
     );
 }
-

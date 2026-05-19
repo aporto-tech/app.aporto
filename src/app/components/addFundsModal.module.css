@@ -92,23 +92,6 @@
     display: none; /* User wants to remove credits */
 }
 
-.saveBadge {
-    display: inline-block;
-    background: rgba(0, 220, 130, 0.15);
-    color: #00dc82;
-    font-size: 11px;
-    font-weight: 800;
-    padding: 3px 8px;
-    border-radius: 4px;
-    margin-bottom: 8px;
-    letter-spacing: 0.3px;
-}
-
-.packageCard.selected .saveBadge {
-    background: rgba(0, 0, 0, 0.2);
-    color: #000;
-}
-
 /* Payment Methods Grid */
 .paymentGrid {
     display: flex;
@@ -225,46 +208,5 @@
 
 .customInputActive {
     color: #00dc82;
-}
-
-/* Savings callout */
-.savingsCallout {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 6px;
-    background: rgba(0, 220, 130, 0.08);
-    border: 1px solid rgba(0, 220, 130, 0.25);
-    border-radius: 10px;
-    padding: 12px 16px;
-    margin-bottom: 20px;
-    font-size: 13px;
-}
-
-.savingsLabel {
-    color: #a1a1aa;
-}
-
-.savingsValue {
-    color: #00dc82;
-    font-weight: 700;
-    font-size: 15px;
-}
-
-.savingsPill {
-    background: #00dc82;
-    color: #000;
-    font-size: 11px;
-    font-weight: 800;
-    padding: 3px 10px;
-    border-radius: 20px;
-    margin-left: 4px;
-}
-
-.savingsSubtext {
-    color: #52525b;
-    font-size: 11px;
-    width: 100%;
-    margin-top: 2px;
 }
 

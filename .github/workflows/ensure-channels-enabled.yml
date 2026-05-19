@@ -2,7 +2,8 @@ name: Ensure channels are enabled
 
 on:
   schedule:
-    - cron: "0 * * * *"
+    # Hourly, offset from :00 to avoid GitHub Actions top-of-hour queue delays.
+    - cron: "17 * * * *"
   workflow_dispatch:
 
 jobs:

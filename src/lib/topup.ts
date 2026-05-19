@@ -4,11 +4,8 @@ import { sendTopUpConfirmationEmail } from "@/lib/emails";
 const NEWAPI_ADMIN_TOKEN = process.env.NEWAPI_ADMIN_TOKEN || "";
 const NEWAPI_URL = process.env.NEWAPI_URL || "https://api.aporto.tech";
 
-// 1 USD at official API prices = 500,000 quota units in New-API.
-// Aporto is 30% cheaper than official prices, so $1 deposited
-// buys $1/0.70 ≈ $1.43 of official API usage.
+// 1 USD account balance = 500,000 quota units in New-API.
 export const QUOTA_PER_USD = 500_000;
-export const APORTO_DISCOUNT = 0.7; // user pays 70% of official price
 
 export async function topUpUserQuota(newApiUserId: number, usdAmount: number) {
     const adminHeaders = {
@@ -30,7 +27,7 @@ export async function topUpUserQuota(newApiUserId: number, usdAmount: number) {
     const userData = await userRes.json();
     const user = userData.data;
     const currentQuota: number = user?.quota ?? 0;
-    const addQuota = Math.floor((usdAmount / APORTO_DISCOUNT) * QUOTA_PER_USD);
+    const addQuota = Math.floor(usdAmount * QUOTA_PER_USD);
     const newQuota = currentQuota + addQuota;
 
     // PUT back the full user object with only quota changed.
@@ -75,7 +72,7 @@ export async function safeTopUp(
     // netUsd: what Aporto actually receives after payment provider fees.
     // Defaults to usdPaid when not provided (e.g. crypto has no fee).
     const quotaBasis = netUsd !== undefined ? netUsd : usdPaid;
-    const creditedUSD = parseFloat((quotaBasis / APORTO_DISCOUNT).toFixed(6));
+    const creditedUSD = parseFloat(quotaBasis.toFixed(6));
 
     let quotaAdded = 0;
     let email = "";
