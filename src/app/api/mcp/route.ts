@@ -85,7 +85,7 @@ function buildMcpServer(userId: number, authHeader: string, internalBaseUrl?: st
         let lastFailure: { provider: string; data: unknown } | null = null;
 
         for (let attempt = 1; attempt <= MAX_PROVIDER_ATTEMPTS; attempt++) {
-            const provider = await selectProvider(skillId, sessionId, userId, undefined, false, attemptedProviderIds);
+            const provider = await selectProvider(skillId, sessionId, userId, undefined, false, attemptedProviderIds, undefined, params);
             if (!provider) {
                 await deactivateSkillIfNoActiveProviders(skillId);
                 if (!lastFailure) return null;

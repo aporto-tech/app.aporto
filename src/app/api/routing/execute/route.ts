@@ -96,6 +96,8 @@ export async function POST(req: NextRequest) {
                 paramsHash,
                 isThirdParty,
                 attemptedProviderIds,
+                undefined,
+                params as Record<string, unknown>,
             );
 
             if (!provider) {

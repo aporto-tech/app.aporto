@@ -41,11 +41,11 @@ function compact(value) {
 }
 
 function parseUsd(row) {
+    const credits = Number(String(row.creditPrice ?? "").trim());
+    if (Number.isFinite(credits)) return credits * CREDIT_TO_USD;
     const raw = String(row.usdPrice ?? "").trim();
     const usd = raw ? Number(raw) : NaN;
     if (Number.isFinite(usd)) return usd;
-    const credits = Number(String(row.creditPrice ?? "").trim());
-    if (Number.isFinite(credits)) return credits * CREDIT_TO_USD;
     return 0;
 }
 

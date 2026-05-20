@@ -859,7 +859,7 @@ export async function runSkill(input: RunSkillInput): Promise<RunSkillResult> {
     const paramsHash = computeSkillParamsHash(skillId, params);
     const isThirdParty = skillMeta.publisherId !== null;
     const providerHint = input.providerHint ?? input.intent;
-    const provider = await selectProvider(skillId, sessionId, input.newApiUserId, paramsHash, isThirdParty, [], providerHint);
+    const provider = await selectProvider(skillId, sessionId, input.newApiUserId, paramsHash, isThirdParty, [], providerHint, params);
     if (!provider) {
         await deactivateSkillIfNoActiveProviders(skillId);
         const runId = await createRun({

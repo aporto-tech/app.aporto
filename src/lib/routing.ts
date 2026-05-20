@@ -68,6 +68,33 @@ type ProviderRow = {
     sync_config: string | null;
 };
 
+function hasMediaInput(params: Record<string, unknown> | undefined, kind: "video" | "image"): boolean {
+    if (!params) return false;
+    const keys = kind === "video"
+        ? ["video", "video_url", "videoUrl", "input_video", "inputVideo", "source_video", "sourceVideo", "source_video_url", "sourceVideoUrl"]
+        : ["image", "image_url", "imageUrl", "input_image", "inputImage", "source_image", "sourceImage", "source_image_url", "sourceImageUrl"];
+
+    return keys.some((key) => {
+        const value = params[key];
+        if (typeof value === "string") return value.trim().length > 0;
+        if (Array.isArray(value)) return value.some((item) => typeof item === "string" && item.trim().length > 0);
+        return false;
+    });
+}
+
+function providerMatchesParams(row: ProviderRow, params?: Record<string, unknown>): boolean {
+    const text = `${row.name} ${row.sync_config ?? ""}`.toLowerCase();
+    const hasVideo = hasMediaInput(params, "video");
+    const hasImage = hasMediaInput(params, "image");
+
+    if (text.includes("with video input") && !hasVideo) return false;
+    if (text.includes("no video input") && hasVideo) return false;
+    if (text.includes("with image input") && !hasImage) return false;
+    if (text.includes("no image input") && hasImage) return false;
+
+    return true;
+}
+
 function toScoredProvider(row: ProviderRow): ScoredProvider {
     return {
         id: row.id,
@@ -235,7 +262,18 @@ export async function discoverSkills(
                      COALESCE("Skill"."outputTypes", ''),
                      COALESCE(string_agg(CONCAT_WS(' ', p.name, p."syncConfig"), ' '), '')
                    ) AS search_text,
-                   MIN(p."pricePerCall") AS min_price
+                   CASE
+                     WHEN BOOL_OR(
+                       p.endpoint = 'https://app.aporto.tech/api/providers/kie'
+                       AND (p.name ILIKE '%with video input%' OR p."syncConfig"::text ILIKE '%with video input%')
+                     )
+                     AND BOOL_OR(
+                       p.endpoint = 'https://app.aporto.tech/api/providers/kie'
+                       AND (p.name ILIKE '%no video input%' OR p."syncConfig"::text ILIKE '%no video input%')
+                     )
+                     THEN MAX(p."pricePerCall")
+                     ELSE MIN(p."pricePerCall")
+                   END AS min_price
             FROM "Skill"
             LEFT JOIN "Provider" p ON p."skillId" = "Skill".id AND p."isActive" = true
             GROUP BY "Skill".id
@@ -279,6 +317,7 @@ export async function selectProvider(
     isThirdParty = false,
     excludeProviderIds: number[] = [],
     providerHint?: string,
+    params?: Record<string, unknown>,
 ): Promise<ScoredProvider | null> {
     // Unified CTE: exclude providers used in this session (24h) OR same paramsHash (2 min)
     // For third-party skills: also exclude providers without a providerSecret (T1 guard)
@@ -287,7 +326,7 @@ export async function selectProvider(
         ? `AND p.id NOT IN (${exclusions.map((_, idx) => `$${idx + 6}`).join(", ")})`
         : "";
 
-    const preferred = await selectAttributedProvider(skillId, newApiUserId, isThirdParty, exclusions, providerHint);
+    const preferred = await selectAttributedProvider(skillId, newApiUserId, isThirdParty, exclusions, providerHint, params);
     if (preferred) return preferred;
 
     const rows = await prisma.$queryRawUnsafe<
@@ -338,12 +377,13 @@ export async function selectProvider(
         ...exclusions,
     );
 
-    if (rows.length === 0) return null;
+    const compatibleRows = rows.filter((row) => providerMatchesParams(row, params));
+    if (compatibleRows.length === 0) return null;
 
     // Min-max normalize then score:
     // 0.40*(1-normPrice) + 0.30*(1-normLatency) + 0.15*(1-retryRate) + 0.15*(1-timeoutRate)
-    const prices = rows.map((r) => Number(r.price_per_call));
-    const latencies = rows.map((r) => Number(r.avg_latency_ms));
+    const prices = compatibleRows.map((r) => Number(r.price_per_call));
+    const latencies = compatibleRows.map((r) => Number(r.avg_latency_ms));
 
     const minPrice = Math.min(...prices);
     const maxPrice = Math.max(...prices);
@@ -352,7 +392,7 @@ export async function selectProvider(
 
     const normalize = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, "");
     const hint = providerHint ? normalize(providerHint) : null;
-    const scored = rows.map((r) => {
+    const scored = compatibleRows.map((r) => {
         const normPrice =
             maxPrice === minPrice ? 0.5 : (Number(r.price_per_call) - minPrice) / (maxPrice - minPrice);
         const normLat =
@@ -380,6 +420,7 @@ async function selectAttributedProvider(
     isThirdParty: boolean,
     excludeProviderIds: number[],
     providerHint?: string,
+    params?: Record<string, unknown>,
 ): Promise<ScoredProvider | null> {
     const exclusions = Array.from(new Set(excludeProviderIds.filter((id) => Number.isInteger(id) && id > 0)));
     const exclusionClause = exclusions.length
@@ -445,6 +486,7 @@ async function selectAttributedProvider(
     const hint = providerHint ? normalize(providerHint) : null;
     const row = rows[0];
     if (!row) return null;
+    if (!providerMatchesParams(row, params)) return null;
 
     if (hint) {
         const providerText = normalize(`${row.name} ${row.sync_config ?? ""}`);
