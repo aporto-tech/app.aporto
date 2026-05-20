@@ -8,7 +8,7 @@ import {
     deactivateSkillIfNoActiveProviders,
     discoverSkills,
     executeSkillViaProvider,
-    findExactSkillByIntent,
+    findExactSkillByIntentWithFilters,
     recordSkillCall,
     updateSkillCallCost,
     selectProvider,
@@ -24,9 +24,9 @@ function waitSecondsFromEnv(name: string, fallback: number): number {
     return Number.isFinite(value) && value > 0 ? Math.floor(value) : fallback;
 }
 
-export const MAX_WAIT_SECONDS = waitSecondsFromEnv("APORTO_MAX_WAIT_SECONDS", 300);
+export const MAX_WAIT_SECONDS = waitSecondsFromEnv("APORTO_MAX_WAIT_SECONDS", 600);
 export const DEFAULT_WAIT_SECONDS = Math.min(
-    waitSecondsFromEnv("APORTO_DEFAULT_WAIT_SECONDS", 85),
+    waitSecondsFromEnv("APORTO_DEFAULT_WAIT_SECONDS", 600),
     MAX_WAIT_SECONDS,
 );
 
@@ -46,6 +46,8 @@ type RunSkillInput = {
     waitForResult?: boolean;
     maxWaitSeconds?: number;
     sessionId?: string;
+    billingMode?: "paid" | "trial";
+    trialOnly?: boolean;
 };
 
 type RunSkillResult = {
@@ -424,9 +426,9 @@ async function updateRun(
     );
 }
 
-async function getSkillMeta(skillId: number): Promise<{ name: string; category: string | null; publisherId: string | null; revenueShare: number | null } | null> {
-    const rows = await prisma.$queryRawUnsafe<{ name: string; category: string | null; publisherId: string | null; revenueShare: number | null }[]>(
-        `SELECT s.name, s.category, s."publisherId", p."revenueShare"
+async function getSkillMeta(skillId: number): Promise<{ name: string; category: string | null; publisherId: string | null; revenueShare: number | null; trialAvailable: boolean } | null> {
+    const rows = await prisma.$queryRawUnsafe<{ name: string; category: string | null; publisherId: string | null; revenueShare: number | null; trialAvailable: boolean }[]>(
+        `SELECT s.name, s.category, s."publisherId", s."trialAvailable", p."revenueShare"
          FROM "Skill" s
          LEFT JOIN "Publisher" p ON p.id = s."publisherId"
          WHERE s.id = $1
@@ -448,9 +450,12 @@ async function storeFinalResult(input: {
     charge: Pick<SkillCharge, "promoRedemptionId" | "promoCoveredUSD" | "balanceChargedUSD">;
     params: Record<string, unknown>;
     result: unknown;
+    skipBillingAdjustments?: boolean;
 }) {
     const deltaUSD = input.actualCostUSD - input.estimatedCostUSD;
-    if (deltaUSD > 0) {
+    if (input.skipBillingAdjustments) {
+        // Anonymous trials are platform-sponsored. Keep cost reporting, but do not debit or refund a user balance.
+    } else if (deltaUSD > 0) {
         const extraCharge = await deductSkillUsage(input.userId, input.skillId, deltaUSD);
         if (extraCharge.error) {
             console.error("[storeFinalResult] extra charge failed after provider success", {
@@ -534,6 +539,7 @@ async function waitForProviderResult(input: {
     maxWaitSeconds: number;
     internalBaseUrl?: string;
     charge: Pick<SkillCharge, "promoRedemptionId" | "promoCoveredUSD" | "balanceChargedUSD">;
+    billingMode?: "paid" | "trial";
 }): Promise<RunSkillResult> {
     const deadline = Date.now() + Math.max(1, input.maxWaitSeconds) * 1000;
     let lastData: unknown = null;
@@ -567,13 +573,14 @@ async function waitForProviderResult(input: {
                 charge: input.charge,
                 params: input.params,
                 result: normalized.data,
+                skipBillingAdjustments: input.billingMode === "trial",
             });
             if (input.skillCallId != null) {
                 await updateSkillCallCost(input.skillCallId, actualCostUSD).catch((error) => {
                     console.error("[waitForProviderResult] updateSkillCallCost:", error);
                 });
             }
-            if (input.publisherId && input.revenueShare != null && actualCostUSD > 0 && input.skillCallId != null) {
+            if (input.billingMode !== "trial" && input.publisherId && input.revenueShare != null && actualCostUSD > 0 && input.skillCallId != null) {
                 void createSkillRevenue({
                     skillId: input.skillId,
                     publisherId: input.publisherId,
@@ -603,9 +610,11 @@ async function waitForProviderResult(input: {
         }
 
         if (normalized.status === "failed") {
-            await refundSkillUsage(input.newApiUserId, input.charge).catch((error) => {
-                console.error("[waitForProviderResult] refund failed:", error);
-            });
+            if (input.billingMode !== "trial") {
+                await refundSkillUsage(input.newApiUserId, input.charge).catch((error) => {
+                    console.error("[waitForProviderResult] refund failed:", error);
+                });
+            }
             await updateRun(input.runId, {
                 status: "failed",
                 error: normalized.error,
@@ -650,8 +659,8 @@ export async function runSkill(input: RunSkillInput): Promise<RunSkillResult> {
     let skillId = input.skillId;
     let skillName: string | undefined;
     if (!skillId) {
-        const exactMatch = await findExactSkillByIntent(input.intent);
-        const matches = exactMatch ? [] : await discoverSkills(input.intent, 0);
+        const exactMatch = await findExactSkillByIntentWithFilters(input.intent, { trialOnly: input.trialOnly });
+        const matches = exactMatch ? [] : await discoverSkills(input.intent, 0, { trialOnly: input.trialOnly });
         if (!exactMatch && hasCloseSkillVariants(input.intent, matches)) {
             const runId = await createRun({
                 newApiUserId: input.newApiUserId,
@@ -716,6 +725,31 @@ export async function runSkill(input: RunSkillInput): Promise<RunSkillResult> {
         };
     }
     skillName ??= skillMeta.name;
+    if (input.trialOnly && !skillMeta.trialAvailable) {
+        const runId = await createRun({
+            newApiUserId: input.newApiUserId,
+            sessionId,
+            skillId,
+            status: "failed",
+            lifecycleMode: "none",
+            error: {
+                code: "TRIAL_SKILL_NOT_AVAILABLE",
+                message: "This skill is not available for trial runs. Get an API key at https://aporto.tech to run the full skill catalog.",
+                retryable: false,
+            },
+        });
+        return {
+            status: "failed",
+            runId,
+            skillId,
+            skillName,
+            error: {
+                code: "TRIAL_SKILL_NOT_AVAILABLE",
+                message: "This skill is not available for trial runs. Get an API key at https://aporto.tech to run the full skill catalog.",
+                retryable: false,
+            },
+        };
+    }
 
     const paramsHash = computeSkillParamsHash(skillId, params);
     const isThirdParty = skillMeta.publisherId !== null;
@@ -744,7 +778,9 @@ export async function runSkill(input: RunSkillInput): Promise<RunSkillResult> {
     const estimatedCostUSD = provider.costPerChar != null && typeof params.text === "string"
         ? Math.max(0.0001, params.text.length * provider.costPerChar)
         : provider.pricePerCall;
-    const charge = await deductSkillUsage(input.newApiUserId, skillId, estimatedCostUSD);
+    const charge = input.billingMode === "trial"
+        ? { requestedUSD: estimatedCostUSD, promoRedemptionId: null, promoCoveredUSD: 0, balanceChargedUSD: 0, error: null }
+        : await deductSkillUsage(input.newApiUserId, skillId, estimatedCostUSD);
     if (charge.error) {
         const runId = await createRun({
             newApiUserId: input.newApiUserId,
@@ -808,7 +844,9 @@ export async function runSkill(input: RunSkillInput): Promise<RunSkillResult> {
         .catch((error) => console.error("[runSkill] updateProviderStats:", error));
 
     if (!executed.success) {
-        void refundSkillUsage(input.newApiUserId, charge).catch((error) => console.error("[runSkill] refund failed:", error));
+        if (input.billingMode !== "trial") {
+            void refundSkillUsage(input.newApiUserId, charge).catch((error) => console.error("[runSkill] refund failed:", error));
+        }
         const error = {
             code: executed.errorType.toUpperCase(),
             message: "Provider submit failed.",
@@ -862,6 +900,7 @@ export async function runSkill(input: RunSkillInput): Promise<RunSkillResult> {
                 internalBaseUrl: input.internalBaseUrl,
                 skillCallId,
                 charge,
+                billingMode: input.billingMode,
             })),
         };
     }
@@ -879,13 +918,14 @@ export async function runSkill(input: RunSkillInput): Promise<RunSkillResult> {
         charge,
         params,
         result: executed.data,
+        skipBillingAdjustments: input.billingMode === "trial",
     });
     if (skillCallId != null) {
         await updateSkillCallCost(skillCallId, actualCostUSD).catch((error) => {
             console.error("[runSkill] updateSkillCallCost:", error);
         });
     }
-    if (skillMeta.publisherId && skillMeta.revenueShare != null && actualCostUSD > 0) {
+    if (input.billingMode !== "trial" && skillMeta.publisherId && skillMeta.revenueShare != null && actualCostUSD > 0) {
         void createSkillRevenue({
             skillId,
             publisherId: skillMeta.publisherId,

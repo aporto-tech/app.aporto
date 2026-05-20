@@ -1,4 +1,35 @@
 <!-- /autoplan restore point: /Users/igortkachenko/.gstack/projects/aporto-tech-app.aporto/main-autoplan-restore-20260421-112806.md -->
+<!-- /autoplan restore point: sandbox blocked ~/.gstack write; current plan amended in-place on 2026-05-20 -->
+
+## Plan Addendum: Anonymous CLI Trial Runs
+
+**Date:** 2026-05-20
+**Scope:** Let SDK/CLI users try trial-marked skills without an API key, with strict anonymous limits and a clear path to get a key.
+
+### Premises
+
+1. CLI users already install `@aporto-tech/sdk`, so a local random install id is enough for the primary trial identity.
+2. IP-only limits are too blunt for shared offices and VPNs, but useful as an abuse backstop.
+3. Trial execution must be an explicit allowlist on `Skill`, not inferred from provider price or category.
+4. Unauthenticated discover should only surface trial-available skills, so users do not discover a skill they cannot run.
+
+### Implementation
+
+- Add `Skill.trialAvailable Boolean @default(false)`.
+- Add `AnonymousSkillUsage` with hashed IP, anonymous client id, skill id, status, and timestamps.
+- Add `/api/routing/trial/run` for unauthenticated CLI calls.
+- Add `trialOnly` discovery/routing mode so anonymous matching only sees `trialAvailable = true`.
+- Add CLI install id at `~/.aporto/anonymous_id` and use it when `APORTO_API_KEY` is missing.
+- Add admin API/UI support to mark a skill as trial-available.
+- Return a limit message that explicitly points users to `https://aporto.tech` for an API key.
+
+### Decision Audit Trail
+
+| # | Phase | Decision | Classification | Principle | Rationale | Rejected |
+|---|-------|----------|----------------|-----------|-----------|----------|
+| T1 | CEO | Use install UUID + IP backstop | Mechanical | P3 | Best onboarding with acceptable abuse resistance | IP-only |
+| T2 | Eng | Add explicit `trialAvailable` flag on Skill | Mechanical | P5 | Clear allowlist, easy discover filtering | Hidden config list |
+| T3 | DX | Let `aporto run` work without key for trial skills | Mechanical | P1 | Fastest hello-world path from SDK install | Separate trial command |
 
 # Plan: Routing Alpha — One MCP Server, Thousands of Skills
 

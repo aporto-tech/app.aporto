@@ -42,7 +42,7 @@ if (!adminToken || adminToken === "changeme_after_first_boot") {
   throw new Error("NEWAPI_ADMIN_TOKEN is required");
 }
 
-const channelIds = [217, 218];
+const channelIds = [65, 217, 218, 226, 227];
 
 function apiUrl(path) {
   return new URL(path, baseUrl).toString();

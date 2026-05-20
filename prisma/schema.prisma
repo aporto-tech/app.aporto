@@ -273,6 +273,7 @@ model Skill {
   lastEditedAt DateTime?
   inputSchema  String?
   mcpVersion   String?
+  trialAvailable Boolean              @default(false)
   providers    Provider[]
   options      ProviderOption[]
   publisher    Publisher?             @relation(fields: [publisherId], references: [id])
@@ -283,7 +284,23 @@ model Skill {
   @@index([status])
   @@index([publisherId])
   @@index([category])
+  @@index([trialAvailable])
   @@index([embedding], map: "Skill_embedding_ivfflat_idx")
+}
+
+model AnonymousSkillUsage {
+  id                String   @id @default(cuid())
+  anonymousClientId String?
+  ipHash            String
+  skillId           Int?
+  runId             String?
+  status            String   @default("started")
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([anonymousClientId, createdAt])
+  @@index([ipHash, createdAt])
+  @@index([skillId, createdAt])
 }
 
 model Provider {

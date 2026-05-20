@@ -21,7 +21,7 @@ export async function POST(req: NextRequest) {
 
     try {
         const start = Date.now();
-        const skills = await discoverSkills(query, page, { category, capability });
+        const skills = await discoverSkills(query, page, { category, capability, trialOnly: !auth });
         if (auth) {
             void logSkillDiscovery({
                 newApiUserId: auth.newApiUserId,
@@ -38,7 +38,7 @@ export async function POST(req: NextRequest) {
                 ip: getRequestIp(req),
             });
         }
-        return NextResponse.json({ success: true, skills, page });
+        return NextResponse.json({ success: true, skills, page, trialOnly: !auth });
     } catch (err) {
         console.error("[routing/skills] error:", err);
         if (auth) {

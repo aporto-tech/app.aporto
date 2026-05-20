@@ -1,9 +1,12 @@
 #!/usr/bin/env node
 
-import { readFileSync } from "node:fs";
-import { basename, extname } from "node:path";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { homedir } from "node:os";
+import { basename, dirname, extname, join } from "node:path";
+import { randomUUID } from "node:crypto";
 import { AportoClient } from "./index";
 import { AportoConfigError } from "./errors";
+import type { RunSkillResult } from "./modules/routing";
 
 const MIME_TYPES: Record<string, string> = {
     ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png",
@@ -29,7 +32,7 @@ function usage(): string {
         "  --json             Output as JSON (useful for AI agents and scripting)",
         "  --wait             Wait for skill execution to complete before returning",
         "  --no-wait          Do not wait (default for async skills)",
-        "  --max-wait <sec>   Maximum seconds to wait for completion (default: 300)",
+        "  --max-wait <sec>   Maximum seconds to wait for completion (default: 600)",
         "  --provider <hint>  Provider preference (name or 'auto')",
         "  --param key=value  Set a parameter (repeatable)",
         "  --file key=path    Attach a local file as a parameter (repeatable, base64-encoded)",
@@ -42,7 +45,7 @@ function usage(): string {
         "  --interval <sec>   Poll interval in seconds (runs wait)",
         "",
         "Environment:",
-        "  APORTO_API_KEY      required for run/paid commands; optional for discover",
+        "  APORTO_API_KEY      required for paid commands; optional for discover and trial skill runs",
         "  APORTO_BASE_URL     optional, defaults to https://app.aporto.tech",
     ].join("\n");
 }
@@ -153,7 +156,7 @@ function printJson(value: unknown): void {
     process.stdout.write(`${JSON.stringify(value, null, 2)}\n`);
 }
 
-function printSkills(result: { skills?: Array<{ id?: number; skillId?: number; name?: string; category?: string | null; similarity?: number; priceUSD?: number | null }> }): void {
+function printSkills(result: { skills?: Array<{ id?: number; skillId?: number; name?: string; category?: string | null; similarity?: number; priceUSD?: number | null; trialAvailable?: boolean }> }): void {
     const skills = result.skills ?? [];
     if (skills.length === 0) {
         process.stdout.write("No matching skills found.\n");
@@ -162,8 +165,21 @@ function printSkills(result: { skills?: Array<{ id?: number; skillId?: number; n
     for (const skill of skills) {
         const id = skill.skillId ?? skill.id;
         const price = skill.priceUSD != null ? `  $${skill.priceUSD < 0.001 ? skill.priceUSD.toExponential(1) : skill.priceUSD.toFixed(4)}/call` : "";
-        process.stdout.write(`${id}\t${skill.name ?? "Unnamed skill"}${skill.category ? `  ${skill.category}` : ""}${price}\n`);
+        const trial = skill.trialAvailable ? "  trial" : "";
+        process.stdout.write(`${id}\t${skill.name ?? "Unnamed skill"}${skill.category ? `  ${skill.category}` : ""}${price}${trial}\n`);
     }
+}
+
+function getAnonymousClientId(): string {
+    const path = join(homedir(), ".aporto", "anonymous_id");
+    if (existsSync(path)) {
+        const existing = readFileSync(path, "utf8").trim();
+        if (existing) return existing.slice(0, 128);
+    }
+    mkdirSync(dirname(path), { recursive: true });
+    const id = randomUUID();
+    writeFileSync(path, `${id}\n`, { mode: 0o600 });
+    return id;
 }
 
 function printRun(result: { status?: string; runId?: string; skillId?: number; skillName?: string; provider?: string; costUSD?: number; artifacts?: Array<{ url?: string }>; artifact?: { url?: string }; error?: { message?: string; code?: string }; choices?: Array<{ skillId?: number; id?: number; name?: string }> }): void {
@@ -199,7 +215,7 @@ async function discoverSkills(params: {
     category?: string;
     capability?: string;
     page: number;
-}): Promise<{ skills: Array<{ id?: number; skillId?: number; name?: string; category?: string | null; similarity?: number; priceUSD?: number | null }>; page: number; authWarning?: string }> {
+}): Promise<{ skills: Array<{ id?: number; skillId?: number; name?: string; category?: string | null; similarity?: number; priceUSD?: number | null; trialAvailable?: boolean }>; page: number; authWarning?: string; trialOnly?: boolean }> {
     const headers: Record<string, string> = {
         "Content-Type": "application/json",
         "X-Agent-Name": "aporto-cli",
@@ -237,8 +253,43 @@ async function discoverSkills(params: {
         throw new AportoConfigError(`Discovery failed: ${res.status} ${res.statusText}${text ? ` - ${text}` : ""}`);
     }
 
-    const data = await res.json() as { skills: Array<{ id?: number; skillId?: number; name?: string; category?: string | null; similarity?: number; priceUSD?: number | null }>; page: number };
+    const data = await res.json() as { skills: Array<{ id?: number; skillId?: number; name?: string; category?: string | null; similarity?: number; priceUSD?: number | null; trialAvailable?: boolean }>; page: number; trialOnly?: boolean };
     return { ...data, authWarning };
+}
+
+async function runAnonymousTrial(params: {
+    appBaseUrl: string;
+    intent: string;
+    skillId?: number;
+    providerHint?: string;
+    runParams: Record<string, unknown>;
+    waitForResult: boolean;
+    maxWaitSeconds?: number;
+    sessionId?: string;
+}): Promise<unknown> {
+    const res = await fetch(`${params.appBaseUrl.replace(/\/$/, "")}/api/routing/trial/run`, {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+            "X-Agent-Name": "aporto-cli",
+        },
+        body: JSON.stringify({
+            anonymousClientId: getAnonymousClientId(),
+            intent: params.intent,
+            skillId: params.skillId,
+            providerHint: params.providerHint,
+            params: params.runParams,
+            waitForResult: params.waitForResult,
+            maxWaitSeconds: params.maxWaitSeconds,
+            sessionId: params.sessionId,
+        }),
+    });
+    const data = await res.json().catch(async () => ({ success: false, message: await res.text().catch(() => "") })) as { message?: string; error?: { message?: string } };
+    if (!res.ok) {
+        const message = data.error?.message ?? data.message ?? `Trial run failed: ${res.status} ${res.statusText}`;
+        throw new Error(message);
+    }
+    return data;
 }
 
 async function main() {
@@ -274,38 +325,44 @@ async function main() {
         return;
     }
 
-    if (!apiKey) {
-        throw new AportoConfigError("APORTO_API_KEY is required for this command");
-    }
-
-    const client = new AportoClient({
-        apiKey,
-        agentName: "aporto-cli",
-        appBaseUrl,
-    });
-
     if (command === "run" || (command === "skill" && args[1] === "run")) {
         const target = args.slice(command === "skill" ? 2 : 1).join(" ").trim();
         if (!target) throw new AportoConfigError("run requires a skillId or intent");
         const numericSkillId = /^\d+$/.test(target) ? Number(target) : undefined;
         const provider = flagString(flags, "provider");
         const shouldWait = flags.wait === true;
-        let result = await client.routing.runSkill({
-            intent: target,
-            skillId: numericSkillId,
-            params: readParams(flags),
-            providerHint: provider && provider !== "auto" ? provider : undefined,
-            waitForResult: shouldWait,
-            maxWaitSeconds: flagNumber(flags, "max-wait"),
-            sessionId: flagString(flags, "session"),
-        });
-        if (shouldWait && result.runId && (result.status === "running" || result.status === "waiting")) {
-            result = await client.routing.waitSkillRun({
-                runId: result.runId,
-                timeoutSeconds: flagNumber(flags, "max-wait") ?? 300,
-                pollIntervalSeconds: 5,
-                maxWaitSeconds: 85,
+        const runParams = readParams(flags);
+        let result: RunSkillResult;
+        if (!apiKey) {
+            result = await runAnonymousTrial({
+                appBaseUrl,
+                intent: target,
+                skillId: numericSkillId,
+                runParams,
+                providerHint: provider && provider !== "auto" ? provider : undefined,
+                waitForResult: shouldWait,
+                maxWaitSeconds: flagNumber(flags, "max-wait"),
+                sessionId: flagString(flags, "session"),
+            }) as RunSkillResult;
+        } else {
+            const client = createClient(apiKey, appBaseUrl);
+            result = await client.routing.runSkill({
+                intent: target,
+                skillId: numericSkillId,
+                params: runParams,
+                providerHint: provider && provider !== "auto" ? provider : undefined,
+                waitForResult: shouldWait,
+                maxWaitSeconds: flagNumber(flags, "max-wait"),
+                sessionId: flagString(flags, "session"),
             });
+            if (shouldWait && result.runId && (result.status === "running" || result.status === "waiting")) {
+                result = await client.routing.waitSkillRun({
+                    runId: result.runId,
+                    timeoutSeconds: flagNumber(flags, "max-wait") ?? 600,
+                    pollIntervalSeconds: 5,
+                    maxWaitSeconds: flagNumber(flags, "max-wait") ?? 600,
+                });
+            }
         }
         if (asJson) printJson(result);
         else printRun(result);
@@ -313,13 +370,19 @@ async function main() {
         return;
     }
 
+    if (!apiKey) {
+        throw new AportoConfigError("APORTO_API_KEY is required for this command. To keep using Aporto after trial runs, get a key at https://aporto.tech");
+    }
+
+    const client = createClient(apiKey, appBaseUrl);
+
     if (command === "runs" && (args[1] === "get" || args[1] === "wait")) {
         const runId = args[2];
         if (!runId) throw new AportoConfigError(`runs ${args[1]} requires a runId`);
         const result = args[1] === "wait"
             ? await client.routing.waitSkillRun({
                 runId,
-                timeoutSeconds: flagNumber(flags, "timeout") ?? 300,
+                timeoutSeconds: flagNumber(flags, "timeout") ?? 600,
                 pollIntervalSeconds: flagNumber(flags, "interval") ?? 30,
                 maxWaitSeconds: flagNumber(flags, "max-wait") ?? 30,
             })
@@ -335,6 +398,14 @@ async function main() {
     }
 
     throw new AportoConfigError(`Unknown command: ${args.join(" ")}`);
+}
+
+function createClient(apiKey: string, appBaseUrl: string): AportoClient {
+    return new AportoClient({
+        apiKey,
+        agentName: "aporto-cli",
+        appBaseUrl,
+    });
 }
 
 main().catch((error) => {

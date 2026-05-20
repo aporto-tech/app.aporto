@@ -454,6 +454,15 @@
     background: rgba(0, 220, 130, 0.08);
 }
 
+.checkboxRow {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: #cbd5e1;
+    font-size: 13px;
+    margin: 12px 0;
+}
+
 /* Bar chart */
 .barChart {
     display: flex;

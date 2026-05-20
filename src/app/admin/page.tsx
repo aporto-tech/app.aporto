@@ -50,6 +50,7 @@ interface Skill {
     params_schema: string | null;
     tags: string | null;
     is_active: boolean;
+    trial_available: boolean;
     created_at: string;
     provider_count: number;
     call_count: number;
@@ -585,6 +586,15 @@ function SkillsTab() {
         fetchSkills();
     }
 
+    async function handleToggleTrial(skill: Skill) {
+        await fetch(`/api/admin/skills?id=${skill.id}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ trialAvailable: !skill.trial_available }),
+        });
+        fetchSkills();
+    }
+
     async function handleDeleteSkill(skill: Skill) {
         if (!confirm(`Deactivate and remove skill "${skill.name}"?`)) return;
         await fetch(`/api/admin/skills?id=${skill.id}`, { method: "DELETE" });
@@ -615,12 +625,13 @@ function SkillsTab() {
                                 <th>Providers</th>
                                 <th>Calls</th>
                                 <th>Active</th>
+                                <th>Trial</th>
                                 <th></th>
                             </tr>
                         </thead>
                         <tbody>
                             {skills.length === 0
-                                ? <tr className={styles.emptyRow}><td colSpan={6}>No skills yet. Add one to start routing.</td></tr>
+                                ? <tr className={styles.emptyRow}><td colSpan={7}>No skills yet. Add one to start routing.</td></tr>
                                 : skills.map(s => (
                                     <Fragment key={s.id}>
                                         <tr className={selectedSkillId === s.id ? styles.rowSelected : ""}>
@@ -641,6 +652,14 @@ function SkillsTab() {
                                                 </button>
                                             </td>
                                             <td>
+                                                <button
+                                                    className={s.trial_available ? styles.toggleOn : styles.toggleOff}
+                                                    onClick={() => handleToggleTrial(s)}
+                                                >
+                                                    {s.trial_available ? "Trial" : "Paid"}
+                                                </button>
+                                            </td>
+                                            <td>
                                                 <div style={{ display: "flex", gap: 8 }}>
                                                     <button
                                                         className={styles.actionBtn}
@@ -655,7 +674,7 @@ function SkillsTab() {
                                         </tr>
                                         {selectedSkillId === s.id && (
                                             <tr className={styles.providersInlineRow}>
-                                                <td colSpan={6}>
+                                                <td colSpan={7}>
                                                     <ProvidersPanel skill={s} onChanged={fetchSkills} />
                                                 </td>
                                             </tr>
@@ -697,6 +716,7 @@ function SkillModal({ skill, onClose, onSaved }: { skill?: Skill; onClose: () =>
     const [name, setName] = useState(skill?.name ?? "");
     const [description, setDescription] = useState(skill?.description ?? "");
     const [tags, setTags] = useState(skill?.tags ? (JSON.parse(skill.tags) as string[]).join(", ") : "");
+    const [trialAvailable, setTrialAvailable] = useState(Boolean(skill?.trial_available));
     const [paramsSchema, setParamsSchema] = useState(skill?.params_schema ?? "");
     const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState("");
@@ -719,7 +739,7 @@ function SkillModal({ skill, onClose, onSaved }: { skill?: Skill; onClose: () =>
         const res = await fetch(url, {
             method,
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ name, description, paramsSchema: parsedSchema, tags: tagsArr.length ? tagsArr : null }),
+            body: JSON.stringify({ name, description, paramsSchema: parsedSchema, tags: tagsArr.length ? tagsArr : null, trialAvailable }),
         });
         setSubmitting(false);
 
@@ -748,6 +768,10 @@ function SkillModal({ skill, onClose, onSaved }: { skill?: Skill; onClose: () =>
                         <label>Tags <span className={styles.hint}>(comma-separated, optional)</span></label>
                         <input className={styles.formInput} type="text" placeholder="e.g. search, web, research" value={tags} onChange={e => setTags(e.target.value)} />
                     </div>
+                    <label className={styles.checkboxRow}>
+                        <input type="checkbox" checked={trialAvailable} onChange={e => setTrialAvailable(e.target.checked)} />
+                        Available for anonymous CLI trial
+                    </label>
                     <div className={styles.formGroup}>
                         <label>Params Schema <span className={styles.hint}>(JSON, optional)</span></label>
                         <textarea

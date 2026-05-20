@@ -33,6 +33,7 @@ export interface DiscoveredSkill {
     paramsSchema: string | null;
     tags: string | null;
     similarity: number;
+    trialAvailable: boolean;
 }
 
 export type SkillLookup = Pick<DiscoveredSkill, "id" | "name" | "description" | "category" | "capabilities" | "paramsSchema" | "tags">;
@@ -117,9 +118,14 @@ function skillFromRow(row: {
 }
 
 export async function findExactSkillByIntent(intent: string): Promise<SkillLookup | null> {
+    return findExactSkillByIntentWithFilters(intent);
+}
+
+export async function findExactSkillByIntentWithFilters(intent: string, filters?: { trialOnly?: boolean }): Promise<SkillLookup | null> {
     const normalizedIntent = normalizeSkillText(intent);
     if (!normalizedIntent) return null;
 
+    const trialClause = filters?.trialOnly ? `AND s."trialAvailable" = true` : "";
     const rows = await prisma.$queryRawUnsafe<{
         id: number; name: string; description: string;
         category: string | null; capabilities: string | null;
@@ -130,6 +136,7 @@ export async function findExactSkillByIntent(intent: string): Promise<SkillLooku
          FROM "Skill" s
          WHERE s."isActive" = true
            AND s.status = 'live'
+           ${trialClause}
            AND EXISTS (
              SELECT 1 FROM "Provider" p
              WHERE p."skillId" = s.id AND p."isActive" = true
@@ -160,7 +167,7 @@ export async function findExactSkillByIntent(intent: string): Promise<SkillLooku
 export async function discoverSkills(
     query: string,
     page = 0,
-    filters?: { category?: string; capability?: string },
+    filters?: { category?: string; capability?: string; trialOnly?: boolean },
 ): Promise<DiscoveredSkill[]> {
     const embedding = await embedQuery(query);
     const vectorLiteral = `[${embedding.join(",")}]`;
@@ -197,6 +204,9 @@ export async function discoverSkills(
         conditions.push(`capabilities::text ILIKE $${argIdx++}`);
         args.push(`%"${filters.capability}"%`);
     }
+    if (filters?.trialOnly) {
+        conditions.push(`"trialAvailable" = true`);
+    }
 
     const lexicalParts: string[] = [];
     for (const term of lexicalTerms) {
@@ -212,7 +222,7 @@ export async function discoverSkills(
         category: string | null; capabilities: string | null;
         input_types: string | null; output_types: string | null;
         params_schema: string | null; tags: string | null; similarity: number;
-        min_price: number | null;
+        min_price: number | null; trial_available: boolean;
     }[]>(
         `WITH searchable AS (
             SELECT "Skill".*,
@@ -234,7 +244,8 @@ export async function discoverSkills(
                 "inputTypes" AS input_types, "outputTypes" AS output_types,
                 "paramsSchema" AS params_schema, tags,
                 1 - (embedding <=> $1::vector) AS similarity,
-                min_price
+                min_price,
+                "trialAvailable" AS trial_available
          FROM searchable AS "Skill"
          WHERE ${where}
          ORDER BY (${lexicalScore}) DESC, embedding <=> $1::vector
@@ -254,6 +265,7 @@ export async function discoverSkills(
         tags: r.tags,
         similarity: Number(r.similarity),
         priceUSD: r.min_price != null ? Number(r.min_price) : null,
+        trialAvailable: Boolean(r.trial_available),
     }));
 }
 

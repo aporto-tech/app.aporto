@@ -60,7 +60,7 @@ aporto run 17 --params params.json --wait --json
 | `--provider <hint>` | Provider preference (name or `auto`) |
 | `--wait` | Wait for completion before returning |
 | `--no-wait` | Return immediately with runId |
-| `--max-wait <sec>` | Max wait time (default: 300) |
+| `--max-wait <sec>` | Max wait time (default: 600) |
 | `--session <id>` | Session ID for retry deduplication |
 | `--json` | Structured JSON output |
 
@@ -73,7 +73,7 @@ aporto runs wait <runId> --timeout 600 --interval 10 --json
 
 | Flag | Description |
 |------|-------------|
-| `--timeout <sec>` | Total timeout (default: 300) |
+| `--timeout <sec>` | Total timeout (default: 600) |
 | `--interval <sec>` | Poll interval (default: 30) |
 | `--max-wait <sec>` | Max wait per poll cycle |
 | `--json` | Structured JSON output |

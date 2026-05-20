@@ -26,6 +26,7 @@ export async function GET() {
         input_types: string | null;
         output_types: string | null;
         is_active: boolean;
+        trial_available: boolean;
         created_at: string;
         provider_count: number;
         call_count: number;
@@ -41,6 +42,7 @@ export async function GET() {
             s."inputTypes"  AS input_types,
             s."outputTypes" AS output_types,
             s."isActive"    AS is_active,
+            s."trialAvailable" AS trial_available,
             s."createdAt"   AS created_at,
             (SELECT COUNT(*)::int FROM "Provider" p WHERE p."skillId" = s.id AND p."isActive" = true) AS provider_count,
             (SELECT COUNT(*)::int FROM "SkillCall" c WHERE c."skillId" = s.id) AS call_count
@@ -56,7 +58,7 @@ export async function POST(req: NextRequest) {
     if (forbidden) return forbidden;
 
     const body = await req.json();
-    const { name, description, paramsSchema, tags, providers } = body;
+    const { name, description, paramsSchema, tags, providers, trialAvailable } = body;
 
     if (!name || !description) {
         return NextResponse.json({ error: "name and description are required" }, { status: 400 });
@@ -71,8 +73,8 @@ export async function POST(req: NextRequest) {
     if (providers && Array.isArray(providers) && providers.length > 0) {
         const result = await prisma.$transaction(async (tx) => {
             const skillRows = await tx.$queryRawUnsafe<{ id: number }[]>(
-                `INSERT INTO "Skill" (name, description, embedding, "paramsSchema", tags, category, capabilities, "inputTypes", "outputTypes", "isActive", status, "createdAt")
-                 VALUES ($1, $2, $3::vector, $4, $5, $6, $7, $8, $9, true, 'live', NOW())
+                `INSERT INTO "Skill" (name, description, embedding, "paramsSchema", tags, category, capabilities, "inputTypes", "outputTypes", "isActive", status, "trialAvailable", "createdAt")
+                 VALUES ($1, $2, $3::vector, $4, $5, $6, $7, $8, $9, true, 'live', $10, NOW())
                  RETURNING id`,
                 name, description, vectorLiteral,
                 paramsSchema ? JSON.stringify(paramsSchema) : null,
@@ -81,6 +83,7 @@ export async function POST(req: NextRequest) {
                 JSON.stringify(classification.capabilities),
                 JSON.stringify(classification.inputTypes),
                 JSON.stringify(classification.outputTypes),
+                Boolean(trialAvailable),
             );
             const skillId = skillRows[0].id;
 
@@ -107,8 +110,8 @@ export async function POST(req: NextRequest) {
 
     // Original flow: skill only, no providers
     const rows = await prisma.$queryRawUnsafe<{ id: number }[]>(
-        `INSERT INTO "Skill" (name, description, embedding, "paramsSchema", tags, category, capabilities, "inputTypes", "outputTypes", "isActive", "createdAt")
-         VALUES ($1, $2, $3::vector, $4, $5, $6, $7, $8, $9, true, NOW())
+        `INSERT INTO "Skill" (name, description, embedding, "paramsSchema", tags, category, capabilities, "inputTypes", "outputTypes", "isActive", "trialAvailable", "createdAt")
+         VALUES ($1, $2, $3::vector, $4, $5, $6, $7, $8, $9, true, $10, NOW())
          RETURNING id`,
         name, description, vectorLiteral,
         paramsSchema ? JSON.stringify(paramsSchema) : null,
@@ -117,6 +120,7 @@ export async function POST(req: NextRequest) {
         JSON.stringify(classification.capabilities),
         JSON.stringify(classification.inputTypes),
         JSON.stringify(classification.outputTypes),
+        Boolean(trialAvailable),
     );
 
     return NextResponse.json({ success: true, id: rows[0].id, classification });
@@ -140,6 +144,7 @@ export async function PATCH(req: NextRequest) {
     if ("paramsSchema" in body) { updates.push(`"paramsSchema" = $${i++}`); args.push(body.paramsSchema ? JSON.stringify(body.paramsSchema) : null); }
     if ("tags" in body) { updates.push(`tags = $${i++}`); args.push(body.tags ? JSON.stringify(body.tags) : null); }
     if ("isActive" in body) { updates.push(`"isActive" = $${i++}`); args.push(Boolean(body.isActive)); }
+    if ("trialAvailable" in body) { updates.push(`"trialAvailable" = $${i++}`); args.push(Boolean(body.trialAvailable)); }
     if ("category" in body) { updates.push(`category = $${i++}`); args.push(body.category); }
     if ("capabilities" in body) { updates.push(`capabilities = $${i++}`); args.push(JSON.stringify(body.capabilities)); }
     if ("inputTypes" in body) { updates.push(`"inputTypes" = $${i++}`); args.push(JSON.stringify(body.inputTypes)); }

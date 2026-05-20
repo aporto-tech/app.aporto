@@ -25,6 +25,8 @@ export interface SkillResult {
     similarity: number;
     /** Minimum price (USD) per call from active providers */
     priceUSD: number | null;
+    /** True when this skill can be run through the anonymous CLI trial. */
+    trialAvailable?: boolean;
 }
 
 export interface ExecuteSkillOptions {
@@ -81,7 +83,7 @@ export interface GetSkillRunOptions {
 
 export interface WaitSkillRunOptions {
     runId: string;
-    /** Total client-side wait budget in seconds. Defaults to 300. */
+    /** Total client-side wait budget in seconds. Defaults to 600. */
     timeoutSeconds?: number;
     /** Poll interval in seconds. Defaults to 30. */
     pollIntervalSeconds?: number;
@@ -125,6 +127,8 @@ export interface RunSkillResult {
         retryable?: boolean;
     };
     message?: string;
+    trial?: boolean;
+    trialMessage?: string;
 }
 
 // ── Module ────────────────────────────────────────────────────────────────────
@@ -221,7 +225,7 @@ export function createRoutingModule(apiKey: string, agentName?: string, appBaseU
          * Poll until a skill run reaches a terminal state or the client-side timeout expires.
          */
         async waitSkillRun(opts: WaitSkillRunOptions): Promise<RunSkillResult> {
-            const timeoutMs = Math.max(1, opts.timeoutSeconds ?? 300) * 1000;
+            const timeoutMs = Math.max(1, opts.timeoutSeconds ?? 600) * 1000;
             const pollIntervalMs = Math.max(1, opts.pollIntervalSeconds ?? 30) * 1000;
             const startedAt = Date.now();
             let last: RunSkillResult | null = null;
@@ -230,7 +234,7 @@ export function createRoutingModule(apiKey: string, agentName?: string, appBaseU
                 last = await this.getSkillRun({
                     runId: opts.runId,
                     waitForResult: true,
-                    maxWaitSeconds: opts.maxWaitSeconds ?? 30,
+                    maxWaitSeconds: opts.maxWaitSeconds ?? 600,
                 });
 
                 if (last.status === "succeeded" || last.status === "failed" || last.status === "needs_selection") {
