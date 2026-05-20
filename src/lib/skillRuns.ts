@@ -160,6 +160,26 @@ type ProviderLookupRow = {
     sync_config: string | null;
 };
 
+type AsyncProviderPollResult = {
+    success: boolean;
+    data: unknown;
+    latencyMs: number;
+    errorType: "success" | "timeout" | "network_error" | "error_5xx" | "error_4xx";
+};
+
+type NormalizedProviderTask = {
+    status: RunStatus;
+    data?: unknown;
+    error?: RunSkillResult["error"];
+};
+
+type AsyncProviderAdapter = {
+    name: string;
+    matches(provider: ScoredProvider, initialData?: unknown): boolean;
+    poll(provider: ScoredProvider, providerTaskId: string, internalBaseUrl?: string): Promise<AsyncProviderPollResult>;
+    normalize(data: unknown): NormalizedProviderTask;
+};
+
 function sleep(ms: number) {
     return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -185,6 +205,54 @@ function parseJsonMaybe(value: unknown): unknown {
     } catch {
         return value;
     }
+}
+
+function isEmptyResultValue(value: unknown): boolean {
+    const parsed = parseJsonMaybe(value);
+    if (parsed == null) return true;
+    if (typeof parsed === "string") {
+        const trimmed = parsed.trim().toLowerCase();
+        return trimmed === "" || trimmed === "null" || trimmed === "{}" || trimmed === "[]";
+    }
+    if (Array.isArray(parsed)) return parsed.length === 0;
+    if (isPlainObject(parsed)) return Object.keys(parsed).length === 0;
+    return false;
+}
+
+function hasUsefulResultPayload(value: unknown): boolean {
+    const parsed = parseJsonMaybe(value);
+    if (isEmptyResultValue(parsed)) return false;
+
+    if (typeof parsed === "string") {
+        return /^https?:\/\//i.test(parsed) || parsed.trim().length > 0;
+    }
+
+    if (Array.isArray(parsed)) {
+        return parsed.some((item) => hasUsefulResultPayload(item));
+    }
+
+    if (!isPlainObject(parsed)) return true;
+
+    const directKeys = [
+        "url", "urls", "output", "outputs", "result", "results", "response",
+        "audioUrl", "audio_url", "videoUrl", "video_url", "imageUrl", "image_url",
+        "stored_artifacts",
+    ];
+    for (const key of directKeys) {
+        if (key in parsed && !isEmptyResultValue(parsed[key]) && hasUsefulResultPayload(parsed[key])) {
+            return true;
+        }
+    }
+
+    return Object.entries(parsed).some(([key, child]) => {
+        if (["raw", "providerTask", "taskId", "task_id", "recordId", "jobId", "job_id"].includes(key)) {
+            return false;
+        }
+        if (/(url|output|result|response|artifact)/i.test(key)) {
+            return hasUsefulResultPayload(child);
+        }
+        return false;
+    });
 }
 
 function findStringKey(value: unknown, keys: string[]): string | null {
@@ -238,8 +306,7 @@ function findNumberKey(value: unknown, keys: string[]): number | null {
 }
 
 function resolveActualCostUSD(provider: ScoredProvider, result: unknown, estimatedCostUSD: number): number {
-    const isKieProvider = /\/api\/providers\/kie$/.test(provider.endpoint) || provider.name.startsWith("KIE - ");
-    if (!isKieProvider) return estimatedCostUSD;
+    if (!isKieProvider(provider)) return estimatedCostUSD;
 
     const creditsConsumed = findNumberKey(result, ["creditsConsumed", "credits_consumed", "creditConsumed", "credit_consumed"]);
     if (creditsConsumed != null && creditsConsumed > 0) {
@@ -249,16 +316,22 @@ function resolveActualCostUSD(provider: ScoredProvider, result: unknown, estimat
     return estimatedCostUSD;
 }
 
-function normalizeKieRecordInfo(data: unknown): { status: RunStatus; data?: unknown; error?: RunSkillResult["error"] } {
+function isKieProvider(provider: ScoredProvider): boolean {
+    return /\/api\/providers\/kie$/.test(provider.endpoint) || provider.name.startsWith("KIE - ");
+}
+
+function normalizeKieRecordInfo(data: unknown): NormalizedProviderTask {
     const payload = isPlainObject(data) && isPlainObject(data.data) ? data.data : data;
     if (!isPlainObject(payload)) return { status: "running" };
 
     if (typeof payload.successFlag === "number") {
         if (payload.successFlag === 1) {
+            const response = parseJsonMaybe(payload.response);
+            if (!hasUsefulResultPayload(response)) return { status: "running" };
             return {
                 status: "succeeded",
                 data: {
-                    ...(isPlainObject(payload.response) ? payload.response : { response: payload.response }),
+                    ...(isPlainObject(response) ? response : { response }),
                     providerTask: payload,
                 },
             };
@@ -289,7 +362,8 @@ function normalizeKieRecordInfo(data: unknown): { status: RunStatus; data?: unkn
     }
 
     if (["success", "succeeded", "completed", "complete"].includes(state)) {
-        const parsedResult = parseJsonMaybe(payload.resultJson);
+        const parsedResult = parseJsonMaybe(payload.resultJson ?? payload.result ?? payload.response);
+        if (!hasUsefulResultPayload(parsedResult)) return { status: "running" };
         const result = isPlainObject(parsedResult)
             ? parsedResult
             : { result: parsedResult ?? payload };
@@ -310,10 +384,7 @@ function extractProviderTaskId(data: unknown): string | null {
 }
 
 function lifecycleModeFor(provider: ScoredProvider, data: unknown): "sync" | "async_poll" {
-    const config = provider.syncConfig ?? {};
-    const requestType = typeof config.requestType === "string" ? config.requestType : "";
-    if (requestType === "jobs.createTask") return "async_poll";
-    if (extractProviderTaskId(data) && /\/api\/providers\/kie$/.test(provider.endpoint)) return "async_poll";
+    if (getAsyncProviderAdapter(provider, data)) return "async_poll";
     return "sync";
 }
 
@@ -499,12 +570,7 @@ async function storeFinalResult(input: {
     return artifactResult;
 }
 
-async function pollKieProvider(provider: ScoredProvider, providerTaskId: string, internalBaseUrl?: string): Promise<{
-    success: boolean;
-    data: unknown;
-    latencyMs: number;
-    errorType: "success" | "timeout" | "network_error" | "error_5xx" | "error_4xx";
-}> {
+async function pollKieProvider(provider: ScoredProvider, providerTaskId: string, internalBaseUrl?: string): Promise<AsyncProviderPollResult> {
     const submitPath = typeof provider.syncConfig?.apiPath === "string" ? provider.syncConfig.apiPath : "";
     const recordInfoPath = submitPath === "/api/v1/veo/generate"
         ? "/api/v1/veo/record-info"
@@ -521,6 +587,26 @@ async function pollKieProvider(provider: ScoredProvider, providerTaskId: string,
         internalBaseUrl,
         false,
     );
+}
+
+const kieAsyncAdapter: AsyncProviderAdapter = {
+    name: "kie",
+    matches(provider, initialData) {
+        const config = provider.syncConfig ?? {};
+        const requestType = typeof config.requestType === "string" ? config.requestType : "";
+        if (!isKieProvider(provider) || requestType === "jobs.recordInfo") return false;
+        return requestType === "jobs.createTask" || Boolean(extractProviderTaskId(initialData));
+    },
+    poll: pollKieProvider,
+    normalize: normalizeKieRecordInfo,
+};
+
+const asyncProviderAdapters: AsyncProviderAdapter[] = [
+    kieAsyncAdapter,
+];
+
+function getAsyncProviderAdapter(provider: ScoredProvider, initialData?: unknown): AsyncProviderAdapter | null {
+    return asyncProviderAdapters.find((adapter) => adapter.matches(provider, initialData)) ?? null;
 }
 
 async function waitForProviderResult(input: {
@@ -541,12 +627,31 @@ async function waitForProviderResult(input: {
     charge: Pick<SkillCharge, "promoRedemptionId" | "promoCoveredUSD" | "balanceChargedUSD">;
     billingMode?: "paid" | "trial";
 }): Promise<RunSkillResult> {
+    const adapter = getAsyncProviderAdapter(input.provider, { taskId: input.providerTaskId });
+    if (!adapter) {
+        const error = {
+            code: "ASYNC_PROVIDER_UNSUPPORTED",
+            message: `Async polling is not configured for provider ${input.provider.name}.`,
+            retryable: false,
+        };
+        await updateRun(input.runId, { status: "failed", error, nextPollAt: null });
+        return {
+            status: "failed",
+            runId: input.runId,
+            skillId: input.skillId,
+            providerId: input.provider.id,
+            provider: input.provider.name,
+            providerTaskId: input.providerTaskId,
+            error,
+        };
+    }
+
     const deadline = Date.now() + Math.max(1, input.maxWaitSeconds) * 1000;
     let lastData: unknown = null;
 
     while (Date.now() < deadline) {
         await sleep(2000);
-        const polled = await pollKieProvider(input.provider, input.providerTaskId, input.internalBaseUrl);
+        const polled = await adapter.poll(input.provider, input.providerTaskId, input.internalBaseUrl);
         lastData = polled.data;
         await updateRun(input.runId, {
             providerRaw: polled.data,
@@ -558,7 +663,7 @@ async function waitForProviderResult(input: {
             continue;
         }
 
-        const normalized = normalizeKieRecordInfo(polled.data);
+        const normalized = adapter.normalize(polled.data);
         if (normalized.status === "succeeded") {
             const actualCostUSD = resolveActualCostUSD(input.provider, normalized.data, input.estimatedCostUSD);
             const artifactResult = await storeFinalResult({
