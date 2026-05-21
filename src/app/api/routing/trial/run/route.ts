@@ -10,6 +10,7 @@ import {
 export const dynamic = "force-dynamic";
 
 const ANONYMOUS_NEWAPI_USER_ID = Number(process.env.APORTO_TRIAL_NEWAPI_USER_ID ?? 0);
+const TRIAL_ALL_SKILLS = process.env.APORTO_TRIAL_ALL_SKILLS !== "false";
 
 export async function POST(req: NextRequest) {
     const body = await req.json();
@@ -66,7 +67,7 @@ export async function POST(req: NextRequest) {
             maxWaitSeconds: Number(maxWaitSeconds) || DEFAULT_WAIT_SECONDS,
             sessionId: sessionId ?? `trial-${reservation.usageId}`,
             billingMode: "trial",
-            trialOnly: true,
+            trialOnly: !TRIAL_ALL_SKILLS,
         });
 
         await completeAnonymousTrialRun({
