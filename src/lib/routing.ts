@@ -241,7 +241,7 @@ export async function discoverSkills(
         lexicalParts.push(`CASE WHEN search_text ILIKE $${argIdx++} THEN 1 ELSE 0 END`);
         args.push(`%${term}%`);
     }
-    const lexicalScore = lexicalParts.length ? lexicalParts.join(" + ") : "0";
+    const lexicalScore = lexicalParts.length ? lexicalParts.join(" + ") : "0::int";
 
     const where = conditions.join(" AND ");
 
