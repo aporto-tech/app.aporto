@@ -18,6 +18,7 @@ const TELEGRAM_MODEL = "google/gemini-2.5-flash-lite";
 const MAX_USER_TEXT_CHARS = 1000;
 const MAX_SCHEMA_CHARS = 420;
 const MAX_REPLY_CHARS = 3900;
+const MIN_RUN_CONFIDENCE = 0.7;
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://app.aporto.tech";
 
 type TelegramUpdate = {
@@ -39,6 +40,7 @@ type TelegramPlan = {
     action?: "run_skill" | "ask_clarification" | "discover" | "help";
     intent?: string;
     skillId?: number | null;
+    confidence?: number | null;
     providerHint?: string | null;
     params?: Record<string, unknown>;
     reply?: string;
@@ -65,12 +67,14 @@ function systemPrompt(): string {
         "Return only valid JSON. No markdown. No prose.",
         "Use only the candidate skills provided by the server when choosing skillId.",
         "Keep params minimal and literal. Do not invent URLs, files, emails, phone numbers, credentials, or missing required inputs.",
-        "If the user asks what is available, asks a broad question, or candidates are weak, choose discover.",
+        "Estimate confidence from 0 to 1 that exactly one candidate skill should be executed.",
+        "If confidence is below 0.70, do not run a skill. Choose ask_clarification and include 2-5 concrete skill options in reply.",
+        "If the user asks what is available, asks a broad question, or candidates are weak, choose discover or ask_clarification.",
         "If required params are missing, choose ask_clarification and ask exactly one short question.",
         "For media generation, put the user's creative request in params.prompt.",
         "For text-to-speech, put speakable text in params.text.",
         "For search/scraping, preserve the user's query in params.query unless a candidate schema clearly needs another key.",
-        "Schema: {\"action\":\"run_skill|ask_clarification|discover|help\",\"intent\":\"short skill intent\",\"skillId\":number|null,\"providerHint\":string|null,\"params\":object,\"reply\":\"short user-facing Russian or English message\"}",
+        "Schema: {\"action\":\"run_skill|ask_clarification|discover|help\",\"intent\":\"short skill intent\",\"skillId\":number|null,\"confidence\":number,\"providerHint\":\"string|null\",\"params\":object,\"reply\":\"short user-facing Russian or English message\"}",
     ].join(" ");
 }
 
@@ -79,6 +83,7 @@ function buildPlannerPrompt(userText: string, candidates: Awaited<ReturnType<typ
         id: skill.id,
         name: skill.name,
         category: skill.category,
+        matchScore: Number(skill.similarity.toFixed(3)),
         priceUSD: skill.priceUSD,
         trialAvailable: skill.trialAvailable,
         paramsSchema: skill.paramsSchema ? truncate(skill.paramsSchema, MAX_SCHEMA_CHARS) : null,
@@ -259,6 +264,32 @@ function discoverMessage(candidates: Awaited<ReturnType<typeof discoverSkills>>)
     ].join("\n");
 }
 
+function planConfidence(plan: TelegramPlan): number {
+    const confidence = Number(plan.confidence);
+    if (!Number.isFinite(confidence)) return 0;
+    return Math.max(0, Math.min(1, confidence));
+}
+
+function hasSelectedCandidate(plan: TelegramPlan, candidates: Awaited<ReturnType<typeof discoverSkills>>): boolean {
+    return typeof plan.skillId === "number" && candidates.some((skill) => skill.id === plan.skillId);
+}
+
+function skillClarificationMessage(candidates: Awaited<ReturnType<typeof discoverSkills>>, plan?: TelegramPlan): string {
+    if (!candidates.length) return "Не уверен, какой скил нужно вызвать. Опишите задачу конкретнее.";
+    const intro = plan?.reply && plan.reply.trim()
+        ? plan.reply.trim()
+        : "Не уверен на 70%, какой именно скил вызвать. Выберите один из вариантов:";
+    return [
+        intro,
+        ...candidates.slice(0, 5).map((skill, index) => {
+            const price = skill.priceUSD == null ? "" : ` — $${Number(skill.priceUSD).toFixed(4)}`;
+            return `${index + 1}. ${skill.name}${price}`;
+        }),
+        "",
+        "Ответьте номером или названием скила и добавьте параметры, если они нужны.",
+    ].join("\n");
+}
+
 function resultMessage(result: Awaited<ReturnType<typeof runSkill>>): string {
     if (result.status === "needs_selection" && result.choices?.length) {
         return [
@@ -339,11 +370,18 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ ok: true });
         }
         if (plan.action === "ask_clarification") {
-            await sendMessage(chatId, plan.reply || "Уточните, какой результат нужен?", message.message_id);
+            const reply = planConfidence(plan) >= MIN_RUN_CONFIDENCE && hasSelectedCandidate(plan, candidates)
+                ? plan.reply || "Уточните, какой результат нужен?"
+                : skillClarificationMessage(candidates, plan);
+            await sendMessage(chatId, reply, message.message_id);
             return NextResponse.json({ ok: true });
         }
         if (plan.action === "discover" || plan.action !== "run_skill") {
             await sendMessage(chatId, plan.reply || discoverMessage(candidates), message.message_id);
+            return NextResponse.json({ ok: true });
+        }
+        if (planConfidence(plan) < MIN_RUN_CONFIDENCE || !hasSelectedCandidate(plan, candidates)) {
+            await sendMessage(chatId, skillClarificationMessage(candidates, plan), message.message_id);
             return NextResponse.json({ ok: true });
         }
 
