@@ -8,15 +8,39 @@ echo "Starting Deployment for Aporto..."
 echo "Pulling latest changes from GitHub..."
 cd /var/www/app.aporto.tech
 
+load_env_file() {
+    local file="$1"
+
+    if [ ! -f "$file" ]; then
+        return 1
+    fi
+
+    echo "Loading runtime environment from $file..."
+    set -a
+    # shellcheck disable=SC1090
+    . "$file"
+    set +a
+}
+
 if [ -f .env.local ]; then
-    set -a
-    . ./.env.local
-    set +a
+    load_env_file .env.local
 elif [ -f .env ]; then
-    set -a
-    . ./.env
-    set +a
+    load_env_file .env
+else
+    echo "WARNING: .env.local and .env were not found"
 fi
+
+export NODE_ENV="${NODE_ENV:-production}"
+export PORT="${PORT:-3000}"
+
+echo "Runtime env status:"
+for key in TELEGRAM_BOT_TOKEN TELEGRAM_WEBHOOK_SECRET NEWAPI_ADMIN_KEY NEXT_PUBLIC_APP_URL DATABASE_URL CRON_SECRET; do
+    if [ -n "${!key:-}" ]; then
+        echo "  $key=set"
+    else
+        echo "  $key=missing"
+    fi
+done
 
 git pull origin main || git pull origin master
 
@@ -42,7 +66,7 @@ echo "Restarting with PM2..."
 if pm2 describe "aporto-app" > /dev/null 2>&1; then
     pm2 reload "aporto-app" --update-env
 else
-    PORT=3000 pm2 start "npm start" --name "aporto-app"
+    pm2 start "npm start" --name "aporto-app"
 fi
 
 # 6. Start/Restart async SkillRun poller with PM2
