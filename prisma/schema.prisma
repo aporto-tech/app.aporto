@@ -53,6 +53,37 @@ model User {
   PromoRedemption                PromoRedemption[]
   publisher                      Publisher?
   sessions                       Session[]
+  telegramAccounts               TelegramAccount[]
+  telegramLinkTokens             TelegramLinkToken[]
+}
+
+model TelegramAccount {
+  id             String   @id @default(cuid())
+  userId         String
+  newApiUserId   Int
+  telegramUserId String   @unique
+  chatId         String
+  username       String?
+  firstName      String?
+  linkedAt       DateTime @default(now())
+  lastSeenAt     DateTime @default(now())
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([newApiUserId])
+  @@index([chatId])
+}
+
+model TelegramLinkToken {
+  id        String   @id @default(cuid())
+  userId    String
+  codeHash  String   @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt])
 }
 
 model PasswordResetToken {
@@ -291,6 +322,8 @@ model Skill {
 model AnonymousSkillUsage {
   id                String   @id @default(cuid())
   anonymousClientId String?
+  source            String   @default("cli")
+  externalUserId    String?
   ipHash            String
   skillId           Int?
   runId             String?
@@ -299,6 +332,7 @@ model AnonymousSkillUsage {
   updatedAt         DateTime @updatedAt
 
   @@index([anonymousClientId, createdAt])
+  @@index([source, externalUserId, createdAt])
   @@index([ipHash, createdAt])
   @@index([skillId, createdAt])
 }

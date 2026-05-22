@@ -487,6 +487,20 @@ export default function DashboardPage() {
                     </Link>
                 </div>
 
+                <Link href="/settings?tab=api-keys" className={styles.telegramDashboardCta} style={{ marginBottom: 24 }}>
+                    <div className={styles.telegramCtaIcon}>✈</div>
+                    <div className={styles.telegramCtaCopy}>
+                        <div className={styles.telegramCtaTitle}>
+                            Use Aporto skills in Telegram
+                            <span className={styles.telegramCtaBadge}>New</span>
+                        </div>
+                        <div className={styles.telegramCtaText}>
+                            Connect your account, then run the same skill network from a chat message.
+                        </div>
+                    </div>
+                    <div className={styles.telegramCtaAction}>Connect →</div>
+                </Link>
+
                 <div className={styles.dashboardGrid}>
                     {/* ── Main Column ─────────────────────────────────────── */}
                     <div className={styles.mainCol}>

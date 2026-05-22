@@ -19,6 +19,16 @@ interface ApiToken {
     unlimited_quota: boolean;
 }
 
+interface TelegramLinkStatus {
+    linked: boolean;
+    account?: {
+        username?: string | null;
+        firstName?: string | null;
+        linkedAt?: string;
+        lastSeenAt?: string;
+    } | null;
+}
+
 function SettingsContent() {
     const { data: session, status } = useSession();
     const router = useRouter();
@@ -38,6 +48,10 @@ function SettingsContent() {
 
     const [tokens, setTokens] = useState<ApiToken[]>([]);
     const [loading, setLoading] = useState(true);
+    const [telegramStatus, setTelegramStatus] = useState<TelegramLinkStatus | null>(null);
+    const [telegramLoading, setTelegramLoading] = useState(false);
+    const [telegramCommand, setTelegramCommand] = useState("");
+    const [telegramExpiresAt, setTelegramExpiresAt] = useState("");
 
     const [editingToken, setEditingToken] = useState<ApiToken | null>(null);
     const [editQuota, setEditQuota] = useState("");
@@ -91,15 +105,62 @@ function SettingsContent() {
         }
     }, []);
 
+    const fetchTelegramStatus = useCallback(async () => {
+        try {
+            const res = await fetch("/api/telegram/link");
+            const data = await res.json();
+            if (data.success) setTelegramStatus({ linked: data.linked, account: data.account });
+        } catch (error) {
+            console.error("Failed to fetch Telegram link status", error);
+        }
+    }, []);
+
     useEffect(() => {
         if (status === "unauthenticated") {
             router.push("/login");
         } else if (status === "authenticated" && activeTab === "api-keys") {
             fetchTokens();
+            fetchTelegramStatus();
         } else if (status === "authenticated" && activeTab === "history") {
             fetchHistory();
         }
-    }, [status, router, fetchTokens, fetchHistory, activeTab]);
+    }, [status, router, fetchTokens, fetchTelegramStatus, fetchHistory, activeTab]);
+
+    const handleCreateTelegramLink = async () => {
+        setTelegramLoading(true);
+        try {
+            const res = await fetch("/api/telegram/link", { method: "POST" });
+            const data = await res.json();
+            if (data.success) {
+                setTelegramCommand(data.command);
+                setTelegramExpiresAt(data.expiresAt);
+            } else {
+                alert(data.message || "Failed to create Telegram link code");
+            }
+        } catch {
+            alert("Failed to create Telegram link code");
+        } finally {
+            setTelegramLoading(false);
+        }
+    };
+
+    const handleUnlinkTelegram = async () => {
+        if (!confirm("Disconnect Telegram from your Aporto account?")) return;
+        setTelegramLoading(true);
+        try {
+            const res = await fetch("/api/telegram/link", { method: "DELETE" });
+            const data = await res.json();
+            if (data.success) {
+                setTelegramStatus({ linked: false, account: null });
+                setTelegramCommand("");
+                setTelegramExpiresAt("");
+            }
+        } catch {
+            alert("Failed to disconnect Telegram");
+        } finally {
+            setTelegramLoading(false);
+        }
+    };
 
     const handleRevoke = async (tokenId: number) => {
         if (!confirm("Are you sure you want to revoke this API key? This action cannot be undone.")) return;
@@ -178,6 +239,7 @@ function SettingsContent() {
                 </div>
 
                 {activeTab === "api-keys" && (
+                    <>
                     <div className={styles.keysCard}>
                         <div className={styles.cardHeader}>
                             <h2>API Keys</h2>
@@ -233,6 +295,49 @@ function SettingsContent() {
                             </table>
                         )}
                     </div>
+
+                    <div className={styles.integrationCard}>
+                        <div className={styles.cardHeader}>
+                            <h2>Telegram</h2>
+                            <p>Connect your Telegram bot usage to this Aporto account and spend from your real balance instead of trial limits.</p>
+                        </div>
+
+                        {telegramStatus?.linked ? (
+                            <div className={styles.telegramStatusRow}>
+                                <div>
+                                    <div className={styles.integrationTitle}>
+                                        Connected{telegramStatus.account?.username ? ` to @${telegramStatus.account.username}` : ""}
+                                    </div>
+                                    <div className={styles.integrationMeta}>
+                                        Linked {telegramStatus.account?.linkedAt ? new Date(telegramStatus.account.linkedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "recently"}
+                                    </div>
+                                </div>
+                                <button className={`${styles.actionBtn} ${styles.revokeBtn}`} onClick={handleUnlinkTelegram} disabled={telegramLoading}>
+                                    Disconnect
+                                </button>
+                            </div>
+                        ) : (
+                            <div className={styles.telegramLinkBox}>
+                                <div>
+                                    <div className={styles.integrationTitle}>Not connected</div>
+                                    <div className={styles.integrationMeta}>Generate a one-time code, then send it to the Aporto Telegram bot.</div>
+                                </div>
+                                <button className={styles.createBtn} onClick={handleCreateTelegramLink} disabled={telegramLoading}>
+                                    {telegramLoading ? "Creating..." : "Create Link Code"}
+                                </button>
+                            </div>
+                        )}
+
+                        {telegramCommand && (
+                            <div className={styles.telegramCommandBox}>
+                                <div className={styles.telegramCommand}>{telegramCommand}</div>
+                                <div className={styles.integrationMeta}>
+                                    Send this command to the Telegram bot. Expires {new Date(telegramExpiresAt).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}.
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                    </>
                 )}
 
                 {activeTab === "billing" && (

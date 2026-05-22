@@ -33,6 +33,7 @@ export interface DiscoveredSkill {
     paramsSchema: string | null;
     tags: string | null;
     similarity: number;
+    priceUSD: number | null;
     trialAvailable: boolean;
 }
 

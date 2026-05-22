@@ -5,6 +5,7 @@ import { getRequestIp } from "@/lib/discoveryLogs";
 
 export const TRIAL_LIMIT_MESSAGE =
     "Free trial limit reached. Get an API key at https://aporto.tech to keep running Aporto skills.";
+export const TRIAL_NEWAPI_USER_ID = 0;
 
 const CLIENT_LIMIT = Math.max(Number(process.env.APORTO_TRIAL_CLIENT_LIMIT ?? 2) || 2, 1);
 const IP_LIMIT = Math.max(Number(process.env.APORTO_TRIAL_IP_LIMIT ?? 10) || 10, CLIENT_LIMIT);
@@ -29,21 +30,35 @@ export function getTrialIpHash(req: NextRequest): string {
 
 export async function reserveAnonymousTrialRun(input: {
     anonymousClientId?: string | null;
+    source?: "cli" | "telegram" | "web" | string;
+    externalUserId?: string | null;
     ipHash: string;
     skillId?: number | null;
+    enforceIpLimit?: boolean;
 }): Promise<{ allowed: true; usageId: string } | { allowed: false; reason: string; message: string }> {
     const clientId = input.anonymousClientId?.trim().slice(0, 128) || null;
+    const source = input.source?.trim().slice(0, 32) || "cli";
+    const externalUserId = input.externalUserId?.trim().slice(0, 128) || null;
+    const enforceIpLimit = input.enforceIpLimit ?? true;
     const usageId = randomUUID();
 
     return prisma.$transaction(async (tx) => {
-        await tx.$executeRawUnsafe(
-            `SELECT pg_advisory_xact_lock(hashtext($1))`,
-            `trial-ip:${input.ipHash}`,
-        );
+        if (enforceIpLimit) {
+            await tx.$executeRawUnsafe(
+                `SELECT pg_advisory_xact_lock(hashtext($1))`,
+                `trial-ip:${input.ipHash}`,
+            );
+        }
         if (clientId) {
             await tx.$executeRawUnsafe(
                 `SELECT pg_advisory_xact_lock(hashtext($1))`,
                 `trial-client:${clientId}`,
+            );
+        }
+        if (externalUserId) {
+            await tx.$executeRawUnsafe(
+                `SELECT pg_advisory_xact_lock(hashtext($1))`,
+                `trial-external:${source}:${externalUserId}`,
             );
         }
 
@@ -57,27 +72,46 @@ export async function reserveAnonymousTrialRun(input: {
                 WINDOW_HOURS,
             )
             : [{ count: 0 }];
-        const ipRows = await tx.$queryRawUnsafe<{ count: number }[]>(
-            `SELECT COUNT(*)::int AS count
-             FROM "AnonymousSkillUsage"
-             WHERE "ipHash" = $1
-               AND "createdAt" > NOW() - ($2::int * INTERVAL '1 hour')`,
-            input.ipHash,
-            WINDOW_HOURS,
-        );
+        const externalRows = externalUserId
+            ? await tx.$queryRawUnsafe<{ count: number }[]>(
+                `SELECT COUNT(*)::int AS count
+                 FROM "AnonymousSkillUsage"
+                 WHERE "source" = $1
+                   AND "externalUserId" = $2
+                   AND "createdAt" > NOW() - ($3::int * INTERVAL '1 hour')`,
+                source,
+                externalUserId,
+                WINDOW_HOURS,
+            )
+            : [{ count: 0 }];
+        const ipRows = enforceIpLimit
+            ? await tx.$queryRawUnsafe<{ count: number }[]>(
+                `SELECT COUNT(*)::int AS count
+                 FROM "AnonymousSkillUsage"
+                 WHERE "ipHash" = $1
+                   AND "createdAt" > NOW() - ($2::int * INTERVAL '1 hour')`,
+                input.ipHash,
+                WINDOW_HOURS,
+            )
+            : [{ count: 0 }];
 
         if (clientId && Number(clientRows[0]?.count ?? 0) >= CLIENT_LIMIT) {
             return { allowed: false, reason: "client_limit", message: TRIAL_LIMIT_MESSAGE };
+        }
+        if (externalUserId && Number(externalRows[0]?.count ?? 0) >= CLIENT_LIMIT) {
+            return { allowed: false, reason: "external_user_limit", message: TRIAL_LIMIT_MESSAGE };
         }
         if (Number(ipRows[0]?.count ?? 0) >= IP_LIMIT) {
             return { allowed: false, reason: "ip_limit", message: TRIAL_LIMIT_MESSAGE };
         }
 
         await tx.$executeRawUnsafe(
-            `INSERT INTO "AnonymousSkillUsage" (id, "anonymousClientId", "ipHash", "skillId", status, "createdAt", "updatedAt")
-             VALUES ($1, $2, $3, $4, 'started', NOW(), NOW())`,
+            `INSERT INTO "AnonymousSkillUsage" (id, "anonymousClientId", source, "externalUserId", "ipHash", "skillId", status, "createdAt", "updatedAt")
+             VALUES ($1, $2, $3, $4, $5, $6, 'started', NOW(), NOW())`,
             usageId,
             clientId,
+            source,
+            externalUserId,
             input.ipHash,
             input.skillId ?? null,
         );

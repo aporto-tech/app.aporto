@@ -56,11 +56,16 @@
 
 /* Card layout */
 .keysCard,
-.billingCard {
+.billingCard,
+.integrationCard {
     background: #11151c;
     border: 1px solid #222c3b;
     border-radius: 12px;
     padding: 24px;
+}
+
+.integrationCard {
+    margin-top: 20px;
 }
 
 .cardHeader {
@@ -209,6 +214,47 @@
 
 .revokeBtn:hover {
     color: #f87171;
+}
+
+.telegramStatusRow,
+.telegramLinkBox {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    background: #0d1219;
+    border: 1px solid #1e293b;
+    border-radius: 8px;
+    padding: 16px;
+}
+
+.integrationTitle {
+    color: #f8fafc;
+    font-size: 14px;
+    font-weight: 600;
+    margin-bottom: 4px;
+}
+
+.integrationMeta {
+    color: #94a3b8;
+    font-size: 13px;
+    line-height: 1.4;
+}
+
+.telegramCommandBox {
+    margin-top: 12px;
+    background: #07110d;
+    border: 1px solid rgba(0, 220, 130, 0.35);
+    border-radius: 8px;
+    padding: 14px 16px;
+}
+
+.telegramCommand {
+    color: #00dc82;
+    font-family: monospace;
+    font-size: 15px;
+    font-weight: 600;
+    margin-bottom: 6px;
 }
 
 .empty {

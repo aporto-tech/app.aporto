@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { DEFAULT_WAIT_SECONDS, runSkill } from "@/lib/skillRuns";
 import {
     TRIAL_LIMIT_MESSAGE,
+    TRIAL_NEWAPI_USER_ID,
     completeAnonymousTrialRun,
     getTrialIpHash,
     reserveAnonymousTrialRun,
@@ -9,7 +10,6 @@ import {
 
 export const dynamic = "force-dynamic";
 
-const ANONYMOUS_NEWAPI_USER_ID = Number(process.env.APORTO_TRIAL_NEWAPI_USER_ID ?? 0);
 const TRIAL_ALL_SKILLS = process.env.APORTO_TRIAL_ALL_SKILLS !== "false";
 
 export async function POST(req: NextRequest) {
@@ -56,7 +56,7 @@ export async function POST(req: NextRequest) {
     try {
         const result = await runSkill({
             source: "rest",
-            newApiUserId: ANONYMOUS_NEWAPI_USER_ID,
+            newApiUserId: TRIAL_NEWAPI_USER_ID,
             authHeader: "",
             internalBaseUrl: req.nextUrl.origin,
             intent,
