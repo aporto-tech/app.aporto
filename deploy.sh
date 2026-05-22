@@ -32,6 +32,7 @@ fi
 
 export NODE_ENV="${NODE_ENV:-production}"
 export PORT="${PORT:-3000}"
+export TELEGRAM_WEBHOOK_URL="${TELEGRAM_WEBHOOK_URL:-${NEXT_PUBLIC_APP_URL:-https://app.aporto.tech}/api/telegram/webhook}"
 
 echo "Runtime env status:"
 for key in TELEGRAM_BOT_TOKEN TELEGRAM_WEBHOOK_SECRET NEWAPI_ADMIN_KEY NEXT_PUBLIC_APP_URL DATABASE_URL CRON_SECRET; do
@@ -82,6 +83,16 @@ if pm2 describe "aporto-skill-poller" > /dev/null 2>&1; then
     pm2 reload "aporto-skill-poller" --update-env
 else
     pm2 start "npm run skill-runs:poller" --name "aporto-skill-poller"
+fi
+
+if [ -n "$TELEGRAM_BOT_TOKEN" ] && [ -n "$TELEGRAM_WEBHOOK_SECRET" ]; then
+    echo "Syncing Telegram webhook to ${TELEGRAM_WEBHOOK_URL}..."
+    curl -fsS -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/setWebhook" \
+        -H "Content-Type: application/json" \
+        -d "{\"url\":\"${TELEGRAM_WEBHOOK_URL}\",\"secret_token\":\"${TELEGRAM_WEBHOOK_SECRET}\",\"allowed_updates\":[\"message\"]}"
+    echo
+else
+    echo "WARNING: skipping Telegram webhook sync because TELEGRAM_BOT_TOKEN or TELEGRAM_WEBHOOK_SECRET is missing"
 fi
 
 pm2 save
