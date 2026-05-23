@@ -1,0 +1,2 @@
+ALTER TABLE "TelegramConversation"
+ADD COLUMN IF NOT EXISTS "quietMode" BOOLEAN NOT NULL DEFAULT false;

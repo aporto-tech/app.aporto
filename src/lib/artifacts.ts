@@ -2,7 +2,7 @@ import { randomUUID } from "crypto";
 import { artifactExpiresAt, copyUrlToR2, uploadToR2 } from "@/lib/r2";
 
 export type StoredArtifact = {
-    type: "json" | "csv" | "media";
+    type: "json" | "csv" | "markdown" | "media";
     url: string;
     storage_key: string;
     expires_at: string;
@@ -88,6 +88,36 @@ function toCsv(rows: Record<string, unknown>[]): string {
         ...rows.map((row) => headers.map((header) => csvCell(row[header])).join(",")),
     ];
     return `${lines.join("\n")}\n`;
+}
+
+function markdownCell(value: unknown): string {
+    if (value == null) return "";
+    const text = typeof value === "object" ? JSON.stringify(value) : String(value);
+    return text.replace(/\|/g, "\\|").replace(/\s+/g, " ").trim();
+}
+
+function toMarkdownTable(rows: Record<string, unknown>[], maxRows = 100): string {
+    const visibleRows = rows.slice(0, maxRows);
+    const headers = Array.from(new Set(visibleRows.flatMap((row) => Object.keys(row)))).slice(0, 16);
+    if (!headers.length) return "";
+    const lines = [
+        `| ${headers.map(markdownCell).join(" | ")} |`,
+        `| ${headers.map(() => "---").join(" | ")} |`,
+        ...visibleRows.map((row) => `| ${headers.map((header) => markdownCell(row[header])).join(" | ")} |`),
+    ];
+    if (rows.length > maxRows) {
+        lines.push("");
+        lines.push(`Showing ${maxRows} of ${rows.length} rows. Full data is available in CSV/JSON artifacts.`);
+    }
+    return `${lines.join("\n")}\n`;
+}
+
+function extractTextResult(value: unknown): string | null {
+    if (typeof value === "string" && value.trim()) return value.trim();
+    if (!isPlainObject(value)) return null;
+    const direct = value.content ?? value.text ?? value.answer ?? value.result;
+    if (typeof direct === "string" && direct.trim()) return direct.trim();
+    return null;
 }
 
 async function copyMediaUrls(value: unknown, prefix: string, expiresAt: Date): Promise<{
@@ -180,6 +210,21 @@ export async function storeSkillResultArtifacts(input: StoreSkillArtifactsInput)
 
     const rows = findTabularRows(mediaCopy.value);
     if (rows) {
+        const markdownKey = `${prefix}.md`;
+        const markdownUrl = await uploadToR2(
+            markdownKey,
+            Buffer.from(toMarkdownTable(rows)),
+            "text/markdown; charset=utf-8",
+            { expiresAt },
+        );
+        artifacts.push({
+            type: "markdown",
+            url: markdownUrl,
+            storage_key: markdownKey,
+            expires_at: expiresAt.toISOString(),
+            content_type: "text/markdown; charset=utf-8",
+        });
+
         const csvKey = `${prefix}.csv`;
         const csvUrl = await uploadToR2(
             csvKey,
@@ -194,6 +239,24 @@ export async function storeSkillResultArtifacts(input: StoreSkillArtifactsInput)
             expires_at: expiresAt.toISOString(),
             content_type: "text/csv",
         });
+    } else {
+        const textResult = extractTextResult(mediaCopy.value);
+        if (textResult && textResult.length > 1500) {
+            const markdownKey = `${prefix}.md`;
+            const markdownUrl = await uploadToR2(
+                markdownKey,
+                Buffer.from(`${textResult}\n`),
+                "text/markdown; charset=utf-8",
+                { expiresAt },
+            );
+            artifacts.push({
+                type: "markdown",
+                url: markdownUrl,
+                storage_key: markdownKey,
+                expires_at: expiresAt.toISOString(),
+                content_type: "text/markdown; charset=utf-8",
+            });
+        }
     }
 
     return {

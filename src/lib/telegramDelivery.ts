@@ -25,7 +25,27 @@ export function telegramRunButtons(runId?: string): TelegramReplyMarkup {
     };
 }
 
-export function resultText(result: NonNullable<SkillRunResult>): string {
+function textFromResultData(data: unknown): string | null {
+    if (typeof data === "string" && data.trim()) return data.trim();
+    if (!data || typeof data !== "object" || Array.isArray(data)) return null;
+    const object = data as Record<string, unknown>;
+    for (const key of ["content", "text", "answer", "message"]) {
+        const value = object[key];
+        if (typeof value === "string" && value.trim()) return value.trim();
+    }
+    const choices = object.choices;
+    if (Array.isArray(choices) && choices[0] && typeof choices[0] === "object") {
+        const message = (choices[0] as { message?: { content?: unknown } }).message;
+        if (typeof message?.content === "string" && message.content.trim()) return message.content.trim();
+    }
+    return null;
+}
+
+function isLlmTextResult(result: NonNullable<SkillRunResult>): boolean {
+    return result.status === "succeeded" && Boolean(textFromResultData(result.data));
+}
+
+export function resultText(result: NonNullable<SkillRunResult>, options: { quietMode?: boolean } = {}): string {
     if (result.status === "needs_selection" && result.choices?.length) {
         return [
             "Нашел несколько похожих скилов. Уточните, какой нужен:",
@@ -45,10 +65,14 @@ export function resultText(result: NonNullable<SkillRunResult>): string {
         return result.error?.message ?? "Не удалось выполнить скил.";
     }
 
+    const textResult = textFromResultData(result.data);
+    if (textResult) return textResult;
+
     const downloadableArtifacts = telegramDownloadableArtifacts(result);
+    if (options.quietMode && downloadableArtifacts.length) return "";
     return [
         "Готово.",
-        result.costUSD != null ? `costUSD: ${result.costUSD}` : null,
+        options.quietMode ? null : result.costUSD != null ? `costUSD: ${result.costUSD}` : null,
         downloadableArtifacts.length ? "Файлы отправляю ниже." : null,
     ].filter(Boolean).join("\n");
 }
@@ -56,6 +80,7 @@ export function resultText(result: NonNullable<SkillRunResult>): string {
 function telegramDownloadableArtifacts(result: NonNullable<SkillRunResult>) {
     if (result.status !== "succeeded") return [];
     const artifacts = result.artifacts ?? [];
+    if (isLlmTextResult(result)) return [];
     const nonJson = artifacts.filter((artifact) => artifact.type !== "json");
     if (nonJson.length) return nonJson;
     return artifacts.filter((artifact) => artifact.type === "json");
@@ -89,8 +114,9 @@ export async function sendTelegramRunResult(input: {
     chatId: number | string;
     result: NonNullable<SkillRunResult>;
     replyToMessageId?: number | null;
+    quietMode?: boolean;
 }): Promise<void> {
-    const text = resultText(input.result);
+    const text = resultText(input.result, { quietMode: input.quietMode });
     if (resultCanSendFiles(input.result)) {
         await sendTelegramArtifacts({
             chatId: input.chatId,
@@ -102,6 +128,7 @@ export async function sendTelegramRunResult(input: {
         });
         return;
     }
+    if (!text.trim()) return;
     await sendTelegramMessage({
         chatId: input.chatId,
         text,
@@ -139,6 +166,10 @@ export async function deliverDueTelegramSkillRuns(input: {
         }
 
         try {
+            const conversation = await prisma.telegramConversation.findUnique({
+                where: { telegramUserId: delivery.telegramUserId },
+                select: { quietMode: true },
+            });
             const result = await getSkillRun({
                 source: "rest",
                 newApiUserId: run.newApiUserId,
@@ -154,6 +185,7 @@ export async function deliverDueTelegramSkillRuns(input: {
                 chatId: delivery.chatId,
                 result,
                 replyToMessageId: delivery.replyToMessageId,
+                quietMode: conversation?.quietMode ?? false,
             });
             await prisma.telegramSkillDelivery.update({
                 where: { id: delivery.id },

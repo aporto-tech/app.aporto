@@ -110,21 +110,25 @@ export async function sendTelegramArtifacts(input: {
 }): Promise<void> {
     const artifacts = input.artifacts?.filter((artifact) => input.includeJson || artifact.type !== "json") ?? [];
     if (!artifacts.length) {
+        if (input.fallbackText.trim()) {
+            await sendTelegramMessage({
+                chatId: input.chatId,
+                text: input.fallbackText,
+                replyToMessageId: input.replyToMessageId,
+                replyMarkup: input.replyMarkup,
+            });
+        }
+        return;
+    }
+
+    if (input.fallbackText.trim()) {
         await sendTelegramMessage({
             chatId: input.chatId,
             text: input.fallbackText,
             replyToMessageId: input.replyToMessageId,
             replyMarkup: input.replyMarkup,
         });
-        return;
     }
-
-    await sendTelegramMessage({
-        chatId: input.chatId,
-        text: input.fallbackText,
-        replyToMessageId: input.replyToMessageId,
-        replyMarkup: input.replyMarkup,
-    });
 
     for (const artifact of artifacts.slice(0, 5)) {
         await sendTelegramArtifact({

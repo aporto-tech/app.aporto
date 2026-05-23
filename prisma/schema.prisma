@@ -97,6 +97,7 @@ model TelegramConversation {
   lastSkillId    Int?
   lastProviderHint String?
   lastRunId      String?
+  quietMode      Boolean  @default(false)
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 

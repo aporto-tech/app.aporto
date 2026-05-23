@@ -224,6 +224,10 @@ function helpMessage(): string {
         "найди LinkedIn профили founders AI agencies",
         "озвучь: Welcome to Aporto",
         "",
+        "Команды:",
+        "/quiet on — не присылать служебные сообщения после результата",
+        "/quiet off — снова показывать cost/status сообщения",
+        "",
         "Для привязки аккаунта откройте Settings в Aporto, создайте Telegram code и отправьте сюда /link CODE.",
         "Без привязки Telegram работает через trial. Когда лимит закончится, получите API key на https://aporto.tech.",
     ].join("\n");
@@ -476,6 +480,7 @@ async function updateConversation(input: {
     lastSkillId?: number | null;
     lastProviderHint?: string | null;
     lastRunId?: string | null;
+    quietMode?: boolean;
 }): Promise<void> {
     await prisma.telegramConversation.upsert({
         where: { telegramUserId: input.telegramUserId },
@@ -489,6 +494,7 @@ async function updateConversation(input: {
             lastSkillId: input.lastSkillId ?? null,
             lastProviderHint: input.lastProviderHint ?? null,
             lastRunId: input.lastRunId ?? null,
+            quietMode: input.quietMode ?? false,
         },
         update: {
             chatId: String(input.chatId),
@@ -499,6 +505,7 @@ async function updateConversation(input: {
             ...(input.lastSkillId !== undefined ? { lastSkillId: input.lastSkillId } : {}),
             ...(input.lastProviderHint !== undefined ? { lastProviderHint: input.lastProviderHint } : {}),
             ...(input.lastRunId !== undefined ? { lastRunId: input.lastRunId } : {}),
+            ...(input.quietMode !== undefined ? { quietMode: input.quietMode } : {}),
         },
     });
 }
@@ -628,6 +635,7 @@ async function runTelegramSkill(input: {
             chatId: input.chatId,
             result,
             replyToMessageId: input.replyToMessageId,
+            quietMode: (await getConversation(input.telegramUserId))?.quietMode ?? false,
         });
     } catch (error) {
         if (reservedUsageId) {
@@ -832,6 +840,29 @@ export async function POST(req: NextRequest) {
         await sendTelegramMessage({
             chatId,
             text: "Telegram отвязан от Aporto. Следующие запуски пойдут через trial.",
+            replyToMessageId: message.message_id,
+        });
+        return NextResponse.json({ ok: true });
+    }
+    if (text.toLowerCase().startsWith("/quiet") || text.toLowerCase().startsWith("/silent") || text.toLowerCase() === "/verbose") {
+        const normalized = text.toLowerCase();
+        const quietMode = normalized === "/verbose"
+            ? false
+            : /\b(on|yes|true|1|вкл|включить)\b/i.test(text)
+                ? true
+                : /\b(off|no|false|0|выкл|выключить)\b/i.test(text)
+                    ? false
+                    : !(await getConversation(telegramUserId))?.quietMode;
+        await updateConversation({
+            telegramUserId,
+            chatId,
+            quietMode,
+        });
+        await sendTelegramMessage({
+            chatId,
+            text: quietMode
+                ? "Quiet mode включен. После результата буду присылать только сам ответ или файлы."
+                : "Quiet mode выключен. Буду показывать служебные сообщения и costUSD.",
             replyToMessageId: message.message_id,
         });
         return NextResponse.json({ ok: true });
