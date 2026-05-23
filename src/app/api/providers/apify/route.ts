@@ -18,9 +18,9 @@ import { NextRequest, NextResponse } from "next/server";
 export const dynamic = "force-dynamic";
 
 const APIFY_BASE = "https://api.apify.com/v2";
-// Wait up to 90s for actor to finish synchronously.
-// Actors that exceed this fall back to async polling (not yet implemented).
-const WAIT_SECS = 90;
+// Keep the initial submit below routing's default 10s provider timeout.
+// Longer Apify actors are completed by SkillRun async polling.
+const WAIT_SECS = 5;
 
 function apifyAuthError(data: unknown): boolean {
     if (!data || typeof data !== "object") return false;
@@ -54,6 +54,46 @@ async function startActor(actorId: string, actorInput: Record<string, unknown>, 
     };
 
     return { runRes, runData };
+}
+
+async function fetchRun(runId: string, apiKey: string) {
+    const runRes = await fetch(`${APIFY_BASE}/actor-runs/${encodeURIComponent(runId)}`, {
+        headers: { "Authorization": `Bearer ${apiKey}` },
+        signal: AbortSignal.timeout(30_000),
+    });
+    const runData = await runRes.json() as {
+        data?: {
+            id?: string;
+            status?: string;
+            defaultDatasetId?: string;
+            exitCode?: number;
+        };
+        error?: { type?: string; message?: string };
+    };
+    return { runRes, runData };
+}
+
+async function fetchDatasetItems(datasetId: string, apiKey: string) {
+    const datasetRes = await fetch(
+        `${APIFY_BASE}/datasets/${encodeURIComponent(datasetId)}/items?clean=true&format=json`,
+        {
+            headers: { "Authorization": `Bearer ${apiKey}` },
+            signal: AbortSignal.timeout(30_000),
+        },
+    );
+
+    if (!datasetRes.ok) {
+        const errText = await datasetRes.text();
+        return {
+            ok: false as const,
+            response: NextResponse.json(
+                { success: false, message: `Failed to fetch results: ${datasetRes.status}`, detail: errText },
+                { status: 502 },
+            ),
+        };
+    }
+
+    return { ok: true as const, items: await datasetRes.json() as unknown[] };
 }
 
 function firstString(...values: unknown[]): string | null {
@@ -165,6 +205,67 @@ export async function POST(req: NextRequest) {
         }
 
         const body = await req.json() as Record<string, unknown>;
+        const fallbackApiKey = process.env.APIFY_API_KEY;
+        let effectiveApiKey = apiKey;
+
+        if (body.requestType === "apify.getRunResult") {
+            const runId = typeof body.runId === "string" ? body.runId : "";
+            if (!runId) {
+                return NextResponse.json({ success: false, message: "Missing required field: runId" }, { status: 400 });
+            }
+
+            let { runRes, runData } = await fetchRun(runId, effectiveApiKey);
+            if (!runRes.ok && apifyAuthError(runData) && fallbackApiKey && fallbackApiKey !== effectiveApiKey) {
+                effectiveApiKey = fallbackApiKey;
+                ({ runRes, runData } = await fetchRun(runId, effectiveApiKey));
+            }
+
+            if (!runRes.ok || runData.error) {
+                return NextResponse.json(
+                    {
+                        success: false,
+                        message: runData.error?.message ?? `Apify error ${runRes.status}`,
+                        detail: runData,
+                    },
+                    { status: runRes.status },
+                );
+            }
+
+            const run = runData.data;
+            const status = run?.status;
+            if (status === "FAILED" || status === "TIMED-OUT" || status === "ABORTED") {
+                return NextResponse.json(
+                    { success: false, message: `Actor run ${status}`, runId: run?.id, status },
+                    { status: 502 },
+                );
+            }
+            if (status !== "SUCCEEDED") {
+                return NextResponse.json({
+                    success: true,
+                    runId: run?.id ?? runId,
+                    status,
+                    datasetId: run?.defaultDatasetId,
+                });
+            }
+
+            const datasetId = run?.defaultDatasetId;
+            if (!datasetId) {
+                return NextResponse.json({ success: false, message: "Actor completed but no dataset produced", runId: run?.id }, { status: 502 });
+            }
+
+            const dataset = await fetchDatasetItems(datasetId, effectiveApiKey);
+            if (!dataset.ok) return dataset.response;
+
+            return NextResponse.json({
+                success: true,
+                items: dataset.items,
+                itemCount: dataset.items.length,
+                datasetId,
+                runId: run?.id,
+                status,
+            });
+        }
+
         const { actorId, ...rawActorInput } = body;
 
         if (!actorId || typeof actorId !== "string") {
@@ -174,9 +275,9 @@ export async function POST(req: NextRequest) {
         // Run actor synchronously — waits up to WAIT_SECS for completion
         let actorInput = rawActorInput;
         let { runRes, runData } = await startActor(actorId, actorInput, apiKey);
-        const fallbackApiKey = process.env.APIFY_API_KEY;
         if (!runRes.ok && apifyAuthError(runData) && fallbackApiKey && fallbackApiKey !== apiKey) {
             console.warn("[providers/apify] providerSecret auth failed; retrying with APIFY_API_KEY env fallback");
+            effectiveApiKey = fallbackApiKey;
             ({ runRes, runData } = await startActor(actorId, actorInput, fallbackApiKey));
         }
 
@@ -191,7 +292,7 @@ export async function POST(req: NextRequest) {
             if (!retryInput) break;
             actorInput = retryInput;
             console.warn(`[providers/apify] retrying with adjusted input for ${missingField ?? typeIssue?.field}`);
-            ({ runRes, runData } = await startActor(actorId, actorInput, fallbackApiKey ?? apiKey));
+            ({ runRes, runData } = await startActor(actorId, actorInput, effectiveApiKey));
         }
 
         if (!runRes.ok || runData.error) {
@@ -222,28 +323,22 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ success: false, message: "Actor completed but no dataset produced", runId: run?.id }, { status: 502 });
         }
 
-        const datasetRes = await fetch(
-            `${APIFY_BASE}/datasets/${datasetId}/items?clean=true&format=json`,
-            {
-                headers: { "Authorization": `Bearer ${apiKey}` },
-                signal: AbortSignal.timeout(30_000),
-            },
-        );
-
-        if (!datasetRes.ok) {
-            const errText = await datasetRes.text();
-            return NextResponse.json(
-                { success: false, message: `Failed to fetch results: ${datasetRes.status}`, detail: errText },
-                { status: 502 },
-            );
+        if (status !== "SUCCEEDED") {
+            return NextResponse.json({
+                success: true,
+                runId: run?.id,
+                status,
+                datasetId,
+            });
         }
 
-        const items = await datasetRes.json() as unknown[];
+        const dataset = await fetchDatasetItems(datasetId, effectiveApiKey);
+        if (!dataset.ok) return dataset.response;
 
         return NextResponse.json({
             success: true,
-            items,
-            itemCount: items.length,
+            items: dataset.items,
+            itemCount: dataset.items.length,
             datasetId,
             runId: run?.id,
             status,

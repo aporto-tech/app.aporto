@@ -257,6 +257,47 @@ function extractText(data: unknown): string | null {
     return null;
 }
 
+function findNumberKey(value: unknown, keys: string[]): number | null {
+    if (typeof value === "number" && Number.isFinite(value)) return value;
+    if (!value || typeof value !== "object") return null;
+    if (Array.isArray(value)) {
+        for (const item of value) {
+            const found = findNumberKey(item, keys);
+            if (found != null) return found;
+        }
+        return null;
+    }
+    const object = value as JsonObject;
+    for (const key of keys) {
+        const direct = object[key];
+        if (typeof direct === "number" && Number.isFinite(direct)) return direct;
+        if (typeof direct === "string" && direct.trim() && Number.isFinite(Number(direct))) return Number(direct);
+    }
+    for (const child of Object.values(object)) {
+        const found = findNumberKey(child, keys);
+        if (found != null) return found;
+    }
+    return null;
+}
+
+function findUsage(data: unknown): unknown {
+    if (!data || typeof data !== "object") return null;
+    if (Array.isArray(data)) {
+        for (const item of data) {
+            const found = findUsage(item);
+            if (found) return found;
+        }
+        return null;
+    }
+    const object = data as JsonObject;
+    if (isObject(object.usage)) return object.usage;
+    for (const child of Object.values(object)) {
+        const found = findUsage(child);
+        if (found) return found;
+    }
+    return null;
+}
+
 export async function POST(req: NextRequest) {
     try {
         const apiKey = (req.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "").trim();
@@ -293,6 +334,8 @@ export async function POST(req: NextRequest) {
             provider: "kie",
             model: requestBody.model ?? body.model ?? null,
             content: extractText(data),
+            usage: findUsage(data),
+            credits_consumed: findNumberKey(data, ["credits_consumed", "creditsConsumed", "credit_consumed", "creditConsumed"]),
             raw: data,
         });
     } catch (error) {

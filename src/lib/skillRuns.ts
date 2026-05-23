@@ -305,6 +305,67 @@ function findNumberKey(value: unknown, keys: string[]): number | null {
     return null;
 }
 
+function findObjectWithNumberKey(value: unknown, keys: string[]): Record<string, unknown> | null {
+    if (!value || typeof value !== "object") return null;
+    if (Array.isArray(value)) {
+        for (const item of value) {
+            const found = findObjectWithNumberKey(item, keys);
+            if (found) return found;
+        }
+        return null;
+    }
+
+    const object = value as Record<string, unknown>;
+    if (keys.some((key) => typeof object[key] === "number" || (typeof object[key] === "string" && Number.isFinite(Number(object[key]))))) {
+        return object;
+    }
+    for (const child of Object.values(object)) {
+        const found = findObjectWithNumberKey(child, keys);
+        if (found) return found;
+    }
+    return null;
+}
+
+function numberFromObject(object: Record<string, unknown>, keys: string[]): number {
+    for (const key of keys) {
+        const value = object[key];
+        if (typeof value === "number" && Number.isFinite(value)) return value;
+        if (typeof value === "string" && value.trim() && Number.isFinite(Number(value))) return Number(value);
+    }
+    return 0;
+}
+
+function numberFromConfig(value: unknown): number | null {
+    if (typeof value === "number" && Number.isFinite(value)) return value;
+    if (typeof value === "string" && value.trim() && Number.isFinite(Number(value))) return Number(value);
+    return null;
+}
+
+function resolveKieLlmUsageCostUSD(provider: ScoredProvider, result: unknown): number | null {
+    const pricing = provider.syncConfig?.pricing;
+    if (!isPlainObject(pricing)) return null;
+
+    const inputUsdPerMillion = numberFromConfig(pricing.inputUsdPerMillionTokens);
+    const outputUsdPerMillion = numberFromConfig(pricing.outputUsdPerMillionTokens);
+    const cachedInputUsdPerMillion = numberFromConfig(pricing.cachedInputUsdPerMillionTokens);
+    if (inputUsdPerMillion == null && outputUsdPerMillion == null) return null;
+
+    const usage = findObjectWithNumberKey(result, ["prompt_tokens", "input_tokens", "completion_tokens", "output_tokens", "total_tokens"]);
+    if (!usage) return null;
+
+    const inputTokens = numberFromObject(usage, ["input_tokens", "prompt_tokens"]);
+    const outputTokens = numberFromObject(usage, ["output_tokens", "completion_tokens"]);
+    const cachedInputTokens = numberFromObject(usage, ["cache_read_input_tokens", "cached_input_tokens"]);
+    const billableInputTokens = Math.max(0, inputTokens - cachedInputTokens);
+
+    const inputCost = inputUsdPerMillion == null ? 0 : (billableInputTokens * inputUsdPerMillion) / 1_000_000;
+    const cachedInputCost = cachedInputUsdPerMillion == null ? 0 : (cachedInputTokens * cachedInputUsdPerMillion) / 1_000_000;
+    const outputCost = outputUsdPerMillion == null ? 0 : (outputTokens * outputUsdPerMillion) / 1_000_000;
+    const total = inputCost + cachedInputCost + outputCost;
+
+    return total > 0 ? Math.max(0.0001, total) : null;
+}
+
 function resolveActualCostUSD(provider: ScoredProvider, result: unknown, estimatedCostUSD: number): number {
     if (!isKieProvider(provider)) return estimatedCostUSD;
 
@@ -313,11 +374,20 @@ function resolveActualCostUSD(provider: ScoredProvider, result: unknown, estimat
         return Math.max(0.0001, creditsConsumed * KIE_CREDIT_TO_USD);
     }
 
+    const llmUsageCost = resolveKieLlmUsageCostUSD(provider, result);
+    if (llmUsageCost != null) return llmUsageCost;
+
     return estimatedCostUSD;
 }
 
 function isKieProvider(provider: ScoredProvider): boolean {
     return /\/api\/providers\/kie$/.test(provider.endpoint) || provider.name.startsWith("KIE - ");
+}
+
+function isApifyProvider(provider: ScoredProvider): boolean {
+    return /\/api\/providers\/apify(?:$|\?)/.test(provider.endpoint)
+        || provider.name.toLowerCase().includes("apify")
+        || typeof provider.syncConfig?.actorId === "string";
 }
 
 function normalizeKieRecordInfo(data: unknown): NormalizedProviderTask {
@@ -377,6 +447,43 @@ function normalizeKieRecordInfo(data: unknown): NormalizedProviderTask {
     }
 
     return { status: "running" };
+}
+
+function normalizeApifyRunResult(data: unknown): NormalizedProviderTask {
+    if (!isPlainObject(data)) return { status: "running" };
+
+    if (data.success === false) {
+        return {
+            status: "failed",
+            error: {
+                code: String(data.status ?? "APIFY_RUN_FAILED"),
+                message: String(data.message ?? "Apify actor run failed."),
+                cause: JSON.stringify(data),
+                retryable: false,
+            },
+        };
+    }
+
+    const status = String(data.status ?? "").toUpperCase();
+    if (["FAILED", "TIMED-OUT", "ABORTED"].includes(status)) {
+        return {
+            status: "failed",
+            error: {
+                code: `APIFY_${status.replace("-", "_")}`,
+                message: `Apify actor run ${status}.`,
+                cause: JSON.stringify(data),
+                retryable: status !== "ABORTED",
+            },
+        };
+    }
+
+    if (status !== "SUCCEEDED") return { status: "running" };
+    if (!Array.isArray(data.items)) return { status: "running" };
+
+    return {
+        status: "succeeded",
+        data,
+    };
 }
 
 function extractProviderTaskId(data: unknown): string | null {
@@ -601,8 +708,40 @@ const kieAsyncAdapter: AsyncProviderAdapter = {
     normalize: normalizeKieRecordInfo,
 };
 
+const apifyAsyncAdapter: AsyncProviderAdapter = {
+    name: "apify",
+    matches(provider, initialData) {
+        if (!isApifyProvider(provider)) return false;
+        if (!isPlainObject(initialData)) return false;
+        const status = String(initialData.status ?? "").toUpperCase();
+        if (status === "SUCCEEDED" && Array.isArray(initialData.items)) return false;
+        return Boolean(initialData.runId ?? initialData.run_id);
+    },
+    poll(provider, providerTaskId, internalBaseUrl) {
+        return executeSkillViaProvider(
+            {
+                ...provider,
+                syncConfig: {
+                    ...(provider.syncConfig ?? {}),
+                    timeoutMs: 60_000,
+                },
+            },
+            {
+                requestType: "apify.getRunResult",
+                runId: providerTaskId,
+            },
+            "",
+            false,
+            internalBaseUrl,
+            false,
+        );
+    },
+    normalize: normalizeApifyRunResult,
+};
+
 const asyncProviderAdapters: AsyncProviderAdapter[] = [
     kieAsyncAdapter,
+    apifyAsyncAdapter,
 ];
 
 function getAsyncProviderAdapter(provider: ScoredProvider, initialData?: unknown): AsyncProviderAdapter | null {

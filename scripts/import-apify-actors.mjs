@@ -54,6 +54,7 @@ const SKILL_DEFINITIONS = [
         },
         searchTerms: ["google maps scraper", "google places scraper"],
         matchKeywords: ["google maps", "maps"],
+        excludeKeywords: ["review", "reviews"],
         pricePerCall: 0.003,
     },
     {

@@ -611,8 +611,14 @@ export async function executeSkillViaProvider(
 
     const latencyMs = Date.now() - start;
 
-    // Response body cap: 512KB for third-party providers, 1MB for internal
-    const responseCap = isThirdParty ? 524_288 : 1_048_576;
+    // Response body cap: keep third-party providers tight, but allow larger
+    // internal JSON payloads such as Apify CSV/JSON extraction results.
+    const configuredResponseCap = Number(provider.syncConfig?.responseCapBytes);
+    const responseCap = isThirdParty
+        ? 524_288
+        : Number.isFinite(configuredResponseCap) && configuredResponseCap > 0
+            ? Math.min(configuredResponseCap, 8_388_608)
+            : 8_388_608;
     const contentLength = Number(res.headers.get("content-length") ?? 0);
     if (contentLength > responseCap) {
         throw new Error(`Provider response exceeds ${isThirdParty ? "512KB" : "1MB"} limit`);

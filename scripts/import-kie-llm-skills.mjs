@@ -9,6 +9,7 @@ const NEWAPI_ADMIN_KEY = process.env.NEWAPI_ADMIN_KEY;
 const KIE_API_KEY = process.env.KIE_API_KEY;
 const PROVIDER_ENDPOINT = process.env.KIE_LLM_PROVIDER_ENDPOINT ?? "https://app.aporto.tech/api/providers/kie-llm";
 const EMBED_DELAY_MS = Number(process.env.EMBED_DELAY_MS ?? "250");
+const PRICING_URL = "https://api.kie.ai/client/v1/model-pricing/page";
 let fallbackEmbeddingLiteral;
 
 const MODEL_CONTROLS = {
@@ -135,6 +136,85 @@ const SKILLS = [
     },
 ];
 
+function parseUsd(value) {
+    const number = Number(String(value ?? "").trim());
+    return Number.isFinite(number) ? number : null;
+}
+
+function modelSlugForPricing(model) {
+    return model.toLowerCase().replace(/\./g, "-");
+}
+
+function pricingMatchScore(row, skill) {
+    const desc = String(row.modelDescription ?? "").toLowerCase();
+    const anchor = String(row.anchor ?? "").toLowerCase();
+    const model = skill.model.toLowerCase();
+    const slug = modelSlugForPricing(model);
+
+    if (desc.includes(model)) return 5;
+    if (desc.includes(slug)) return 4;
+    if (anchor.includes(model) || anchor.includes(slug)) return 3;
+    if (model.includes("codex") && desc.includes(model.replace(/^gpt-/, ""))) return 2;
+    return 0;
+}
+
+async function fetchPricingPage(pageNum) {
+    const res = await fetch(PRICING_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pageNum, pageSize: 100, modelDescription: "", interfaceType: "chat" }),
+    });
+    if (!res.ok) throw new Error(`KIE pricing HTTP ${res.status}: ${await res.text()}`);
+    const data = await res.json();
+    if (data.code !== 200) throw new Error(`KIE pricing error ${data.code}: ${data.msg}`);
+    return data.data;
+}
+
+async function fetchPricingRows() {
+    const first = await fetchPricingPage(1);
+    const rows = [...(first.records ?? [])];
+    for (let page = 2; page <= Number(first.pages ?? 1); page += 1) {
+        const next = await fetchPricingPage(page);
+        rows.push(...(next.records ?? []));
+    }
+    return rows.filter((row) => String(row.interfaceType ?? "").toLowerCase() === "chat");
+}
+
+function pricingForSkill(skill, pricingRows) {
+    const matches = pricingRows
+        .map((row) => ({ row, score: pricingMatchScore(row, skill) }))
+        .filter((item) => item.score > 0)
+        .sort((a, b) => b.score - a.score);
+
+    const input = matches.find((item) => /input/i.test(item.row.modelDescription) && !/cached/i.test(item.row.modelDescription));
+    const output = matches.find((item) => /output/i.test(item.row.modelDescription));
+    const cachedInput = matches.find((item) => /cached.*input|input.*cached/i.test(item.row.modelDescription));
+
+    const inputUsd = parseUsd(input?.row.usdPrice);
+    const outputUsd = parseUsd(output?.row.usdPrice);
+    const cachedInputUsd = parseUsd(cachedInput?.row.usdPrice);
+    const estimatedPricePerCall = Math.max(
+        0.0001,
+        ((inputUsd ?? 0) * 1000 + (outputUsd ?? 0) * 1000) / 1_000_000,
+    );
+
+    return {
+        inputUsdPerMillionTokens: inputUsd,
+        outputUsdPerMillionTokens: outputUsd,
+        cachedInputUsdPerMillionTokens: cachedInputUsd,
+        estimatedPricePerCall,
+        source: "https://api.kie.ai/client/v1/model-pricing/page",
+        rows: matches.slice(0, 3).map((item) => ({
+            modelDescription: item.row.modelDescription,
+            creditPrice: item.row.creditPrice,
+            creditUnit: item.row.creditUnit,
+            usdPrice: item.row.usdPrice,
+            anchor: item.row.anchor,
+        })),
+        importedAt: new Date().toISOString(),
+    };
+}
+
 function buildEmbedText(skill) {
     return [
         "category:llm/chat",
@@ -246,14 +326,16 @@ async function upsertSkill(skill) {
     return rows[0].id;
 }
 
-async function upsertProvider(skillId, skill) {
+async function upsertProvider(skillId, skill, pricingRows) {
     const providerName = `KIE - ${skill.model}`;
+    const pricing = pricingForSkill(skill, pricingRows);
     const syncConfig = JSON.stringify({
         mode: skill.mode,
         model: skill.model,
         apiPath: skill.apiPath,
         timeoutMs: 600000,
         docs: "https://docs.kie.ai/market/quickstart",
+        pricing,
     });
     const existing = await prisma.$queryRawUnsafe(
         `SELECT id FROM "Provider" WHERE "skillId" = $1 AND name = $2 LIMIT 1`,
@@ -268,7 +350,7 @@ async function upsertProvider(skillId, skill) {
              WHERE id = $1`,
             existing[0].id,
             PROVIDER_ENDPOINT,
-            0.0001,
+            pricing.estimatedPricePerCall,
             KIE_API_KEY,
             syncConfig,
         );
@@ -281,7 +363,7 @@ async function upsertProvider(skillId, skill) {
         providerName,
         skillId,
         PROVIDER_ENDPOINT,
-        0.0001,
+        pricing.estimatedPricePerCall,
         KIE_API_KEY,
         syncConfig,
     );
@@ -290,12 +372,13 @@ async function upsertProvider(skillId, skill) {
 
 async function main() {
     if (!KIE_API_KEY && APPLY) throw new Error("KIE_API_KEY is required to apply providers");
+    const pricingRows = await fetchPricingRows();
     console.log(`KIE LLM skills to ${APPLY ? "upsert" : "preview"}: ${SKILLS.length}`);
     for (const skill of SKILLS) {
         console.log(`- ${skill.name} -> ${skill.apiPath} (${skill.model})`);
         if (!APPLY) continue;
         const skillId = await upsertSkill(skill);
-        await upsertProvider(skillId, skill);
+        await upsertProvider(skillId, skill, pricingRows);
     }
 }
 
