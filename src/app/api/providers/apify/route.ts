@@ -56,6 +56,74 @@ async function startActor(actorId: string, actorInput: Record<string, unknown>, 
     return { runRes, runData };
 }
 
+function firstString(...values: unknown[]): string | null {
+    for (const value of values) {
+        if (typeof value === "string" && value.trim()) return value.trim();
+    }
+    return null;
+}
+
+function firstNumber(...values: unknown[]): number | null {
+    for (const value of values) {
+        const number = typeof value === "number" ? value : typeof value === "string" ? Number(value) : NaN;
+        if (Number.isFinite(number) && number > 0) return Math.floor(number);
+    }
+    return null;
+}
+
+function queryWithLocation(input: Record<string, unknown>): string | null {
+    const query = firstString(
+        input.searchQuery,
+        input.query,
+        input.keyword,
+        input.search,
+        input.term,
+        input.prompt,
+    );
+    const location = firstString(input.location, input.city, input.area);
+    return query && location && !query.toLowerCase().includes(location.toLowerCase())
+        ? `${query} in ${location}`
+        : query;
+}
+
+function missingInputField(data: unknown): string | null {
+    if (!data || typeof data !== "object") return null;
+    const error = (data as { error?: { message?: string } }).error;
+    const message = error?.message ?? "";
+    const match = message.match(/Field input\.([A-Za-z0-9_]+) is required/i);
+    return match?.[1] ?? null;
+}
+
+function retryInputForMissingField(
+    field: string,
+    input: Record<string, unknown>,
+): Record<string, unknown> | null {
+    if (input[field] !== undefined) return null;
+    const query = queryWithLocation(input);
+    const maxResults = firstNumber(
+        input.maxResults,
+        input.maxItems,
+        input.limit,
+        input.resultsLimit,
+        input.maxCrawledPlaces,
+    );
+
+    if (/^(keyword|query|search|term|searchQuery|searchString)$/i.test(field) && query) {
+        return { ...input, [field]: query };
+    }
+    if (/^(searchStringsArray|queries)$/i.test(field) && query) {
+        return { ...input, [field]: [query] };
+    }
+    if (/^(maxItems|maxResults|limit|resultsLimit|maxCrawledPlaces)$/i.test(field) && maxResults != null) {
+        return { ...input, [field]: maxResults };
+    }
+    if (/^(location|city|area)$/i.test(field)) {
+        const location = firstString(input.location, input.city, input.area);
+        if (location) return { ...input, [field]: location };
+    }
+    return null;
+}
+
 export async function POST(req: NextRequest) {
     try {
         const apiKey = req.headers.get("authorization")?.replace("Bearer ", "") ?? "";
@@ -65,18 +133,25 @@ export async function POST(req: NextRequest) {
         }
 
         const body = await req.json() as Record<string, unknown>;
-        const { actorId, ...actorInput } = body;
+        const { actorId, ...rawActorInput } = body;
 
         if (!actorId || typeof actorId !== "string") {
             return NextResponse.json({ success: false, message: "Missing required field: actorId (set in provider syncConfig)" }, { status: 400 });
         }
 
         // Run actor synchronously — waits up to WAIT_SECS for completion
+        const actorInput = rawActorInput;
         let { runRes, runData } = await startActor(actorId, actorInput, apiKey);
         const fallbackApiKey = process.env.APIFY_API_KEY;
         if (!runRes.ok && apifyAuthError(runData) && fallbackApiKey && fallbackApiKey !== apiKey) {
             console.warn("[providers/apify] providerSecret auth failed; retrying with APIFY_API_KEY env fallback");
             ({ runRes, runData } = await startActor(actorId, actorInput, fallbackApiKey));
+        }
+        const missingField = !runRes.ok ? missingInputField(runData) : null;
+        const retryInput = missingField ? retryInputForMissingField(missingField, actorInput) : null;
+        if (retryInput) {
+            console.warn(`[providers/apify] retrying with inferred required field: ${missingField}`);
+            ({ runRes, runData } = await startActor(actorId, retryInput, fallbackApiKey ?? apiKey));
         }
 
         if (!runRes.ok || runData.error) {
