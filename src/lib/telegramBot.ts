@@ -106,8 +106,9 @@ export async function sendTelegramArtifacts(input: {
     fallbackText: string;
     replyToMessageId?: number;
     replyMarkup?: TelegramReplyMarkup;
+    includeJson?: boolean;
 }): Promise<void> {
-    const artifacts = input.artifacts?.filter((artifact) => artifact.type !== "json") ?? [];
+    const artifacts = input.artifacts?.filter((artifact) => input.includeJson || artifact.type !== "json") ?? [];
     if (!artifacts.length) {
         await sendTelegramMessage({
             chatId: input.chatId,

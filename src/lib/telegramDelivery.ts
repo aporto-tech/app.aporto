@@ -45,12 +45,20 @@ export function resultText(result: NonNullable<SkillRunResult>): string {
         return result.error?.message ?? "Не удалось выполнить скил.";
     }
 
-    const urls = result.artifacts?.map((artifact) => artifact.url).filter(Boolean) ?? [];
+    const downloadableArtifacts = telegramDownloadableArtifacts(result);
     return [
         "Готово.",
         result.costUSD != null ? `costUSD: ${result.costUSD}` : null,
-        urls.length ? "Файлы отправляю ниже." : null,
+        downloadableArtifacts.length ? "Файлы отправляю ниже." : null,
     ].filter(Boolean).join("\n");
+}
+
+function telegramDownloadableArtifacts(result: NonNullable<SkillRunResult>) {
+    if (result.status !== "succeeded") return [];
+    const artifacts = result.artifacts ?? [];
+    const nonJson = artifacts.filter((artifact) => artifact.type !== "json");
+    if (nonJson.length) return nonJson;
+    return artifacts.filter((artifact) => artifact.type === "json");
 }
 
 export async function registerTelegramDelivery(input: {
@@ -90,6 +98,7 @@ export async function sendTelegramRunResult(input: {
             fallbackText: text,
             replyToMessageId: input.replyToMessageId ?? undefined,
             replyMarkup: telegramRunButtons(input.result.runId),
+            includeJson: true,
         });
         return;
     }
@@ -102,7 +111,7 @@ export async function sendTelegramRunResult(input: {
 }
 
 function resultCanSendFiles(result: NonNullable<SkillRunResult>): result is NonNullable<SkillRunResult> & { artifacts: NonNullable<NonNullable<SkillRunResult>["artifacts"]> } {
-    return result.status === "succeeded" && Boolean(result.artifacts?.some((artifact) => artifact.type !== "json"));
+    return telegramDownloadableArtifacts(result).length > 0;
 }
 
 export async function deliverDueTelegramSkillRuns(input: {
