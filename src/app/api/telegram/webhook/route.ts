@@ -32,6 +32,7 @@ const MAX_SCHEMA_CHARS = 420;
 const MIN_RUN_CONFIDENCE = 0.7;
 const CONFIRM_CONFIDENCE = 0.85;
 const CONFIRM_COST_USD = Number(process.env.TELEGRAM_CONFIRM_COST_USD ?? 0.05);
+const PENDING_SELECTION_TTL_MS = 10 * 60 * 1000;
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://app.aporto.tech";
 
 type TelegramUpdate = {
@@ -355,6 +356,10 @@ function isPendingRunPayload(value: unknown): value is PendingRunPayload {
     return typeof payload.text === "string" && Boolean(payload.plan) && Array.isArray(payload.candidates);
 }
 
+function isFreshPending(updatedAt: Date): boolean {
+    return Date.now() - updatedAt.getTime() <= PENDING_SELECTION_TTL_MS;
+}
+
 function jsonInput(value: unknown): Prisma.InputJsonValue | typeof Prisma.JsonNull | undefined {
     if (value === undefined) return undefined;
     if (value === null) return Prisma.JsonNull;
@@ -403,12 +408,23 @@ async function getConversation(telegramUserId: string) {
 }
 
 function chooseSkillFromText(text: string, candidates: Awaited<ReturnType<typeof discoverSkills>>) {
-    const asNumber = Number(text.trim());
+    const trimmed = text.trim();
+    const numberMatch = trimmed.match(/^(?:#|skill\s*)?(\d+)$/i)
+        ?? trimmed.match(/^(?:выбери|выбираю|вариант|номер|option|choose|pick)\s+(?:#|skill\s*)?(\d+)$/i);
+    const asNumber = Number(numberMatch?.[1]);
     if (Number.isInteger(asNumber) && asNumber >= 1 && asNumber <= candidates.length) {
         return candidates[asNumber - 1];
     }
-    const normalized = text.toLowerCase().trim();
-    return candidates.find((skill) => skill.name.toLowerCase().includes(normalized) || normalized.includes(skill.name.toLowerCase()));
+
+    const normalized = trimmed.toLowerCase();
+    if (normalized.length < 4) return undefined;
+    return candidates.find((skill) => {
+        const skillName = skill.name.toLowerCase();
+        return normalized === skillName
+            || normalized === `run ${skillName}`
+            || normalized === `запусти ${skillName}`
+            || skillName.includes(normalized);
+    });
 }
 
 async function runTelegramSkill(input: {
@@ -530,19 +546,24 @@ async function handlePendingSelection(input: {
     text: string;
 }): Promise<boolean> {
     const conversation = await getConversation(input.telegramUserId);
-    if (conversation?.pendingAction !== "choose_skill" || !isPendingRunPayload(conversation.pendingPayload)) {
+    if (
+        conversation?.pendingAction !== "choose_skill"
+        || !isPendingRunPayload(conversation.pendingPayload)
+        || !isFreshPending(conversation.updatedAt)
+    ) {
         return false;
     }
 
     const pendingPayload = conversation.pendingPayload as PendingRunPayload;
     const selected = chooseSkillFromText(input.text, pendingPayload.candidates);
     if (!selected) {
-        await sendTelegramMessage({
+        await updateConversation({
+            telegramUserId: input.telegramUserId,
             chatId: input.chatId,
-            text: skillClarificationMessage(pendingPayload.candidates),
-            replyToMessageId: input.replyToMessageId,
+            pendingAction: null,
+            pendingPayload: null,
         });
-        return true;
+        return false;
     }
 
     const plan = {
