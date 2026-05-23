@@ -106,7 +106,7 @@ function systemPrompt(): string {
         "If the user asks what is available, asks a broad question, or candidates are weak, choose discover or ask_clarification.",
         "If required params are missing, choose ask_clarification and ask exactly one short question.",
         "For media generation, put the user's creative request in params.prompt.",
-        "For text-to-speech, put speakable text in params.text.",
+        "For text-to-speech, put speakable text in params.text. Do not invent voice_id. If the user names a common voice, use the lowercase voice name, e.g. rachel, adam, bella.",
         "For search/scraping, preserve the user's query in params.query unless a candidate schema clearly needs another key.",
         "Schema: {\"action\":\"run_skill|ask_clarification|discover|help\",\"intent\":\"short skill intent\",\"skillId\":number|null,\"confidence\":number,\"providerHint\":\"string|null\",\"params\":object,\"reply\":\"short user-facing Russian or English message\"}",
     ].join(" ");
