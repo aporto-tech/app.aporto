@@ -330,7 +330,7 @@ export async function selectProvider(
     const preferred = await selectAttributedProvider(skillId, newApiUserId, isThirdParty, exclusions, providerHint, params);
     if (preferred) return preferred;
 
-    const rows = await prisma.$queryRawUnsafe<
+    let rows = await prisma.$queryRawUnsafe<
         ProviderRow[]
     >(
         `WITH used AS (
@@ -377,6 +377,31 @@ export async function selectProvider(
         isThirdParty,
         ...exclusions,
     );
+
+    if (rows.length === 0) {
+        rows = await prisma.$queryRawUnsafe<ProviderRow[]>(
+            `SELECT
+                p.id,
+                p.name,
+                p.endpoint,
+                p."pricePerCall"    AS price_per_call,
+                p."costPerChar"     AS cost_per_char,
+                p."avgLatencyMs"    AS avg_latency_ms,
+                p."retryRate"       AS retry_rate,
+                p."timeoutRate"     AS timeout_rate,
+                p."providerSecret"  AS secret,
+                p."syncConfig"      AS sync_config
+            FROM "Provider" p
+            WHERE p."skillId" = $1
+              AND p."isActive" = true
+              AND ($2 = false OR p."providerSecret" IS NOT NULL)
+              ${exclusionClause.replace(/\$(\d+)/g, (_, index) => `$${Number(index) - 3}`)}
+            ORDER BY p.id`,
+            skillId,
+            isThirdParty,
+            ...exclusions,
+        );
+    }
 
     const compatibleRows = rows.filter((row) => providerMatchesParams(row, params));
     if (compatibleRows.length === 0) return null;
