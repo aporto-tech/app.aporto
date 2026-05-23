@@ -26,7 +26,7 @@ import {
 
 export const dynamic = "force-dynamic";
 
-const TELEGRAM_MODEL = "google/gemini-2.5-flash-lite";
+const TELEGRAM_MODEL = "openai/gpt-5-nano";
 const MAX_USER_TEXT_CHARS = 1000;
 const MAX_SCHEMA_CHARS = 420;
 const MIN_RUN_CONFIDENCE = 0.7;
