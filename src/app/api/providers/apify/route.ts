@@ -22,6 +22,40 @@ const APIFY_BASE = "https://api.apify.com/v2";
 // Actors that exceed this fall back to async polling (not yet implemented).
 const WAIT_SECS = 90;
 
+function apifyAuthError(data: unknown): boolean {
+    if (!data || typeof data !== "object") return false;
+    const error = (data as { error?: { type?: string; message?: string } }).error;
+    return error?.type === "user-or-token-not-found"
+        || /token.*not valid|user was not found/i.test(error?.message ?? "");
+}
+
+async function startActor(actorId: string, actorInput: Record<string, unknown>, apiKey: string) {
+    const runRes = await fetch(
+        `${APIFY_BASE}/acts/${encodeURIComponent(actorId)}/runs?waitSecs=${WAIT_SECS}`,
+        {
+            method: "POST",
+            headers: {
+                "Authorization": `Bearer ${apiKey}`,
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify(actorInput),
+            signal: AbortSignal.timeout((WAIT_SECS + 10) * 1_000),
+        },
+    );
+
+    const runData = await runRes.json() as {
+        data?: {
+            id?: string;
+            status?: string;
+            defaultDatasetId?: string;
+            exitCode?: number;
+        };
+        error?: { type?: string; message?: string };
+    };
+
+    return { runRes, runData };
+}
+
 export async function POST(req: NextRequest) {
     try {
         const apiKey = req.headers.get("authorization")?.replace("Bearer ", "") ?? "";
@@ -38,28 +72,12 @@ export async function POST(req: NextRequest) {
         }
 
         // Run actor synchronously — waits up to WAIT_SECS for completion
-        const runRes = await fetch(
-            `${APIFY_BASE}/acts/${encodeURIComponent(actorId)}/runs?waitSecs=${WAIT_SECS}`,
-            {
-                method: "POST",
-                headers: {
-                    "Authorization": `Bearer ${apiKey}`,
-                    "Content-Type": "application/json",
-                },
-                body: JSON.stringify(actorInput),
-                signal: AbortSignal.timeout((WAIT_SECS + 10) * 1_000),
-            },
-        );
-
-        const runData = await runRes.json() as {
-            data?: {
-                id?: string;
-                status?: string;
-                defaultDatasetId?: string;
-                exitCode?: number;
-            };
-            error?: { type?: string; message?: string };
-        };
+        let { runRes, runData } = await startActor(actorId, actorInput, apiKey);
+        const fallbackApiKey = process.env.APIFY_API_KEY;
+        if (!runRes.ok && apifyAuthError(runData) && fallbackApiKey && fallbackApiKey !== apiKey) {
+            console.warn("[providers/apify] providerSecret auth failed; retrying with APIFY_API_KEY env fallback");
+            ({ runRes, runData } = await startActor(actorId, actorInput, fallbackApiKey));
+        }
 
         if (!runRes.ok || runData.error) {
             return NextResponse.json(
