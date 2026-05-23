@@ -1,0 +1,175 @@
+import { getSkillRun } from "@/lib/skillRuns";
+import { prisma } from "@/lib/prisma";
+import {
+    sendTelegramArtifacts,
+    sendTelegramMessage,
+    type TelegramReplyMarkup,
+} from "@/lib/telegramBot";
+
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://app.aporto.tech";
+
+type SkillRunResult = Awaited<ReturnType<typeof getSkillRun>>;
+
+export function telegramRunButtons(runId?: string): TelegramReplyMarkup {
+    return {
+        inline_keyboard: [
+            [
+                { text: "Retry", callback_data: "retry_last" },
+                { text: "Dashboard", url: `${APP_URL}/dashboard` },
+            ],
+            [
+                { text: "Link account", url: `${APP_URL}/settings?tab=api-keys` },
+            ],
+            ...(runId ? [[{ text: "Open run", url: `${APP_URL}/dashboard?runId=${encodeURIComponent(runId)}` }]] : []),
+        ],
+    };
+}
+
+export function resultText(result: NonNullable<SkillRunResult>): string {
+    if (result.status === "needs_selection" && result.choices?.length) {
+        return [
+            "Нашел несколько похожих скилов. Уточните, какой нужен:",
+            ...result.choices.slice(0, 5).map((choice, index) => `${index + 1}. ${choice.name} (skillId ${choice.skillId})`),
+        ].join("\n");
+    }
+
+    if (result.status === "running" || result.status === "waiting") {
+        return [
+            "Скил запущен, результат готовится.",
+            `runId: ${result.runId}`,
+            "Я пришлю результат сюда, когда он будет готов.",
+        ].join("\n");
+    }
+
+    if (result.status === "failed") {
+        return result.error?.message ?? "Не удалось выполнить скил.";
+    }
+
+    const urls = result.artifacts?.map((artifact) => artifact.url).filter(Boolean) ?? [];
+    return [
+        "Готово.",
+        result.costUSD != null ? `costUSD: ${result.costUSD}` : null,
+        urls.length ? "Файлы отправляю ниже." : null,
+    ].filter(Boolean).join("\n");
+}
+
+export async function registerTelegramDelivery(input: {
+    runId: string;
+    telegramUserId: string;
+    chatId: number | string;
+    replyToMessageId?: number;
+}): Promise<void> {
+    await prisma.telegramSkillDelivery.upsert({
+        where: { runId: input.runId },
+        create: {
+            runId: input.runId,
+            telegramUserId: input.telegramUserId,
+            chatId: String(input.chatId),
+            replyToMessageId: input.replyToMessageId ?? null,
+        },
+        update: {
+            telegramUserId: input.telegramUserId,
+            chatId: String(input.chatId),
+            replyToMessageId: input.replyToMessageId ?? null,
+            status: "pending",
+            lastError: null,
+        },
+    });
+}
+
+export async function sendTelegramRunResult(input: {
+    chatId: number | string;
+    result: NonNullable<SkillRunResult>;
+    replyToMessageId?: number | null;
+}): Promise<void> {
+    const text = resultText(input.result);
+    if (resultCanSendFiles(input.result)) {
+        await sendTelegramArtifacts({
+            chatId: input.chatId,
+            artifacts: input.result.artifacts,
+            fallbackText: text,
+            replyToMessageId: input.replyToMessageId ?? undefined,
+            replyMarkup: telegramRunButtons(input.result.runId),
+        });
+        return;
+    }
+    await sendTelegramMessage({
+        chatId: input.chatId,
+        text,
+        replyToMessageId: input.replyToMessageId ?? undefined,
+        replyMarkup: telegramRunButtons(input.result.runId),
+    });
+}
+
+function resultCanSendFiles(result: NonNullable<SkillRunResult>): result is NonNullable<SkillRunResult> & { artifacts: NonNullable<NonNullable<SkillRunResult>["artifacts"]> } {
+    return result.status === "succeeded" && Boolean(result.artifacts?.some((artifact) => artifact.type !== "json"));
+}
+
+export async function deliverDueTelegramSkillRuns(input: {
+    limit?: number;
+    internalBaseUrl?: string;
+} = {}): Promise<{ checked: number; sent: number; failed: number; skipped: number; errors: Array<{ runId: string; error: string }> }> {
+    const limit = Math.min(50, Math.max(1, input.limit ?? 20));
+    const deliveries = await prisma.telegramSkillDelivery.findMany({
+        where: { status: "pending" },
+        orderBy: { createdAt: "asc" },
+        take: limit,
+    });
+
+    const summary = { checked: 0, sent: 0, failed: 0, skipped: 0, errors: [] as Array<{ runId: string; error: string }> };
+
+    for (const delivery of deliveries) {
+        summary.checked += 1;
+        const run = await prisma.skillRun.findUnique({
+            where: { id: delivery.runId },
+            select: { newApiUserId: true, status: true },
+        });
+        if (!run || !["succeeded", "failed"].includes(run.status)) {
+            summary.skipped += 1;
+            continue;
+        }
+
+        try {
+            const result = await getSkillRun({
+                source: "rest",
+                newApiUserId: run.newApiUserId,
+                runId: delivery.runId,
+                waitForResult: false,
+                internalBaseUrl: input.internalBaseUrl,
+            });
+            if (!result) {
+                summary.skipped += 1;
+                continue;
+            }
+            await sendTelegramRunResult({
+                chatId: delivery.chatId,
+                result,
+                replyToMessageId: delivery.replyToMessageId,
+            });
+            await prisma.telegramSkillDelivery.update({
+                where: { id: delivery.id },
+                data: {
+                    status: "sent",
+                    sentAt: new Date(),
+                    attempts: { increment: 1 },
+                    lastError: null,
+                },
+            });
+            summary.sent += 1;
+        } catch (error) {
+            const message = String(error);
+            await prisma.telegramSkillDelivery.update({
+                where: { id: delivery.id },
+                data: {
+                    status: delivery.attempts >= 4 ? "failed" : "pending",
+                    attempts: { increment: 1 },
+                    lastError: message,
+                },
+            });
+            summary.failed += 1;
+            summary.errors.push({ runId: delivery.runId, error: message });
+        }
+    }
+
+    return summary;
+}

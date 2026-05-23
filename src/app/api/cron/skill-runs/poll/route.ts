@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { pollDueSkillRuns } from "@/lib/skillRuns";
+import { deliverDueTelegramSkillRuns } from "@/lib/telegramDelivery";
 
 export const dynamic = "force-dynamic";
 
@@ -20,8 +21,12 @@ export async function POST(req: NextRequest) {
             maxWaitSecondsPerRun: parsePositiveInt(searchParams.get("maxWaitSecondsPerRun"), 5),
             internalBaseUrl: req.nextUrl.origin,
         });
+        const telegram = await deliverDueTelegramSkillRuns({
+            limit: parsePositiveInt(searchParams.get("telegramLimit"), 20),
+            internalBaseUrl: req.nextUrl.origin,
+        });
 
-        return NextResponse.json({ success: true, ...result });
+        return NextResponse.json({ success: true, ...result, telegram });
     } catch (error) {
         console.error("[cron/skill-runs/poll] Error:", error);
         return NextResponse.json({ success: false, message: "Internal server error" }, { status: 500 });

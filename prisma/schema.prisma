@@ -86,6 +86,40 @@ model TelegramLinkToken {
   @@index([userId, expiresAt])
 }
 
+model TelegramConversation {
+  id             String   @id @default(cuid())
+  telegramUserId String   @unique
+  chatId         String
+  pendingAction  String?
+  pendingPayload Json?
+  lastIntent     String?
+  lastParams     Json?
+  lastSkillId    Int?
+  lastProviderHint String?
+  lastRunId      String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([chatId])
+}
+
+model TelegramSkillDelivery {
+  id               String   @id @default(cuid())
+  runId            String   @unique
+  telegramUserId   String
+  chatId           String
+  replyToMessageId Int?
+  status           String   @default("pending")
+  attempts         Int      @default(0)
+  lastError        String?
+  sentAt           DateTime?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([status, createdAt])
+  @@index([telegramUserId, createdAt])
+}
+
 model PasswordResetToken {
   id        String   @id @default(cuid())
   email     String

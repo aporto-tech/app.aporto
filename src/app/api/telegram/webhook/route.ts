@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { DEFAULT_WAIT_SECONDS, runSkill } from "@/lib/skillRuns";
+import { Prisma } from "@prisma/client";
+import { runSkill } from "@/lib/skillRuns";
 import { discoverSkills } from "@/lib/routing";
 import {
     TRIAL_LIMIT_MESSAGE,
@@ -10,15 +11,27 @@ import {
 } from "@/lib/anonymousTrial";
 import { prisma } from "@/lib/prisma";
 import { hashTelegramLinkCode } from "@/lib/telegramLink";
+import {
+    answerTelegramCallback,
+    sendTelegramChatAction,
+    sendTelegramMessage,
+    type TelegramReplyMarkup,
+} from "@/lib/telegramBot";
+import {
+    registerTelegramDelivery,
+    resultText,
+    sendTelegramRunResult,
+    telegramRunButtons,
+} from "@/lib/telegramDelivery";
 
 export const dynamic = "force-dynamic";
 
-const TELEGRAM_API = "https://api.telegram.org";
 const TELEGRAM_MODEL = "google/gemini-2.5-flash-lite";
 const MAX_USER_TEXT_CHARS = 1000;
 const MAX_SCHEMA_CHARS = 420;
-const MAX_REPLY_CHARS = 3900;
 const MIN_RUN_CONFIDENCE = 0.7;
+const CONFIRM_CONFIDENCE = 0.85;
+const CONFIRM_COST_USD = Number(process.env.TELEGRAM_CONFIRM_COST_USD ?? 0.05);
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://app.aporto.tech";
 
 type TelegramUpdate = {
@@ -26,6 +39,16 @@ type TelegramUpdate = {
         message_id?: number;
         text?: string;
         chat?: { id?: number | string };
+        from?: { id?: number; username?: string; first_name?: string };
+    };
+    callback_query?: {
+        id: string;
+        data?: string;
+        message?: {
+            message_id?: number;
+            chat?: { id?: number | string };
+            text?: string;
+        };
         from?: { id?: number; username?: string; first_name?: string };
     };
 };
@@ -44,6 +67,16 @@ type TelegramPlan = {
     providerHint?: string | null;
     params?: Record<string, unknown>;
     reply?: string;
+};
+
+type PendingRunPayload = {
+    text: string;
+    plan: TelegramPlan;
+    candidates: Awaited<ReturnType<typeof discoverSkills>>;
+};
+
+type TelegramMessageLike = NonNullable<TelegramUpdate["message"]> & {
+    from?: { id?: number; username?: string; first_name?: string };
 };
 
 function truncate(value: string, maxChars: number): string {
@@ -125,31 +158,6 @@ async function planTelegramRequest(userText: string): Promise<{ plan: TelegramPl
     return { plan: parseJsonObject(content), candidates };
 }
 
-async function telegramCall(method: string, body: Record<string, unknown>): Promise<void> {
-    const token = process.env.TELEGRAM_BOT_TOKEN;
-    if (!token) throw new Error("TELEGRAM_BOT_TOKEN is not set");
-
-    const res = await fetch(`${TELEGRAM_API}/bot${token}/${method}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-    });
-    if (!res.ok) throw new Error(`Telegram ${method} error ${res.status}: ${await res.text()}`);
-}
-
-async function sendMessage(chatId: number | string, text: string, replyToMessageId?: number): Promise<void> {
-    await telegramCall("sendMessage", {
-        chat_id: chatId,
-        text: truncate(text, MAX_REPLY_CHARS),
-        disable_web_page_preview: false,
-        ...(replyToMessageId ? { reply_to_message_id: replyToMessageId } : {}),
-    });
-}
-
-async function sendChatAction(chatId: number | string, action: "typing" | "upload_document" = "typing"): Promise<void> {
-    await telegramCall("sendChatAction", { chat_id: chatId, action });
-}
-
 function helpMessage(): string {
     return [
         "Напишите, что нужно сделать, например:",
@@ -179,6 +187,10 @@ function telegramUserIdFor(message: NonNullable<TelegramUpdate["message"]>): str
     return `telegram:${message.from?.id ?? message.chat?.id}`;
 }
 
+function telegramUserIdForCallback(callback: NonNullable<TelegramUpdate["callback_query"]>): string {
+    return `telegram:${callback.from?.id ?? callback.message?.chat?.id}`;
+}
+
 async function findLinkedTelegramAccount(telegramUserId: string): Promise<LinkedTelegramAccount | null> {
     const account = await prisma.telegramAccount.findUnique({
         where: { telegramUserId },
@@ -194,7 +206,7 @@ async function findLinkedTelegramAccount(telegramUserId: string): Promise<Linked
 
 async function linkTelegramAccount(
     code: string,
-    message: NonNullable<TelegramUpdate["message"]>,
+    message: TelegramMessageLike,
 ): Promise<{ success: true; linkedEmail?: string | null } | { success: false; message: string }> {
     const codeHash = hashTelegramLinkCode(code);
     const token = await prisma.telegramLinkToken.findUnique({
@@ -290,32 +302,282 @@ function skillClarificationMessage(candidates: Awaited<ReturnType<typeof discove
     ].join("\n");
 }
 
-function resultMessage(result: Awaited<ReturnType<typeof runSkill>>): string {
-    if (result.status === "needs_selection" && result.choices?.length) {
-        return [
-            "Нашел несколько похожих скилов. Уточните, какой нужен:",
-            ...result.choices.slice(0, 5).map((choice, index) => `${index + 1}. ${choice.name} (skillId ${choice.skillId})`),
-        ].join("\n");
-    }
+function confirmButtons(): TelegramReplyMarkup {
+    return {
+        inline_keyboard: [
+            [
+                { text: "Run", callback_data: "confirm_run" },
+                { text: "Choose skill", callback_data: "choose_skill" },
+            ],
+            [
+                { text: "Dashboard", url: `${APP_URL}/dashboard` },
+                { text: "Link account", url: `${APP_URL}/settings?tab=api-keys` },
+            ],
+        ],
+    };
+}
 
-    if (result.status === "running" || result.status === "waiting") {
-        return [
-            "Скил запущен, результат еще готовится.",
-            `runId: ${result.runId}`,
-            "Я пока не умею сам присылать follow-up из Telegram, поэтому повторите запрос позже через веб/API. Скоро добавим авто-уведомление.",
-        ].join("\n");
-    }
+function chooseButtons(): TelegramReplyMarkup {
+    return {
+        inline_keyboard: [
+            [
+                { text: "Choose skill", callback_data: "choose_skill" },
+            ],
+            [
+                { text: "Dashboard", url: `${APP_URL}/dashboard` },
+                { text: "Link account", url: `${APP_URL}/settings?tab=api-keys` },
+            ],
+        ],
+    };
+}
 
-    if (result.status === "failed") {
-        return result.error?.message ?? "Не удалось выполнить скил.";
-    }
+function shouldConfirmRun(plan: TelegramPlan, candidates: Awaited<ReturnType<typeof discoverSkills>>): boolean {
+    const selected = candidates.find((skill) => skill.id === plan.skillId);
+    const price = selected?.priceUSD ?? 0;
+    return price >= CONFIRM_COST_USD || planConfidence(plan) < CONFIRM_CONFIDENCE;
+}
 
-    const urls = result.artifacts?.map((artifact) => artifact.url).filter(Boolean) ?? [];
+function confirmationMessage(plan: TelegramPlan, candidates: Awaited<ReturnType<typeof discoverSkills>>): string {
+    const selected = candidates.find((skill) => skill.id === plan.skillId);
+    const price = selected?.priceUSD == null ? "unknown price" : `$${Number(selected.priceUSD).toFixed(4)}`;
     return [
-        "Готово.",
-        result.costUSD != null ? `costUSD: ${result.costUSD}` : null,
-        ...urls.slice(0, 5),
-    ].filter(Boolean).join("\n");
+        `Запустить скил: ${selected?.name ?? `skillId ${plan.skillId}`}`,
+        `Стоимость: ${price}`,
+        `Уверенность: ${Math.round(planConfidence(plan) * 100)}%`,
+        "",
+        "Подтвердите запуск или выберите другой скил.",
+    ].join("\n");
+}
+
+function isPendingRunPayload(value: unknown): value is PendingRunPayload {
+    if (!value || typeof value !== "object") return false;
+    const payload = value as PendingRunPayload;
+    return typeof payload.text === "string" && Boolean(payload.plan) && Array.isArray(payload.candidates);
+}
+
+function jsonInput(value: unknown): Prisma.InputJsonValue | typeof Prisma.JsonNull | undefined {
+    if (value === undefined) return undefined;
+    if (value === null) return Prisma.JsonNull;
+    return value as Prisma.InputJsonValue;
+}
+
+async function updateConversation(input: {
+    telegramUserId: string;
+    chatId: number | string;
+    pendingAction?: string | null;
+    pendingPayload?: unknown;
+    lastIntent?: string | null;
+    lastParams?: unknown;
+    lastSkillId?: number | null;
+    lastProviderHint?: string | null;
+    lastRunId?: string | null;
+}): Promise<void> {
+    await prisma.telegramConversation.upsert({
+        where: { telegramUserId: input.telegramUserId },
+        create: {
+            telegramUserId: input.telegramUserId,
+            chatId: String(input.chatId),
+            pendingAction: input.pendingAction ?? null,
+            pendingPayload: jsonInput(input.pendingPayload),
+            lastIntent: input.lastIntent ?? null,
+            lastParams: jsonInput(input.lastParams),
+            lastSkillId: input.lastSkillId ?? null,
+            lastProviderHint: input.lastProviderHint ?? null,
+            lastRunId: input.lastRunId ?? null,
+        },
+        update: {
+            chatId: String(input.chatId),
+            ...(input.pendingAction !== undefined ? { pendingAction: input.pendingAction } : {}),
+            ...(input.pendingPayload !== undefined ? { pendingPayload: jsonInput(input.pendingPayload) } : {}),
+            ...(input.lastIntent !== undefined ? { lastIntent: input.lastIntent } : {}),
+            ...(input.lastParams !== undefined ? { lastParams: jsonInput(input.lastParams) } : {}),
+            ...(input.lastSkillId !== undefined ? { lastSkillId: input.lastSkillId } : {}),
+            ...(input.lastProviderHint !== undefined ? { lastProviderHint: input.lastProviderHint } : {}),
+            ...(input.lastRunId !== undefined ? { lastRunId: input.lastRunId } : {}),
+        },
+    });
+}
+
+async function getConversation(telegramUserId: string) {
+    return prisma.telegramConversation.findUnique({ where: { telegramUserId } });
+}
+
+function chooseSkillFromText(text: string, candidates: Awaited<ReturnType<typeof discoverSkills>>) {
+    const asNumber = Number(text.trim());
+    if (Number.isInteger(asNumber) && asNumber >= 1 && asNumber <= candidates.length) {
+        return candidates[asNumber - 1];
+    }
+    const normalized = text.toLowerCase().trim();
+    return candidates.find((skill) => skill.name.toLowerCase().includes(normalized) || normalized.includes(skill.name.toLowerCase()));
+}
+
+async function runTelegramSkill(input: {
+    req: NextRequest;
+    telegramUserId: string;
+    chatId: number | string;
+    replyToMessageId?: number;
+    text: string;
+    plan: TelegramPlan;
+}): Promise<void> {
+    const linkedAccount = await findLinkedTelegramAccount(input.telegramUserId);
+    let reservedUsageId: string | null = null;
+    let reservedSkillId: number | null = null;
+
+    try {
+        await sendTelegramChatAction(input.chatId, "upload_document");
+
+        const params = input.plan.params && typeof input.plan.params === "object" ? input.plan.params : {};
+        const sessionId = linkedAccount
+            ? `telegram-linked-${linkedAccount.newApiUserId}-${new Date().toISOString().slice(0, 10)}`
+            : `telegram-${input.telegramUserId}-${new Date().toISOString().slice(0, 10)}`;
+
+        if (!linkedAccount) {
+            const reservation = await reserveAnonymousTrialRun({
+                anonymousClientId: input.telegramUserId,
+                source: "telegram",
+                externalUserId: input.telegramUserId,
+                ipHash: getTrialIpHash(input.req),
+                skillId: typeof input.plan.skillId === "number" ? input.plan.skillId : null,
+                enforceIpLimit: false,
+            });
+            if (!reservation.allowed) {
+                await sendTelegramMessage({
+                    chatId: input.chatId,
+                    text: telegramLimitMessage(),
+                    replyToMessageId: input.replyToMessageId,
+                    replyMarkup: telegramRunButtons(),
+                });
+                return;
+            }
+            reservedUsageId = reservation.usageId;
+            reservedSkillId = typeof input.plan.skillId === "number" ? input.plan.skillId : null;
+        }
+
+        const result = await runSkill({
+            source: "rest",
+            newApiUserId: linkedAccount?.newApiUserId ?? TRIAL_NEWAPI_USER_ID,
+            authHeader: "",
+            internalBaseUrl: input.req.nextUrl.origin,
+            intent: input.plan.intent || input.text,
+            params,
+            skillId: typeof input.plan.skillId === "number" ? input.plan.skillId : undefined,
+            providerHint: input.plan.providerHint || undefined,
+            waitForResult: false,
+            sessionId,
+            billingMode: linkedAccount ? "paid" : "trial",
+            trialOnly: false,
+        });
+
+        await updateConversation({
+            telegramUserId: input.telegramUserId,
+            chatId: input.chatId,
+            pendingAction: null,
+            pendingPayload: null,
+            lastIntent: input.plan.intent || input.text,
+            lastParams: params,
+            lastSkillId: result.skillId || input.plan.skillId || null,
+            lastProviderHint: input.plan.providerHint || null,
+            lastRunId: result.runId,
+        });
+
+        if (reservedUsageId) {
+            await completeAnonymousTrialRun({
+                usageId: reservedUsageId,
+                status: result.status,
+                skillId: result.skillId || input.plan.skillId || null,
+                runId: result.runId,
+            });
+        }
+
+        if (result.status === "running" || result.status === "waiting") {
+            await registerTelegramDelivery({
+                runId: result.runId,
+                telegramUserId: input.telegramUserId,
+                chatId: input.chatId,
+                replyToMessageId: input.replyToMessageId,
+            });
+            await sendTelegramMessage({
+                chatId: input.chatId,
+                text: resultText(result),
+                replyToMessageId: input.replyToMessageId,
+                replyMarkup: telegramRunButtons(result.runId),
+            });
+            return;
+        }
+
+        await sendTelegramRunResult({
+            chatId: input.chatId,
+            result,
+            replyToMessageId: input.replyToMessageId,
+        });
+    } catch (error) {
+        if (reservedUsageId) {
+            await completeAnonymousTrialRun({
+                usageId: reservedUsageId,
+                status: "error",
+                skillId: reservedSkillId,
+            }).catch(() => {});
+        }
+        throw error;
+    }
+}
+
+async function handlePendingSelection(input: {
+    req: NextRequest;
+    telegramUserId: string;
+    chatId: number | string;
+    replyToMessageId?: number;
+    text: string;
+}): Promise<boolean> {
+    const conversation = await getConversation(input.telegramUserId);
+    if (conversation?.pendingAction !== "choose_skill" || !isPendingRunPayload(conversation.pendingPayload)) {
+        return false;
+    }
+
+    const pendingPayload = conversation.pendingPayload as PendingRunPayload;
+    const selected = chooseSkillFromText(input.text, pendingPayload.candidates);
+    if (!selected) {
+        await sendTelegramMessage({
+            chatId: input.chatId,
+            text: skillClarificationMessage(pendingPayload.candidates),
+            replyToMessageId: input.replyToMessageId,
+        });
+        return true;
+    }
+
+    const plan = {
+        ...pendingPayload.plan,
+        action: "run_skill" as const,
+        skillId: selected.id,
+        confidence: 1,
+    };
+    if (shouldConfirmRun(plan, pendingPayload.candidates)) {
+        await updateConversation({
+            telegramUserId: input.telegramUserId,
+            chatId: input.chatId,
+            pendingAction: "confirm_run",
+            pendingPayload: {
+                ...pendingPayload,
+                plan,
+            },
+        });
+        await sendTelegramMessage({
+            chatId: input.chatId,
+            text: confirmationMessage(plan, pendingPayload.candidates),
+            replyToMessageId: input.replyToMessageId,
+            replyMarkup: confirmButtons(),
+        });
+        return true;
+    }
+    await runTelegramSkill({
+        req: input.req,
+        telegramUserId: input.telegramUserId,
+        chatId: input.chatId,
+        replyToMessageId: input.replyToMessageId,
+        text: pendingPayload.text,
+        plan,
+    });
+    return true;
 }
 
 export async function POST(req: NextRequest) {
@@ -326,139 +588,244 @@ export async function POST(req: NextRequest) {
     }
 
     const update = await req.json() as TelegramUpdate;
+    const callback = update.callback_query;
+    if (callback) {
+        const chatId = callback.message?.chat?.id;
+        const data = callback.data;
+        if (!chatId || !data) {
+            await answerTelegramCallback(callback.id).catch(() => {});
+            return NextResponse.json({ ok: true });
+        }
+        const telegramUserId = telegramUserIdForCallback(callback);
+        await answerTelegramCallback(callback.id).catch(() => {});
+
+        try {
+            const conversation = await getConversation(telegramUserId);
+
+            if (data === "choose_skill") {
+                if (isPendingRunPayload(conversation?.pendingPayload)) {
+                    await updateConversation({
+                        telegramUserId,
+                        chatId,
+                        pendingAction: "choose_skill",
+                        pendingPayload: conversation.pendingPayload,
+                    });
+                    await sendTelegramMessage({
+                        chatId,
+                        text: skillClarificationMessage(conversation.pendingPayload.candidates),
+                        replyToMessageId: callback.message?.message_id,
+                        replyMarkup: chooseButtons(),
+                    });
+                } else {
+                    await sendTelegramMessage({
+                        chatId,
+                        text: "Опишите задачу, и я предложу подходящие скилы.",
+                        replyToMessageId: callback.message?.message_id,
+                    });
+                }
+                return NextResponse.json({ ok: true });
+            }
+
+            if (data === "confirm_run") {
+                if (!isPendingRunPayload(conversation?.pendingPayload)) {
+                    await sendTelegramMessage({
+                        chatId,
+                        text: "Не нашел ожидающий запуск. Отправьте задачу заново.",
+                        replyToMessageId: callback.message?.message_id,
+                    });
+                    return NextResponse.json({ ok: true });
+                }
+                await runTelegramSkill({
+                    req,
+                    telegramUserId,
+                    chatId,
+                    replyToMessageId: callback.message?.message_id,
+                    text: conversation.pendingPayload.text,
+                    plan: conversation.pendingPayload.plan,
+                });
+                return NextResponse.json({ ok: true });
+            }
+
+            if (data === "retry_last") {
+                if (!conversation?.lastIntent) {
+                    await sendTelegramMessage({
+                        chatId,
+                        text: "Пока нет последнего запуска для повтора. Отправьте новую задачу.",
+                        replyToMessageId: callback.message?.message_id,
+                    });
+                    return NextResponse.json({ ok: true });
+                }
+                await runTelegramSkill({
+                    req,
+                    telegramUserId,
+                    chatId,
+                    replyToMessageId: callback.message?.message_id,
+                    text: conversation.lastIntent,
+                    plan: {
+                        action: "run_skill",
+                        intent: conversation.lastIntent,
+                        skillId: conversation.lastSkillId,
+                        providerHint: conversation.lastProviderHint,
+                        params: conversation.lastParams && typeof conversation.lastParams === "object"
+                            ? conversation.lastParams as Record<string, unknown>
+                            : {},
+                        confidence: 1,
+                    },
+                });
+                return NextResponse.json({ ok: true });
+            }
+
+            return NextResponse.json({ ok: true });
+        } catch (error) {
+            console.error("[telegram/webhook] callback error:", error);
+            await sendTelegramMessage({
+                chatId,
+                text: `Ошибка: ${String(error)}`,
+                replyToMessageId: callback.message?.message_id,
+                replyMarkup: telegramRunButtons(),
+            }).catch(() => {});
+            return NextResponse.json({ ok: true });
+        }
+    }
+
     const message = update.message;
     const chatId = message?.chat?.id;
     const text = message?.text?.trim();
     if (!chatId || !text) return NextResponse.json({ ok: true });
+    const telegramUserId = telegramUserIdFor(message);
 
     if (text === "/start" || text === "/help") {
-        await sendMessage(chatId, helpMessage(), message.message_id);
+        await sendTelegramMessage({
+            chatId,
+            text: helpMessage(),
+            replyToMessageId: message.message_id,
+            replyMarkup: telegramRunButtons(),
+        });
         return NextResponse.json({ ok: true });
     }
     if (text.toLowerCase().startsWith("/link")) {
         const code = text.split(/\s+/)[1];
         if (!code) {
-            await sendMessage(chatId, "Отправьте код так: /link ABC123. Код создается в Aporto Settings.", message.message_id);
+            await sendTelegramMessage({
+                chatId,
+                text: "Отправьте код так: /link ABC123. Код создается в Aporto Settings.",
+                replyToMessageId: message.message_id,
+            });
             return NextResponse.json({ ok: true });
         }
         const linked = await linkTelegramAccount(code, message);
-        await sendMessage(
+        await sendTelegramMessage({
             chatId,
-            linked.success
+            text: linked.success
                 ? `Telegram подключен к Aporto${linked.linkedEmail ? ` (${linked.linkedEmail})` : ""}. Теперь запуски идут с вашего аккаунта.`
                 : linked.message,
-            message.message_id,
-        );
+            replyToMessageId: message.message_id,
+            replyMarkup: telegramRunButtons(),
+        });
         return NextResponse.json({ ok: true });
     }
     if (text === "/unlink") {
-        const telegramUserId = telegramUserIdFor(message);
         await prisma.telegramAccount.deleteMany({ where: { telegramUserId } });
-        await sendMessage(chatId, "Telegram отвязан от Aporto. Следующие запуски пойдут через trial.", message.message_id);
+        await sendTelegramMessage({
+            chatId,
+            text: "Telegram отвязан от Aporto. Следующие запуски пойдут через trial.",
+            replyToMessageId: message.message_id,
+        });
         return NextResponse.json({ ok: true });
     }
 
-    let reservedUsageId: string | null = null;
-    let reservedSkillId: number | null = null;
-
     try {
-        await sendChatAction(chatId);
+        if (await handlePendingSelection({ req, telegramUserId, chatId, replyToMessageId: message.message_id, text })) {
+            return NextResponse.json({ ok: true });
+        }
+
+        await sendTelegramChatAction(chatId);
         const { plan, candidates } = await planTelegramRequest(text);
 
         if (plan.action === "help") {
-            await sendMessage(chatId, helpMessage(), message.message_id);
+            await sendTelegramMessage({
+                chatId,
+                text: helpMessage(),
+                replyToMessageId: message.message_id,
+                replyMarkup: telegramRunButtons(),
+            });
             return NextResponse.json({ ok: true });
         }
         if (plan.action === "ask_clarification") {
             const reply = planConfidence(plan) >= MIN_RUN_CONFIDENCE && hasSelectedCandidate(plan, candidates)
                 ? plan.reply || "Уточните, какой результат нужен?"
                 : skillClarificationMessage(candidates, plan);
-            await sendMessage(chatId, reply, message.message_id);
+            await updateConversation({
+                telegramUserId,
+                chatId,
+                pendingAction: "choose_skill",
+                pendingPayload: { text, plan, candidates },
+            });
+            await sendTelegramMessage({
+                chatId,
+                text: reply,
+                replyToMessageId: message.message_id,
+                replyMarkup: chooseButtons(),
+            });
             return NextResponse.json({ ok: true });
         }
         if (plan.action === "discover" || plan.action !== "run_skill") {
-            await sendMessage(chatId, plan.reply || discoverMessage(candidates), message.message_id);
+            await updateConversation({
+                telegramUserId,
+                chatId,
+                pendingAction: "choose_skill",
+                pendingPayload: { text, plan, candidates },
+            });
+            await sendTelegramMessage({
+                chatId,
+                text: plan.reply || discoverMessage(candidates),
+                replyToMessageId: message.message_id,
+                replyMarkup: chooseButtons(),
+            });
             return NextResponse.json({ ok: true });
         }
         if (planConfidence(plan) < MIN_RUN_CONFIDENCE || !hasSelectedCandidate(plan, candidates)) {
-            await sendMessage(chatId, skillClarificationMessage(candidates, plan), message.message_id);
-            return NextResponse.json({ ok: true });
-        }
-
-        const telegramUserId = telegramUserIdFor(message);
-        const linkedAccount = await findLinkedTelegramAccount(telegramUserId);
-        if (linkedAccount) {
-            await sendChatAction(chatId, "upload_document");
-            const result = await runSkill({
-                source: "rest",
-                newApiUserId: linkedAccount.newApiUserId,
-                authHeader: "",
-                internalBaseUrl: req.nextUrl.origin,
-                intent: plan.intent || text,
-                params: plan.params && typeof plan.params === "object" ? plan.params : {},
-                skillId: typeof plan.skillId === "number" ? plan.skillId : undefined,
-                providerHint: plan.providerHint || undefined,
-                waitForResult: true,
-                maxWaitSeconds: DEFAULT_WAIT_SECONDS,
-                sessionId: `telegram-linked-${linkedAccount.newApiUserId}-${new Date().toISOString().slice(0, 10)}`,
-                billingMode: "paid",
-                trialOnly: false,
+            await updateConversation({
+                telegramUserId,
+                chatId,
+                pendingAction: "choose_skill",
+                pendingPayload: { text, plan, candidates },
             });
-            await sendMessage(chatId, resultMessage(result), message.message_id);
+            await sendTelegramMessage({
+                chatId,
+                text: skillClarificationMessage(candidates, plan),
+                replyToMessageId: message.message_id,
+                replyMarkup: chooseButtons(),
+            });
             return NextResponse.json({ ok: true });
         }
 
-        const reservation = await reserveAnonymousTrialRun({
-            anonymousClientId: telegramUserId,
-            source: "telegram",
-            externalUserId: telegramUserId,
-            ipHash: getTrialIpHash(req),
-            skillId: typeof plan.skillId === "number" ? plan.skillId : null,
-            enforceIpLimit: false,
-        });
-        if (!reservation.allowed) {
-            await sendMessage(chatId, telegramLimitMessage(), message.message_id);
+        if (shouldConfirmRun(plan, candidates)) {
+            await updateConversation({
+                telegramUserId,
+                chatId,
+                pendingAction: "confirm_run",
+                pendingPayload: { text, plan, candidates },
+            });
+            await sendTelegramMessage({
+                chatId,
+                text: confirmationMessage(plan, candidates),
+                replyToMessageId: message.message_id,
+                replyMarkup: confirmButtons(),
+            });
             return NextResponse.json({ ok: true });
         }
-        reservedUsageId = reservation.usageId;
-        reservedSkillId = typeof plan.skillId === "number" ? plan.skillId : null;
 
-        await sendChatAction(chatId, "upload_document");
-        const result = await runSkill({
-            source: "rest",
-            newApiUserId: TRIAL_NEWAPI_USER_ID,
-            authHeader: "",
-            internalBaseUrl: req.nextUrl.origin,
-            intent: plan.intent || text,
-            params: plan.params && typeof plan.params === "object" ? plan.params : {},
-            skillId: typeof plan.skillId === "number" ? plan.skillId : undefined,
-            providerHint: plan.providerHint || undefined,
-            waitForResult: true,
-            maxWaitSeconds: DEFAULT_WAIT_SECONDS,
-            sessionId: `telegram-${reservation.usageId}`,
-            billingMode: "trial",
-            trialOnly: false,
-        });
-
-        await completeAnonymousTrialRun({
-            usageId: reservation.usageId,
-            status: result.status,
-            skillId: result.skillId || plan.skillId || null,
-            runId: result.runId,
-        });
-
-        await sendMessage(chatId, resultMessage(result), message.message_id);
+        await runTelegramSkill({ req, telegramUserId, chatId, replyToMessageId: message.message_id, text, plan });
         return NextResponse.json({ ok: true });
     } catch (error) {
-        if (reservedUsageId) {
-            await completeAnonymousTrialRun({
-                usageId: reservedUsageId,
-                status: "error",
-                skillId: reservedSkillId,
-            }).catch(() => {});
-        }
         console.error("[telegram/webhook] error:", error);
-        await sendMessage(chatId, `Ошибка: ${String(error)}`, message.message_id).catch(() => {});
+        await sendTelegramMessage({
+            chatId,
+            text: `Ошибка: ${String(error)}`,
+            replyToMessageId: message.message_id,
+            replyMarkup: telegramRunButtons(),
+        }).catch(() => {});
         return NextResponse.json({ ok: true });
     }
 }
