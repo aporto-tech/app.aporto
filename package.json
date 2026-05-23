@@ -10,7 +10,8 @@
     "build": "prisma generate && next build",
     "start": "next start",
     "lint": "eslint",
-    "skill-runs:poller": "node scripts/skill-runs-poller.mjs"
+    "skill-runs:poller": "node scripts/skill-runs-poller.mjs",
+    "import:kie-llm-skills": "node scripts/import-kie-llm-skills.mjs"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1034.0",

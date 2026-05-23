@@ -337,7 +337,7 @@ function buildMcpServer(userId: number, authHeader: string, internalBaseUrl?: st
     // ── aporto_chat ───────────────────────────────────────────────────────────
     server.tool(
         "aporto_chat",
-        "LLM chat completions via Aporto gateway. Supports all models available at api.aporto.tech (OpenAI, Anthropic, Gemini, etc).",
+        "LLM chat completions via Aporto gateway. For KIE-hosted LLM skills, use aporto_discover_skills/aporto_run_skill with the model skill name.",
         {
             model:       z.string().describe("Model ID, e.g. openai/gpt-4o-mini, anthropic/claude-haiku-4-5-20251001"),
             messages:    z.array(z.object({
@@ -345,13 +345,33 @@ function buildMcpServer(userId: number, authHeader: string, internalBaseUrl?: st
                              content: z.string(),
                          })).describe("Chat messages array"),
             max_tokens:  z.number().int().optional().describe("Max tokens to generate"),
+            max_completion_tokens: z.number().int().optional().describe("Max completion tokens for compatible models"),
             temperature: z.number().min(0).max(2).optional().describe("Sampling temperature 0-2"),
+            top_p: z.number().min(0).max(1).optional().describe("Nucleus sampling"),
+            reasoning_effort: z.enum(["low", "medium", "high", "xhigh"]).optional().describe("Reasoning effort for compatible models"),
+            reasoning: z.record(z.string(), z.unknown()).optional().describe("Responses API reasoning object, e.g. {effort:'high'}"),
+            response_format: z.record(z.string(), z.unknown()).optional().describe("Structured output response_format object"),
+            tools: z.array(z.record(z.string(), z.unknown())).optional().describe("Tool/function definitions for compatible models"),
+            tool_choice: z.unknown().optional().describe("Tool choice for compatible models"),
+            stop: z.union([z.string(), z.array(z.string())]).optional().describe("Stop sequence(s)"),
         },
-        async ({ model, messages, max_tokens, temperature }) => {
+        async (args) => {
             const sessionId = `mcp-${userId}-${Date.now()}`;
-            const params: Record<string, unknown> = { model, messages };
-            if (max_tokens !== undefined) params.max_tokens = max_tokens;
-            if (temperature !== undefined) params.temperature = temperature;
+            const params: Record<string, unknown> = { model: args.model, messages: args.messages };
+            for (const key of [
+                "max_tokens",
+                "max_completion_tokens",
+                "temperature",
+                "top_p",
+                "reasoning_effort",
+                "reasoning",
+                "response_format",
+                "tools",
+                "tool_choice",
+                "stop",
+            ] as const) {
+                if (args[key] !== undefined) params[key] = args[key];
+            }
 
             const result = await callSkill(SKILL.CHAT, params, sessionId);
             if (!result) return { content: [{ type: "text" as const, text: "No providers available" }], isError: true };

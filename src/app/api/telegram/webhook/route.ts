@@ -30,8 +30,6 @@ const TELEGRAM_MODEL = "google/gemini-2.5-flash-lite";
 const MAX_USER_TEXT_CHARS = 1000;
 const MAX_SCHEMA_CHARS = 420;
 const MIN_RUN_CONFIDENCE = 0.7;
-const CONFIRM_CONFIDENCE = 0.85;
-const CONFIRM_COST_USD = Number(process.env.TELEGRAM_CONFIRM_COST_USD ?? 0.05);
 const PENDING_SELECTION_TTL_MS = 10 * 60 * 1000;
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://app.aporto.tech";
 
@@ -102,10 +100,12 @@ function systemPrompt(): string {
         "Use only the candidate skills provided by the server when choosing skillId.",
         "Keep params minimal and literal. Do not invent URLs, files, emails, phone numbers, credentials, or missing required inputs.",
         "Estimate confidence from 0 to 1 that exactly one candidate skill should be executed.",
+        "If the user explicitly names a candidate model/skill/resolution/duration, choose that skill and set confidence >= 0.90.",
         "If confidence is below 0.70, do not run a skill. Choose ask_clarification and include 2-5 concrete skill options in reply.",
         "If the user asks what is available, asks a broad question, or candidates are weak, choose discover or ask_clarification.",
         "If required params are missing, choose ask_clarification and ask exactly one short question.",
         "For media generation, put the user's creative request in params.prompt.",
+        "For LLM/model chat skills, put the user's request in params.prompt. If the user gives a system/developer instruction, put it in params.system. Pass explicit model controls only when the user asks for them: reasoning_effort, reasoning, thinkingFlag, include_thoughts, temperature, max_tokens, response_format, tools.",
         "For text-to-speech, put speakable text in params.text. Do not invent voice_id. If the user names a common voice, use the lowercase voice name, e.g. rachel, adam, bella.",
         "For search/scraping, preserve the user's query in params.query unless a candidate schema clearly needs another key.",
         "Schema: {\"action\":\"run_skill|ask_clarification|discover|help\",\"intent\":\"short skill intent\",\"skillId\":number|null,\"confidence\":number,\"providerHint\":\"string|null\",\"params\":object,\"reply\":\"short user-facing Russian or English message\"}",
@@ -303,21 +303,6 @@ function skillClarificationMessage(candidates: Awaited<ReturnType<typeof discove
     ].join("\n");
 }
 
-function confirmButtons(): TelegramReplyMarkup {
-    return {
-        inline_keyboard: [
-            [
-                { text: "Run", callback_data: "confirm_run" },
-                { text: "Choose skill", callback_data: "choose_skill" },
-            ],
-            [
-                { text: "Dashboard", url: `${APP_URL}/dashboard` },
-                { text: "Link account", url: `${APP_URL}/settings?tab=api-keys` },
-            ],
-        ],
-    };
-}
-
 function chooseButtons(): TelegramReplyMarkup {
     return {
         inline_keyboard: [
@@ -330,24 +315,6 @@ function chooseButtons(): TelegramReplyMarkup {
             ],
         ],
     };
-}
-
-function shouldConfirmRun(plan: TelegramPlan, candidates: Awaited<ReturnType<typeof discoverSkills>>): boolean {
-    const selected = candidates.find((skill) => skill.id === plan.skillId);
-    const price = selected?.priceUSD ?? 0;
-    return price >= CONFIRM_COST_USD || planConfidence(plan) < CONFIRM_CONFIDENCE;
-}
-
-function confirmationMessage(plan: TelegramPlan, candidates: Awaited<ReturnType<typeof discoverSkills>>): string {
-    const selected = candidates.find((skill) => skill.id === plan.skillId);
-    const price = selected?.priceUSD == null ? "unknown price" : `$${Number(selected.priceUSD).toFixed(4)}`;
-    return [
-        `Запустить скил: ${selected?.name ?? `skillId ${plan.skillId}`}`,
-        `Стоимость: ${price}`,
-        `Уверенность: ${Math.round(planConfidence(plan) * 100)}%`,
-        "",
-        "Подтвердите запуск или выберите другой скил.",
-    ].join("\n");
 }
 
 function isPendingRunPayload(value: unknown): value is PendingRunPayload {
@@ -572,24 +539,6 @@ async function handlePendingSelection(input: {
         skillId: selected.id,
         confidence: 1,
     };
-    if (shouldConfirmRun(plan, pendingPayload.candidates)) {
-        await updateConversation({
-            telegramUserId: input.telegramUserId,
-            chatId: input.chatId,
-            pendingAction: "confirm_run",
-            pendingPayload: {
-                ...pendingPayload,
-                plan,
-            },
-        });
-        await sendTelegramMessage({
-            chatId: input.chatId,
-            text: confirmationMessage(plan, pendingPayload.candidates),
-            replyToMessageId: input.replyToMessageId,
-            replyMarkup: confirmButtons(),
-        });
-        return true;
-    }
     await runTelegramSkill({
         req: input.req,
         telegramUserId: input.telegramUserId,
@@ -644,26 +593,6 @@ export async function POST(req: NextRequest) {
                         replyToMessageId: callback.message?.message_id,
                     });
                 }
-                return NextResponse.json({ ok: true });
-            }
-
-            if (data === "confirm_run") {
-                if (!isPendingRunPayload(conversation?.pendingPayload)) {
-                    await sendTelegramMessage({
-                        chatId,
-                        text: "Не нашел ожидающий запуск. Отправьте задачу заново.",
-                        replyToMessageId: callback.message?.message_id,
-                    });
-                    return NextResponse.json({ ok: true });
-                }
-                await runTelegramSkill({
-                    req,
-                    telegramUserId,
-                    chatId,
-                    replyToMessageId: callback.message?.message_id,
-                    text: conversation.pendingPayload.text,
-                    plan: conversation.pendingPayload.plan,
-                });
                 return NextResponse.json({ ok: true });
             }
 
@@ -773,9 +702,11 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ ok: true });
         }
         if (plan.action === "ask_clarification") {
-            const reply = planConfidence(plan) >= MIN_RUN_CONFIDENCE && hasSelectedCandidate(plan, candidates)
-                ? plan.reply || "Уточните, какой результат нужен?"
-                : skillClarificationMessage(candidates, plan);
+            if (planConfidence(plan) >= MIN_RUN_CONFIDENCE && hasSelectedCandidate(plan, candidates)) {
+                await runTelegramSkill({ req, telegramUserId, chatId, replyToMessageId: message.message_id, text, plan });
+                return NextResponse.json({ ok: true });
+            }
+
             await updateConversation({
                 telegramUserId,
                 chatId,
@@ -784,7 +715,7 @@ export async function POST(req: NextRequest) {
             });
             await sendTelegramMessage({
                 chatId,
-                text: reply,
+                text: skillClarificationMessage(candidates, plan),
                 replyToMessageId: message.message_id,
                 replyMarkup: chooseButtons(),
             });
@@ -817,22 +748,6 @@ export async function POST(req: NextRequest) {
                 text: skillClarificationMessage(candidates, plan),
                 replyToMessageId: message.message_id,
                 replyMarkup: chooseButtons(),
-            });
-            return NextResponse.json({ ok: true });
-        }
-
-        if (shouldConfirmRun(plan, candidates)) {
-            await updateConversation({
-                telegramUserId,
-                chatId,
-                pendingAction: "confirm_run",
-                pendingPayload: { text, plan, candidates },
-            });
-            await sendTelegramMessage({
-                chatId,
-                text: confirmationMessage(plan, candidates),
-                replyToMessageId: message.message_id,
-                replyMarkup: confirmButtons(),
             });
             return NextResponse.json({ ok: true });
         }

@@ -581,6 +581,11 @@ export async function executeSkillViaProvider(
         ? { ...params, ...provider.syncConfig }
         : params;
 
+    const configuredTimeoutMs = Number(provider.syncConfig?.timeoutMs);
+    const timeoutMs = Number.isFinite(configuredTimeoutMs) && configuredTimeoutMs > 0
+        ? Math.min(configuredTimeoutMs, 600_000)
+        : 10_000;
+
     let res: Response;
     try {
         res = await fetch(url, {
@@ -593,8 +598,7 @@ export async function executeSkillViaProvider(
                 "Authorization": provider.secret ? `Bearer ${provider.secret}` : authHeader,
             },
             body: JSON.stringify(mergedParams),
-            // 10s timeout — Vercel function limit is 10s on hobby, 30s on pro
-            signal: AbortSignal.timeout(10_000),
+            signal: AbortSignal.timeout(timeoutMs),
         });
     } catch (err) {
         const latencyMs = Date.now() - start;
