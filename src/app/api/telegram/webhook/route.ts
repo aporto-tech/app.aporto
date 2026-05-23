@@ -73,10 +73,12 @@ type TelegramPlan = {
     reply?: string;
 };
 
+type TelegramCandidate = Awaited<ReturnType<typeof discoverSkills>>[number] & { priceLabel?: string };
+
 type PendingRunPayload = {
     text: string;
     plan: TelegramPlan;
-    candidates: Awaited<ReturnType<typeof discoverSkills>>;
+    candidates: TelegramCandidate[];
 };
 
 type TelegramMessageLike = NonNullable<TelegramUpdate["message"]> & {
@@ -149,7 +151,7 @@ function filterCandidatesForIntent(userText: string, candidates: Awaited<ReturnT
     return filtered.length ? filtered : candidates;
 }
 
-function buildPlannerPrompt(userText: string, candidates: Awaited<ReturnType<typeof discoverSkills>>): string {
+function buildPlannerPrompt(userText: string, candidates: TelegramCandidate[]): string {
     const compactCandidates = candidates.slice(0, 5).map((skill) => ({
         id: skill.id,
         name: skill.name,
@@ -171,8 +173,22 @@ function buildPlannerPrompt(userText: string, candidates: Awaited<ReturnType<typ
     });
 }
 
-async function planTelegramRequest(userText: string): Promise<{ plan: TelegramPlan; candidates: Awaited<ReturnType<typeof discoverSkills>> }> {
-    const candidates = filterCandidatesForIntent(userText, await discoverSkills(userText, 0));
+async function planTelegramRequest(userText: string): Promise<{ plan: TelegramPlan; candidates: TelegramCandidate[] }> {
+    const candidates = await withTelegramPriceLabels(filterCandidatesForIntent(userText, await discoverSkills(userText, 0)));
+    const exactModel = explicitModelCandidate(userText, candidates);
+    if (exactModel) {
+        return {
+            candidates,
+            plan: {
+                action: "run_skill",
+                intent: exactModel.name,
+                skillId: exactModel.id,
+                confidence: 0.98,
+                providerHint: exactModel.name,
+                params: { prompt: extractPromptAfterModelName(userText) },
+            },
+        };
+    }
     const baseUrl = process.env.NEWAPI_URL ?? "https://api.aporto.tech";
     const apiKey = process.env.NEWAPI_ADMIN_KEY;
     if (!apiKey) throw new Error("NEWAPI_ADMIN_KEY is not set");
@@ -306,13 +322,89 @@ async function linkTelegramAccount(
     return { success: true, linkedEmail: token.user.email };
 }
 
-function discoverMessage(candidates: Awaited<ReturnType<typeof discoverSkills>>): string {
+function normalizeModelText(value: string): string {
+    return value.toLowerCase().replace(/[^a-z0-9а-яё]+/gi, "");
+}
+
+function explicitModelCandidate(userText: string, candidates: TelegramCandidate[]): TelegramCandidate | null {
+    const text = normalizeModelText(userText);
+    const modelMentioned = /\b(model|модель)\b/i.test(userText)
+        || /(haiku|opus|sonnet|claude|gemini|gpt|codex)/i.test(userText);
+    if (!modelMentioned) return null;
+
+    const familyChecks: Array<{ family: RegExp; version?: RegExp }> = [
+        { family: /haiku/i, version: /4\.?5/i },
+        { family: /opus/i, version: /4\.?[567]/i },
+        { family: /sonnet/i, version: /4\.?[56]/i },
+        { family: /gemini/i, version: /(?:2\.?5|3\.?1|3)/i },
+        { family: /gpt/i, version: /5\.?[245]/i },
+        { family: /codex/i, version: /5(?:\.?[1234])?/i },
+    ];
+
+    for (const candidate of candidates) {
+        const name = candidate.name;
+        if (!/\b(chat|llm|claude|gpt|gemini|codex)\b/i.test(name)) continue;
+        const normalizedName = normalizeModelText(name);
+        const matched = familyChecks.some(({ family, version }) => {
+            if (!family.test(userText) || !family.test(name)) return false;
+            return !version || (version.test(userText) && version.test(name));
+        });
+        if (matched || normalizedName.includes(text)) return candidate;
+    }
+    return null;
+}
+
+function extractPromptAfterModelName(userText: string): string {
+    const dashMatch = userText.match(/[-:—]\s*(.+)$/);
+    if (dashMatch?.[1]?.trim()) return dashMatch[1].trim();
+    return userText
+        .replace(/\bмодель\b/gi, "")
+        .replace(/\bmodel\b/gi, "")
+        .replace(/\b(claude|haiku|opus|sonnet|gemini|gpt|codex)\b\s*[\w. -]*/i, "")
+        .trim() || userText;
+}
+
+function priceLabel(skill: TelegramCandidate): string {
+    if (skill.priceLabel) return ` — ${skill.priceLabel}`;
+    return skill.priceUSD == null ? "" : ` — $${Number(skill.priceUSD).toFixed(4)}`;
+}
+
+async function withTelegramPriceLabels(candidates: Awaited<ReturnType<typeof discoverSkills>>): Promise<TelegramCandidate[]> {
+    if (!candidates.length) return [];
+    const ids = candidates.map((candidate) => candidate.id);
+    const rows = await prisma.provider.findMany({
+        where: {
+            skillId: { in: ids },
+            isActive: true,
+            endpoint: { contains: "/api/providers/kie-llm" },
+        },
+        select: { skillId: true, syncConfig: true },
+    });
+    const labels = new Map<number, string>();
+    for (const row of rows) {
+        if (labels.has(row.skillId)) continue;
+        let config: { pricing?: Record<string, unknown> } | null = null;
+        try {
+            config = row.syncConfig ? JSON.parse(row.syncConfig) as { pricing?: Record<string, unknown> } : null;
+        } catch {
+            config = null;
+        }
+        const pricing = config?.pricing;
+        const input = Number(pricing?.inputUsdPerMillionTokens);
+        const output = Number(pricing?.outputUsdPerMillionTokens);
+        if (Number.isFinite(input) || Number.isFinite(output)) {
+            labels.set(row.skillId, `input $${Number.isFinite(input) ? input : 0}/1M tokens, output $${Number.isFinite(output) ? output : 0}/1M tokens`);
+        }
+    }
+    return candidates.map((candidate) => ({ ...candidate, priceLabel: labels.get(candidate.id) }));
+}
+
+function discoverMessage(candidates: TelegramCandidate[]): string {
     if (!candidates.length) return "Не нашел подходящих скилов. Попробуйте описать задачу конкретнее.";
     return [
         "Подходящие скилы:",
         ...candidates.slice(0, 5).map((skill, index) => {
-            const price = skill.priceUSD == null ? "" : ` — $${Number(skill.priceUSD).toFixed(4)}`;
-            return `${index + 1}. ${skill.name}${price}`;
+            return `${index + 1}. ${skill.name}${priceLabel(skill)}`;
         }),
         "",
         "Напишите задачу более конкретно, и я запущу подходящий скил.",
@@ -325,11 +417,11 @@ function planConfidence(plan: TelegramPlan): number {
     return Math.max(0, Math.min(1, confidence));
 }
 
-function hasSelectedCandidate(plan: TelegramPlan, candidates: Awaited<ReturnType<typeof discoverSkills>>): boolean {
+function hasSelectedCandidate(plan: TelegramPlan, candidates: TelegramCandidate[]): boolean {
     return typeof plan.skillId === "number" && candidates.some((skill) => skill.id === plan.skillId);
 }
 
-function skillClarificationMessage(candidates: Awaited<ReturnType<typeof discoverSkills>>, plan?: TelegramPlan): string {
+function skillClarificationMessage(candidates: TelegramCandidate[], plan?: TelegramPlan): string {
     if (!candidates.length) return "Не уверен, какой скил нужно вызвать. Опишите задачу конкретнее.";
     const intro = plan?.reply && plan.reply.trim()
         ? plan.reply.trim()
@@ -337,8 +429,7 @@ function skillClarificationMessage(candidates: Awaited<ReturnType<typeof discove
     return [
         intro,
         ...candidates.slice(0, 5).map((skill, index) => {
-            const price = skill.priceUSD == null ? "" : ` — $${Number(skill.priceUSD).toFixed(4)}`;
-            return `${index + 1}. ${skill.name}${price}`;
+            return `${index + 1}. ${skill.name}${priceLabel(skill)}`;
         }),
         "",
         "Ответьте номером или названием скила и добавьте параметры, если они нужны.",
@@ -416,7 +507,7 @@ async function getConversation(telegramUserId: string) {
     return prisma.telegramConversation.findUnique({ where: { telegramUserId } });
 }
 
-function chooseSkillFromText(text: string, candidates: Awaited<ReturnType<typeof discoverSkills>>) {
+function chooseSkillFromText(text: string, candidates: TelegramCandidate[]) {
     const trimmed = text.trim();
     const numberMatch = trimmed.match(/^(?:#|skill\s*)?(\d+)$/i)
         ?? trimmed.match(/^(?:выбери|выбираю|вариант|номер|option|choose|pick)\s+(?:#|skill\s*)?(\d+)$/i);
@@ -451,7 +542,10 @@ async function runTelegramSkill(input: {
     try {
         await sendTelegramChatAction(input.chatId, "upload_document");
 
-        const params = input.plan.params && typeof input.plan.params === "object" ? input.plan.params : {};
+        let params = input.plan.params && typeof input.plan.params === "object" ? input.plan.params : {};
+        if (typeof input.plan.skillId === "number" && await shouldInjectLlmPrompt(input.plan.skillId, params)) {
+            params = { ...params, prompt: extractPromptAfterModelName(input.text) };
+        }
         const sessionId = linkedAccount
             ? `telegram-linked-${linkedAccount.newApiUserId}-${new Date().toISOString().slice(0, 10)}`
             : `telegram-${input.telegramUserId}-${new Date().toISOString().slice(0, 10)}`;
@@ -545,6 +639,23 @@ async function runTelegramSkill(input: {
         }
         throw error;
     }
+}
+
+async function shouldInjectLlmPrompt(skillId: number, params: Record<string, unknown>): Promise<boolean> {
+    if (typeof params.prompt === "string" && params.prompt.trim()) return false;
+    if (typeof params.input === "string" && params.input.trim()) return false;
+    if (typeof params.query === "string" && params.query.trim()) return false;
+    if (Array.isArray(params.messages) && params.messages.length > 0) return false;
+
+    const provider = await prisma.provider.findFirst({
+        where: {
+            skillId,
+            isActive: true,
+            endpoint: { contains: "/api/providers/kie-llm" },
+        },
+        select: { id: true },
+    });
+    return Boolean(provider);
 }
 
 async function handlePendingSelection(input: {

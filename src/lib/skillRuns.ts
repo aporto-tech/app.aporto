@@ -715,7 +715,7 @@ const apifyAsyncAdapter: AsyncProviderAdapter = {
         if (!isPlainObject(initialData)) return false;
         const status = String(initialData.status ?? "").toUpperCase();
         if (status === "SUCCEEDED" && Array.isArray(initialData.items)) return false;
-        return Boolean(initialData.runId ?? initialData.run_id);
+        return Boolean(initialData.runId ?? initialData.run_id ?? initialData.taskId ?? initialData.task_id);
     },
     poll(provider, providerTaskId, internalBaseUrl) {
         return executeSkillViaProvider(

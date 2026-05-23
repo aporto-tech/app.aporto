@@ -60,6 +60,9 @@ function messagesFromBody(body: JsonObject): JsonObject[] {
     if (typeof body.input === "string" && body.input.trim()) {
         return [{ role: "user", content: body.input.trim() }];
     }
+    if (typeof body.query === "string" && body.query.trim()) {
+        return [{ role: "user", content: body.query.trim() }];
+    }
     return [];
 }
 
