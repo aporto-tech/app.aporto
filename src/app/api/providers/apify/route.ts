@@ -94,11 +94,16 @@ function missingInputField(data: unknown): string | null {
     return match?.[1] ?? null;
 }
 
-function retryInputForMissingField(
-    field: string,
-    input: Record<string, unknown>,
-): Record<string, unknown> | null {
-    if (input[field] !== undefined) return null;
+function invalidTypeField(data: unknown): { field: string; type: "string" | "number" | "boolean" | "array" } | null {
+    if (!data || typeof data !== "object") return null;
+    const error = (data as { error?: { message?: string } }).error;
+    const message = error?.message ?? "";
+    const match = message.match(/Field input\.([A-Za-z0-9_]+) must be (string|number|boolean|array)/i);
+    if (!match) return null;
+    return { field: match[1], type: match[2].toLowerCase() as "string" | "number" | "boolean" | "array" };
+}
+
+function valueForField(field: string, input: Record<string, unknown>): unknown {
     const query = queryWithLocation(input);
     const maxResults = firstNumber(
         input.maxResults,
@@ -109,18 +114,45 @@ function retryInputForMissingField(
     );
 
     if (/^(keyword|query|search|term|searchQuery|searchString)$/i.test(field) && query) {
-        return { ...input, [field]: query };
+        return query;
     }
     if (/^(searchStringsArray|queries)$/i.test(field) && query) {
-        return { ...input, [field]: [query] };
+        return [query];
     }
     if (/^(maxItems|maxResults|limit|resultsLimit|maxCrawledPlaces)$/i.test(field) && maxResults != null) {
-        return { ...input, [field]: maxResults };
+        return maxResults;
     }
     if (/^(location|city|area)$/i.test(field)) {
         const location = firstString(input.location, input.city, input.area);
-        if (location) return { ...input, [field]: location };
+        if (location) return location;
     }
+    return undefined;
+}
+
+function retryInputForMissingField(field: string, input: Record<string, unknown>): Record<string, unknown> | null {
+    if (input[field] !== undefined) return null;
+    const value = valueForField(field, input);
+    return value === undefined ? null : { ...input, [field]: value };
+}
+
+function retryInputForTypeError(
+    issue: { field: string; type: "string" | "number" | "boolean" | "array" },
+    input: Record<string, unknown>,
+): Record<string, unknown> | null {
+    const current = input[issue.field] ?? valueForField(issue.field, input);
+    if (current === undefined) return null;
+
+    if (issue.type === "string") return { ...input, [issue.field]: Array.isArray(current) ? current.join("\n") : String(current) };
+    if (issue.type === "number") {
+        const number = Number(current);
+        return Number.isFinite(number) ? { ...input, [issue.field]: number } : null;
+    }
+    if (issue.type === "boolean") {
+        if (typeof current === "boolean") return null;
+        if (typeof current === "string") return { ...input, [issue.field]: /^(true|1|yes)$/i.test(current) };
+        return { ...input, [issue.field]: Boolean(current) };
+    }
+    if (issue.type === "array") return { ...input, [issue.field]: Array.isArray(current) ? current : [current] };
     return null;
 }
 
@@ -140,18 +172,26 @@ export async function POST(req: NextRequest) {
         }
 
         // Run actor synchronously — waits up to WAIT_SECS for completion
-        const actorInput = rawActorInput;
+        let actorInput = rawActorInput;
         let { runRes, runData } = await startActor(actorId, actorInput, apiKey);
         const fallbackApiKey = process.env.APIFY_API_KEY;
         if (!runRes.ok && apifyAuthError(runData) && fallbackApiKey && fallbackApiKey !== apiKey) {
             console.warn("[providers/apify] providerSecret auth failed; retrying with APIFY_API_KEY env fallback");
             ({ runRes, runData } = await startActor(actorId, actorInput, fallbackApiKey));
         }
-        const missingField = !runRes.ok ? missingInputField(runData) : null;
-        const retryInput = missingField ? retryInputForMissingField(missingField, actorInput) : null;
-        if (retryInput) {
-            console.warn(`[providers/apify] retrying with inferred required field: ${missingField}`);
-            ({ runRes, runData } = await startActor(actorId, retryInput, fallbackApiKey ?? apiKey));
+
+        for (let attempt = 0; attempt < 3 && !runRes.ok; attempt += 1) {
+            const missingField = missingInputField(runData);
+            const typeIssue = invalidTypeField(runData);
+            const retryInput = missingField
+                ? retryInputForMissingField(missingField, actorInput)
+                : typeIssue
+                    ? retryInputForTypeError(typeIssue, actorInput)
+                    : null;
+            if (!retryInput) break;
+            actorInput = retryInput;
+            console.warn(`[providers/apify] retrying with adjusted input for ${missingField ?? typeIssue?.field}`);
+            ({ runRes, runData } = await startActor(actorId, actorInput, fallbackApiKey ?? apiKey));
         }
 
         if (!runRes.ok || runData.error) {

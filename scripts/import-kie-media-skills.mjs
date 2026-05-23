@@ -255,16 +255,25 @@ function inputDefaults(row) {
     if (quality) {
         const value = quality[1].toLowerCase();
         defaults.quality = value;
+        if (text.includes("happyhorse")) {
+            defaults.resolution = value;
+            delete defaults.quality;
+        }
         if (row.modelDescription.toLowerCase().includes("nano banana 2")) {
             defaults.resolution = value.toUpperCase();
         }
     }
 
     if (row.interfaceType === "video") {
-        defaults.duration = String(durationSeconds(row));
+        defaults.duration = text.includes("happyhorse") ? durationSeconds(row) : String(durationSeconds(row));
         if (text.includes("with audio")) defaults.sound = true;
         if (text.includes("without audio")) defaults.sound = false;
         defaults.aspect_ratio = "16:9";
+        if (text.includes("happyhorse") && text.includes("video-edit")) {
+            delete defaults.duration;
+            delete defaults.aspect_ratio;
+            defaults.audio_setting = "auto";
+        }
     }
 
     if (row.interfaceType === "image") {

@@ -33,6 +33,29 @@ interface KieConfig {
     bodyDefaults?: Record<string, unknown>;
 }
 
+function normalizeCreateTaskInput(model: string, input: Record<string, unknown>): Record<string, unknown> {
+    const normalized = { ...input };
+
+    if (model.startsWith("happyhorse/")) {
+        if (typeof normalized.quality === "string" && typeof normalized.resolution !== "string") {
+            normalized.resolution = normalized.quality;
+        }
+        delete normalized.quality;
+
+        if (typeof normalized.duration === "string") {
+            const duration = Number(normalized.duration);
+            if (Number.isFinite(duration)) normalized.duration = duration;
+        }
+        if (model === "happyhorse/video-edit") {
+            delete normalized.duration;
+            delete normalized.aspect_ratio;
+            normalized.audio_setting ??= "auto";
+        }
+    }
+
+    return normalized;
+}
+
 type StoredArtifact = {
     url: string;
     storage_key: string;
@@ -189,7 +212,7 @@ export async function POST(req: NextRequest) {
             requestBody = {
                 model,
                 ...(typeof callBackUrl === "string" ? { callBackUrl } : {}),
-                input,
+                input: normalizeCreateTaskInput(model, input),
             };
         } else {
             requestBody = {

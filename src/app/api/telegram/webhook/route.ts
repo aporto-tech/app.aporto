@@ -32,6 +32,11 @@ const MAX_SCHEMA_CHARS = 420;
 const MIN_RUN_CONFIDENCE = 0.7;
 const PENDING_SELECTION_TTL_MS = 10 * 60 * 1000;
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://app.aporto.tech";
+const GENERATION_TERMS = /\b(generate|create|make|render|produce|сгенерируй|создай|сделай|нарисуй|создать|генерац)\b/i;
+const VIDEO_TERMS = /\b(video|ролик|видео|анимац)\b/i;
+const IMAGE_TERMS = /\b(image|photo|picture|картин|изображ|фото)\b/i;
+const AUDIO_TERMS = /\b(audio|voice|speech|tts|озвуч|голос|аудио|музык|music|song|песн)\b/i;
+const EXTRACTOR_TERMS = /\b(extract|extractor|scrape|scraper|parser|parse|download|downloader|listing|posts?|reviews?|comments?|tiktok|reddit|linkedin|google maps|извлеч|спарс|парс)\b/i;
 
 type TelegramUpdate = {
     message?: {
@@ -104,6 +109,8 @@ function systemPrompt(): string {
         "If confidence is below 0.70, do not run a skill. Choose ask_clarification and include 2-5 concrete skill options in reply.",
         "If the user asks what is available, asks a broad question, or candidates are weak, choose discover or ask_clarification.",
         "If required params are missing, choose ask_clarification and ask exactly one short question.",
+        "Never choose extractor, scraper, parser, downloader, listing, post, review, TikTok, Reddit, LinkedIn, or Google Maps skills for requests to create/generate media. Those skills read existing content; they do not generate new media.",
+        "For create/generate video requests, choose only skills whose name/category/capabilities/output mention video generation, text-to-video, or image-to-video.",
         "For media generation, put the user's creative request in params.prompt.",
         "For LLM/model chat skills, put the user's request in params.prompt. If the user gives a system/developer instruction, put it in params.system. Pass explicit model controls only when the user asks for them: reasoning_effort, reasoning, thinkingFlag, include_thoughts, temperature, max_tokens, response_format, tools.",
         "For text-to-speech, put speakable text in params.text. Do not invent voice_id. If the user names a common voice, use the lowercase voice name, e.g. rachel, adam, bella.",
@@ -112,11 +119,46 @@ function systemPrompt(): string {
     ].join(" ");
 }
 
+function candidateText(skill: Awaited<ReturnType<typeof discoverSkills>>[number]): string {
+    return [
+        skill.name,
+        skill.description,
+        skill.category,
+        skill.tags,
+        skill.capabilities.join(" "),
+        skill.inputTypes.join(" "),
+        skill.outputTypes.join(" "),
+    ].filter(Boolean).join(" ").toLowerCase();
+}
+
+function filterCandidatesForIntent(userText: string, candidates: Awaited<ReturnType<typeof discoverSkills>>) {
+    if (!GENERATION_TERMS.test(userText)) return candidates;
+
+    const wantsVideo = VIDEO_TERMS.test(userText);
+    const wantsImage = IMAGE_TERMS.test(userText);
+    const wantsAudio = AUDIO_TERMS.test(userText);
+    const filtered = candidates.filter((skill) => {
+        const text = candidateText(skill);
+        if (EXTRACTOR_TERMS.test(text)) return false;
+        if (wantsVideo) return /video|text-to-video|image-to-video|generate-video|video-generation/.test(text);
+        if (wantsImage) return /image|photo|picture|generate-image|image-generation/.test(text);
+        if (wantsAudio) return /audio|speech|voice|tts|music|sound|text-to-speech/.test(text);
+        return true;
+    });
+
+    return filtered.length ? filtered : candidates;
+}
+
 function buildPlannerPrompt(userText: string, candidates: Awaited<ReturnType<typeof discoverSkills>>): string {
     const compactCandidates = candidates.slice(0, 5).map((skill) => ({
         id: skill.id,
         name: skill.name,
+        description: truncate(skill.description, 180),
         category: skill.category,
+        capabilities: skill.capabilities.slice(0, 8),
+        inputTypes: skill.inputTypes.slice(0, 5),
+        outputTypes: skill.outputTypes.slice(0, 5),
+        tags: skill.tags ? truncate(skill.tags, 160) : null,
         matchScore: Number(skill.similarity.toFixed(3)),
         priceUSD: skill.priceUSD,
         trialAvailable: skill.trialAvailable,
@@ -130,7 +172,7 @@ function buildPlannerPrompt(userText: string, candidates: Awaited<ReturnType<typ
 }
 
 async function planTelegramRequest(userText: string): Promise<{ plan: TelegramPlan; candidates: Awaited<ReturnType<typeof discoverSkills>> }> {
-    const candidates = await discoverSkills(userText, 0);
+    const candidates = filterCandidatesForIntent(userText, await discoverSkills(userText, 0));
     const baseUrl = process.env.NEWAPI_URL ?? "https://api.aporto.tech";
     const apiKey = process.env.NEWAPI_ADMIN_KEY;
     if (!apiKey) throw new Error("NEWAPI_ADMIN_KEY is not set");
