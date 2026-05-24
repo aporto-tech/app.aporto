@@ -50,6 +50,7 @@ async function startActor(actorId: string, actorInput: Record<string, unknown>, 
             status?: string;
             defaultDatasetId?: string;
             exitCode?: number;
+            statusMessage?: string;
         };
         error?: { type?: string; message?: string };
     };
@@ -68,6 +69,7 @@ async function fetchRun(runId: string, apiKey: string) {
             status?: string;
             defaultDatasetId?: string;
             exitCode?: number;
+            statusMessage?: string;
         };
         error?: { type?: string; message?: string };
     };
@@ -125,6 +127,42 @@ function queryWithLocation(input: Record<string, unknown>): string | null {
     return query && location && !query.toLowerCase().includes(location.toLowerCase())
         ? `${query} in ${location}`
         : query;
+}
+
+function hasNonEmptyValue(value: unknown): boolean {
+    if (typeof value === "string") return value.trim().length > 0;
+    if (Array.isArray(value)) return value.length > 0;
+    return value != null;
+}
+
+function normalizeActorInput(actorId: string, input: Record<string, unknown>): Record<string, unknown> {
+    const normalized = { ...input };
+    const actorText = actorId.toLowerCase();
+    const query = queryWithLocation(normalized);
+    const maxResults = firstNumber(
+        normalized.maxResults,
+        normalized.maxItems,
+        normalized.limit,
+        normalized.resultsLimit,
+        normalized.maxCrawledPlaces,
+    );
+
+    if (
+        actorText.includes("google-maps")
+        && query
+        && !hasNonEmptyValue(normalized.searchStringsArray)
+        && !hasNonEmptyValue(normalized.placeIds)
+    ) {
+        normalized.searchStringsArray = [query];
+    }
+
+    if (actorText.includes("google-maps") && maxResults != null) {
+        for (const field of ["maxResults", "maxItems", "limit", "resultsLimit", "maxCrawledPlaces"]) {
+            if (normalized[field] === undefined) normalized[field] = maxResults;
+        }
+    }
+
+    return normalized;
 }
 
 function missingInputField(data: unknown): string | null {
@@ -241,7 +279,7 @@ export async function POST(req: NextRequest) {
                     status,
                     datasetId: run?.defaultDatasetId,
                     exitCode: run?.exitCode,
-                    message: `Actor run ${status}`,
+                    message: run?.statusMessage ?? `Actor run ${status}`,
                 });
             }
             if (status !== "SUCCEEDED") {
@@ -278,7 +316,7 @@ export async function POST(req: NextRequest) {
         }
 
         // Run actor synchronously — waits up to WAIT_SECS for completion
-        let actorInput = rawActorInput;
+        let actorInput = normalizeActorInput(actorId, rawActorInput);
         let { runRes, runData } = await startActor(actorId, actorInput, apiKey);
         if (!runRes.ok && apifyAuthError(runData) && fallbackApiKey && fallbackApiKey !== apiKey) {
             console.warn("[providers/apify] providerSecret auth failed; retrying with APIFY_API_KEY env fallback");
@@ -317,7 +355,7 @@ export async function POST(req: NextRequest) {
         // FAILED or TIMED-OUT — return error with status
         if (status && APIFY_FAILED_STATUSES.has(status)) {
             return NextResponse.json(
-                { success: false, message: `Actor run ${status}`, runId: run?.id, status },
+                { success: false, message: run?.statusMessage ?? `Actor run ${status}`, runId: run?.id, status },
                 { status: 502 },
             );
         }
