@@ -32,6 +32,7 @@ const MAX_SCHEMA_CHARS = 420;
 const MIN_RUN_CONFIDENCE = 0.7;
 const PENDING_SELECTION_TTL_MS = 10 * 60 * 1000;
 const RUNNING_SKILL_DEDUP_TTL_MS = 30 * 60 * 1000;
+const TELEGRAM_SKILL_CHOICES_LIMIT = 10;
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://app.aporto.tech";
 const GENERATION_TERMS = /\b(generate|create|make|render|produce|сгенерируй|создай|сделай|нарисуй|создать|генерац)\b/i;
 const VIDEO_TERMS = /\b(video|ролик|видео|анимац)\b/i;
@@ -81,6 +82,8 @@ type PendingRunPayload = {
     text: string;
     plan: TelegramPlan;
     candidates: TelegramCandidate[];
+    page?: number;
+    hasMore?: boolean;
 };
 
 type TelegramRunDedupPayload = {
@@ -191,7 +194,7 @@ function filterCandidatesForIntent(userText: string, candidates: Awaited<ReturnT
 }
 
 function buildPlannerPrompt(userText: string, candidates: TelegramCandidate[]): string {
-    const compactCandidates = candidates.slice(0, 5).map((skill) => ({
+    const compactCandidates = candidates.slice(0, TELEGRAM_SKILL_CHOICES_LIMIT).map((skill) => ({
         id: skill.id,
         name: skill.name,
         description: truncate(skill.description, 180),
@@ -212,12 +215,22 @@ function buildPlannerPrompt(userText: string, candidates: TelegramCandidate[]): 
     });
 }
 
-async function planTelegramRequest(userText: string): Promise<{ plan: TelegramPlan; candidates: TelegramCandidate[] }> {
-    const candidates = await withTelegramPriceLabels(filterCandidatesForIntent(userText, await discoverSkills(userText, 0)));
+async function telegramDiscoveryPage(userText: string, page: number): Promise<TelegramCandidate[]> {
+    return withTelegramPriceLabels(filterCandidatesForIntent(userText, await discoverSkills(userText, page)));
+}
+
+async function telegramDiscoveryHasMore(userText: string, page: number): Promise<boolean> {
+    return (await telegramDiscoveryPage(userText, page + 1)).length > 0;
+}
+
+async function planTelegramRequest(userText: string): Promise<{ plan: TelegramPlan; candidates: TelegramCandidate[]; hasMore: boolean }> {
+    const candidates = await telegramDiscoveryPage(userText, 0);
+    const hasMore = await telegramDiscoveryHasMore(userText, 0);
     const exactModel = explicitModelCandidate(userText, candidates);
     if (exactModel) {
         return {
             candidates,
+            hasMore,
             plan: {
                 action: "run_skill",
                 intent: exactModel.name,
@@ -253,7 +266,7 @@ async function planTelegramRequest(userText: string): Promise<{ plan: TelegramPl
 
     const data = await res.json() as { choices?: Array<{ message?: { content?: string } }> };
     const content = data.choices?.[0]?.message?.content ?? "{}";
-    return { plan: parseJsonObject(content), candidates };
+    return { plan: parseJsonObject(content), candidates, hasMore };
 }
 
 function helpMessage(): string {
@@ -446,7 +459,7 @@ function discoverMessage(candidates: TelegramCandidate[]): string {
     if (!candidates.length) return "Не нашел подходящих скилов. Попробуйте описать задачу конкретнее.";
     return [
         "Подходящие скилы:",
-        ...candidates.slice(0, 5).map((skill, index) => {
+        ...candidates.slice(0, TELEGRAM_SKILL_CHOICES_LIMIT).map((skill, index) => {
             return `${index + 1}. ${skill.name}${priceLabel(skill)}`;
         }),
         "",
@@ -471,7 +484,7 @@ function skillClarificationMessage(candidates: TelegramCandidate[], plan?: Teleg
         : "Не уверен на 70%, какой именно скил вызвать. Выберите один из вариантов:";
     return [
         intro,
-        ...candidates.slice(0, 5).map((skill, index) => {
+        ...candidates.slice(0, TELEGRAM_SKILL_CHOICES_LIMIT).map((skill, index) => {
             return `${index + 1}. ${skill.name}${priceLabel(skill)}`;
         }),
         "",
@@ -479,9 +492,10 @@ function skillClarificationMessage(candidates: TelegramCandidate[], plan?: Teleg
     ].join("\n");
 }
 
-function chooseButtons(): TelegramReplyMarkup {
+function chooseButtons(hasMore = false): TelegramReplyMarkup {
     return {
         inline_keyboard: [
+            ...(hasMore ? [[{ text: "Show next 10 skills", callback_data: "more_skills" }]] : []),
             [
                 { text: "Choose skill", callback_data: "choose_skill" },
             ],
@@ -893,7 +907,7 @@ export async function POST(req: NextRequest) {
                         chatId,
                         text: skillClarificationMessage(conversation.pendingPayload.candidates),
                         replyToMessageId: callback.message?.message_id,
-                        replyMarkup: chooseButtons(),
+                        replyMarkup: chooseButtons(Boolean(conversation.pendingPayload.hasMore)),
                     });
                 } else {
                     await sendTelegramMessage({
@@ -902,6 +916,49 @@ export async function POST(req: NextRequest) {
                         replyToMessageId: callback.message?.message_id,
                     });
                 }
+                return NextResponse.json({ ok: true });
+            }
+
+            if (data === "more_skills") {
+                if (!isPendingRunPayload(conversation?.pendingPayload)) {
+                    await sendTelegramMessage({
+                        chatId,
+                        text: "No skill list is active. Send a new task to discover skills.",
+                        replyToMessageId: callback.message?.message_id,
+                    });
+                    return NextResponse.json({ ok: true });
+                }
+
+                const currentPayload = conversation.pendingPayload as PendingRunPayload;
+                const page = (currentPayload.page ?? 0) + 1;
+                const candidates = await telegramDiscoveryPage(currentPayload.text, page);
+                if (!candidates.length) {
+                    await sendTelegramMessage({
+                        chatId,
+                        text: "No more matching skills.",
+                        replyToMessageId: callback.message?.message_id,
+                    });
+                    return NextResponse.json({ ok: true });
+                }
+
+                const pendingPayload = {
+                    ...currentPayload,
+                    candidates,
+                    page,
+                    hasMore: await telegramDiscoveryHasMore(currentPayload.text, page),
+                };
+                await updateConversation({
+                    telegramUserId,
+                    chatId,
+                    pendingAction: "choose_skill",
+                    pendingPayload,
+                });
+                await sendTelegramMessage({
+                    chatId,
+                    text: skillClarificationMessage(candidates, pendingPayload.plan),
+                    replyToMessageId: callback.message?.message_id,
+                    replyMarkup: chooseButtons(Boolean(pendingPayload.hasMore)),
+                });
                 return NextResponse.json({ ok: true });
             }
 
@@ -1029,7 +1086,7 @@ export async function POST(req: NextRequest) {
         }
 
         await sendTelegramChatAction(chatId);
-        const { plan, candidates } = await planTelegramRequest(text);
+        const { plan, candidates, hasMore } = await planTelegramRequest(text);
 
         if (plan.action === "help") {
             await sendTelegramMessage({
@@ -1050,13 +1107,13 @@ export async function POST(req: NextRequest) {
                 telegramUserId,
                 chatId,
                 pendingAction: "choose_skill",
-                pendingPayload: { text, plan, candidates },
+                pendingPayload: { text, plan, candidates, page: 0, hasMore },
             });
             await sendTelegramMessage({
                 chatId,
                 text: skillClarificationMessage(candidates, plan),
                 replyToMessageId: message.message_id,
-                replyMarkup: chooseButtons(),
+                replyMarkup: chooseButtons(hasMore),
             });
             return NextResponse.json({ ok: true });
         }
@@ -1065,13 +1122,13 @@ export async function POST(req: NextRequest) {
                 telegramUserId,
                 chatId,
                 pendingAction: "choose_skill",
-                pendingPayload: { text, plan, candidates },
+                pendingPayload: { text, plan, candidates, page: 0, hasMore },
             });
             await sendTelegramMessage({
                 chatId,
                 text: plan.reply || discoverMessage(candidates),
                 replyToMessageId: message.message_id,
-                replyMarkup: chooseButtons(),
+                replyMarkup: chooseButtons(hasMore),
             });
             return NextResponse.json({ ok: true });
         }
@@ -1080,13 +1137,13 @@ export async function POST(req: NextRequest) {
                 telegramUserId,
                 chatId,
                 pendingAction: "choose_skill",
-                pendingPayload: { text, plan, candidates },
+                pendingPayload: { text, plan, candidates, page: 0, hasMore },
             });
             await sendTelegramMessage({
                 chatId,
                 text: skillClarificationMessage(candidates, plan),
                 replyToMessageId: message.message_id,
-                replyMarkup: chooseButtons(),
+                replyMarkup: chooseButtons(hasMore),
             });
             return NextResponse.json({ ok: true });
         }

@@ -12,7 +12,8 @@ const Sidebar = () => {
     const pathname = usePathname();
     const { data: session, status } = useSession();
 
-    const isAdmin = ADMIN_EMAILS.has((session?.user as any)?.email ?? "");
+    const sessionUser = session?.user as { email?: string } | undefined;
+    const isAdmin = ADMIN_EMAILS.has(sessionUser?.email ?? "");
 
     // ─── Balance state ────────────────────────────────────────────────────────
     const [balance, setBalance] = useState<{ remainingUSD: number; usedUSD: number } | null>(null);
@@ -77,6 +78,7 @@ const Sidebar = () => {
     const userNavItems = [
         { name: "Dashboard", icon: "📊", path: "/dashboard" },
         { name: "Skill Network", icon: "⚡", path: "/services" },
+        { name: "Skill Pricing", icon: "💳", path: "/skill-pricing" },
         { name: "Guide", icon: "📖", path: "/guide" },
     ];
 
