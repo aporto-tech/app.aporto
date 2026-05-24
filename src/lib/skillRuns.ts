@@ -895,6 +895,10 @@ async function waitForProviderResult(input: {
                         console.error("[waitForProviderResult] refund failed:", error);
                     });
                 }
+                if (isApifyProvider(input.provider)) {
+                    void disableProviderIfOthersActive(input.provider.id, input.skillId)
+                        .catch((error) => console.error("[waitForProviderResult] disableProviderIfOthersActive:", error));
+                }
                 await updateRun(input.runId, {
                     status: "failed",
                     error: normalized.error,
@@ -969,6 +973,10 @@ async function waitForProviderResult(input: {
                 await refundSkillUsage(input.newApiUserId, input.charge).catch((error) => {
                     console.error("[waitForProviderResult] refund failed:", error);
                 });
+            }
+            if (isApifyProvider(input.provider)) {
+                void disableProviderIfOthersActive(input.provider.id, input.skillId)
+                    .catch((error) => console.error("[waitForProviderResult] disableProviderIfOthersActive:", error));
             }
             await updateRun(input.runId, {
                 status: "failed",
