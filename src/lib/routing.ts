@@ -644,8 +644,8 @@ export async function executeSkillViaProvider(
 
     const configuredTimeoutMs = Number(provider.syncConfig?.timeoutMs);
     const timeoutMs = Number.isFinite(configuredTimeoutMs) && configuredTimeoutMs > 0
-        ? Math.min(configuredTimeoutMs, 600_000)
-        : 10_000;
+        ? Math.min(configuredTimeoutMs, 250_000)  // hard cap below vercel.json maxDuration:300
+        : 55_000;                                  // default: 55 s (was 10 s, too tight for LLM)
 
     let res: Response;
     try {
