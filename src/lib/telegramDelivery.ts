@@ -32,6 +32,17 @@ function textFromResultData(data: unknown): string | null {
     for (const key of ["content", "text", "answer", "message"]) {
         const value = object[key];
         if (typeof value === "string" && value.trim()) return value.trim();
+        // Claude native format: content: [{type: "text", text: "..."}]
+        if (key === "content" && Array.isArray(value)) {
+            for (const block of value) {
+                if (block && typeof block === "object" && !Array.isArray(block)) {
+                    const b = block as Record<string, unknown>;
+                    if (b.type === "text" && typeof b.text === "string" && b.text.trim()) {
+                        return b.text.trim();
+                    }
+                }
+            }
+        }
     }
     const choices = object.choices;
     if (Array.isArray(choices) && choices[0] && typeof choices[0] === "object") {

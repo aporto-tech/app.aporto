@@ -303,7 +303,7 @@ function findUsage(data: unknown): unknown {
 
 export async function POST(req: NextRequest) {
     try {
-        const apiKey = (req.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "").trim();
+        const apiKey = (process.env.KIE_API_KEY ?? req.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "").trim();
         if (!apiKey) {
             return NextResponse.json({ success: false, message: "Missing KIE bearer token" }, { status: 401 });
         }
@@ -329,6 +329,16 @@ export async function POST(req: NextRequest) {
             return NextResponse.json(
                 { success: false, message: `KIE LLM error ${upstream.status}`, detail: data },
                 { status: upstream.status },
+            );
+        }
+
+        // KIE sometimes returns HTTP 200 with an error payload (e.g. code:401 for auth failures).
+        // Detect this and surface it as a proper error status so the caller doesn't charge.
+        if (isObject(data) && typeof data.code === "number" && data.code !== 200) {
+            const errStatus = data.code === 401 ? 401 : data.code === 402 ? 402 : 502;
+            return NextResponse.json(
+                { success: false, message: (data.msg ?? data.message ?? `KIE LLM error code ${data.code}`) as string, detail: data },
+                { status: errStatus },
             );
         }
 

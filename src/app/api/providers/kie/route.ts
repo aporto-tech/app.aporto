@@ -166,7 +166,7 @@ async function parseKieResponse(res: Response, options: { storeArtifacts?: boole
 
 export async function POST(req: NextRequest) {
     try {
-        const apiKey = req.headers.get("authorization")?.replace("Bearer ", "") ?? "";
+        const apiKey = process.env.KIE_API_KEY ?? req.headers.get("authorization")?.replace("Bearer ", "") ?? "";
         if (!apiKey) {
             return NextResponse.json({ success: false, message: "KIE API key not configured" }, { status: 503 });
         }
