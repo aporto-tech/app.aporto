@@ -34,7 +34,14 @@ jobs:
           APP_URL: ${{ secrets.APP_URL }}
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
         run: |
-          base_url="${APP_URL%/}"
+          set -euo pipefail
+          base_url="${APP_URL:-https://app.aporto.tech}"
+          base_url="${base_url%/}"
+          if [ -z "${CRON_SECRET:-}" ]; then
+            echo "ERROR: CRON_SECRET GitHub secret is not configured"
+            exit 1
+          fi
+          echo "Triggering $base_url/api/cron/spending-alerts"
           response=$(curl -L -sS -o response.json -w "%{http_code}" \
             -X POST "$base_url/api/cron/spending-alerts" \
             -H "Authorization: Bearer $CRON_SECRET" \
@@ -59,7 +66,14 @@ jobs:
           APP_URL: ${{ secrets.APP_URL }}
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
         run: |
-          base_url="${APP_URL%/}"
+          set -euo pipefail
+          base_url="${APP_URL:-https://app.aporto.tech}"
+          base_url="${base_url%/}"
+          if [ -z "${CRON_SECRET:-}" ]; then
+            echo "ERROR: CRON_SECRET GitHub secret is not configured"
+            exit 1
+          fi
+          echo "Triggering $base_url/api/cron/weekly-digest"
           response=$(curl -L -sS -o response.json -w "%{http_code}" \
             -X POST "$base_url/api/cron/weekly-digest" \
             -H "Authorization: Bearer $CRON_SECRET" \
@@ -84,7 +98,14 @@ jobs:
           APP_URL: ${{ secrets.APP_URL }}
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
         run: |
-          base_url="${APP_URL%/}"
+          set -euo pipefail
+          base_url="${APP_URL:-https://app.aporto.tech}"
+          base_url="${base_url%/}"
+          if [ -z "${CRON_SECRET:-}" ]; then
+            echo "ERROR: CRON_SECRET GitHub secret is not configured"
+            exit 1
+          fi
+          echo "Triggering $base_url/api/cron/sync-provider-options"
           response=$(curl -L -sS -o response.json -w "%{http_code}" \
             -X POST "$base_url/api/cron/sync-provider-options" \
             -H "Authorization: Bearer $CRON_SECRET" \
