@@ -31,6 +31,7 @@ const MAX_USER_TEXT_CHARS = 1000;
 const MAX_SCHEMA_CHARS = 420;
 const MIN_RUN_CONFIDENCE = 0.7;
 const PENDING_SELECTION_TTL_MS = 10 * 60 * 1000;
+const RUNNING_SKILL_DEDUP_TTL_MS = 30 * 60 * 1000;
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://app.aporto.tech";
 const GENERATION_TERMS = /\b(generate|create|make|render|produce|сгенерируй|создай|сделай|нарисуй|создать|генерац)\b/i;
 const VIDEO_TERMS = /\b(video|ролик|видео|анимац)\b/i;
@@ -39,6 +40,7 @@ const AUDIO_TERMS = /\b(audio|voice|speech|tts|озвуч|голос|аудио|
 const EXTRACTOR_TERMS = /\b(extract|extractor|scrape|scraper|parser|parse|download|downloader|listing|posts?|reviews?|comments?|tiktok|reddit|linkedin|google maps|извлеч|спарс|парс)\b/i;
 
 type TelegramUpdate = {
+    update_id?: number;
     message?: {
         message_id?: number;
         text?: string;
@@ -79,6 +81,16 @@ type PendingRunPayload = {
     text: string;
     plan: TelegramPlan;
     candidates: TelegramCandidate[];
+};
+
+type TelegramRunDedupPayload = {
+    kind: "telegram_run_dedup";
+    updateId?: number;
+    messageId?: number;
+    chatId: string;
+    text: string;
+    startedAt: string;
+    status: "running" | "completed";
 };
 
 type TelegramMessageLike = NonNullable<TelegramUpdate["message"]> & {
@@ -487,8 +499,32 @@ function isPendingRunPayload(value: unknown): value is PendingRunPayload {
     return typeof payload.text === "string" && Boolean(payload.plan) && Array.isArray(payload.candidates);
 }
 
+function isTelegramRunDedupPayload(value: unknown): value is TelegramRunDedupPayload {
+    if (!value || typeof value !== "object") return false;
+    const payload = value as TelegramRunDedupPayload;
+    return payload.kind === "telegram_run_dedup"
+        && typeof payload.chatId === "string"
+        && typeof payload.text === "string"
+        && typeof payload.startedAt === "string"
+        && (payload.status === "running" || payload.status === "completed");
+}
+
 function isFreshPending(updatedAt: Date): boolean {
     return Date.now() - updatedAt.getTime() <= PENDING_SELECTION_TTL_MS;
+}
+
+function isFreshRunDedup(updatedAt: Date): boolean {
+    return Date.now() - updatedAt.getTime() <= RUNNING_SKILL_DEDUP_TTL_MS;
+}
+
+function matchesTelegramRunDedup(
+    payload: TelegramRunDedupPayload,
+    identity: TelegramRunIdentity,
+): boolean {
+    if (identity.updateId != null && payload.updateId != null) return identity.updateId === payload.updateId;
+    return payload.chatId === String(identity.chatId)
+        && payload.messageId === identity.messageId
+        && payload.text === identity.text;
 }
 
 function jsonInput(value: unknown): Prisma.InputJsonValue | typeof Prisma.JsonNull | undefined {
@@ -541,6 +577,67 @@ async function getConversation(telegramUserId: string) {
     return prisma.telegramConversation.findUnique({ where: { telegramUserId } });
 }
 
+type TelegramRunIdentity = {
+    updateId?: number;
+    messageId?: number;
+    chatId: number | string;
+    text: string;
+};
+
+async function tryMarkTelegramRunInFlight(input: {
+    telegramUserId: string;
+    identity?: TelegramRunIdentity;
+}): Promise<boolean> {
+    if (!input.identity?.messageId && input.identity?.updateId == null) return true;
+
+    const conversation = await getConversation(input.telegramUserId);
+    if (
+        (conversation?.pendingAction === "running_skill" || conversation?.pendingAction === "completed_skill")
+        && isTelegramRunDedupPayload(conversation.pendingPayload)
+        && isFreshRunDedup(conversation.updatedAt)
+        && matchesTelegramRunDedup(conversation.pendingPayload, input.identity)
+    ) {
+        return false;
+    }
+
+    await updateConversation({
+        telegramUserId: input.telegramUserId,
+        chatId: input.identity.chatId,
+        pendingAction: "running_skill",
+        pendingPayload: {
+            kind: "telegram_run_dedup",
+            updateId: input.identity.updateId,
+            messageId: input.identity.messageId,
+            chatId: String(input.identity.chatId),
+            text: input.identity.text,
+            startedAt: new Date().toISOString(),
+            status: "running",
+        } satisfies TelegramRunDedupPayload,
+    });
+    return true;
+}
+
+async function markTelegramRunCompleted(input: {
+    telegramUserId: string;
+    identity?: TelegramRunIdentity;
+}): Promise<void> {
+    if (!input.identity?.messageId && input.identity?.updateId == null) return;
+    await updateConversation({
+        telegramUserId: input.telegramUserId,
+        chatId: input.identity.chatId,
+        pendingAction: "completed_skill",
+        pendingPayload: {
+            kind: "telegram_run_dedup",
+            updateId: input.identity.updateId,
+            messageId: input.identity.messageId,
+            chatId: String(input.identity.chatId),
+            text: input.identity.text,
+            startedAt: new Date().toISOString(),
+            status: "completed",
+        } satisfies TelegramRunDedupPayload,
+    });
+}
+
 function chooseSkillFromText(text: string, candidates: TelegramCandidate[]) {
     const trimmed = text.trim();
     const numberMatch = trimmed.match(/^(?:#|skill\s*)?(\d+)$/i)
@@ -568,12 +665,19 @@ async function runTelegramSkill(input: {
     replyToMessageId?: number;
     text: string;
     plan: TelegramPlan;
+    identity?: TelegramRunIdentity;
 }): Promise<void> {
     const linkedAccount = await findLinkedTelegramAccount(input.telegramUserId);
     let reservedUsageId: string | null = null;
     let reservedSkillId: number | null = null;
 
     try {
+        const shouldRun = await tryMarkTelegramRunInFlight({
+            telegramUserId: input.telegramUserId,
+            identity: input.identity,
+        });
+        if (!shouldRun) return;
+
         await sendTelegramChatAction(input.chatId, "upload_document");
 
         let params = input.plan.params && typeof input.plan.params === "object" ? input.plan.params : {};
@@ -625,8 +729,18 @@ async function runTelegramSkill(input: {
         await updateConversation({
             telegramUserId: input.telegramUserId,
             chatId: input.chatId,
-            pendingAction: null,
-            pendingPayload: null,
+            pendingAction: input.identity ? "completed_skill" : null,
+            pendingPayload: input.identity
+                ? {
+                    kind: "telegram_run_dedup",
+                    updateId: input.identity.updateId,
+                    messageId: input.identity.messageId,
+                    chatId: String(input.identity.chatId),
+                    text: input.identity.text,
+                    startedAt: new Date().toISOString(),
+                    status: "completed",
+                } satisfies TelegramRunDedupPayload
+                : null,
             lastIntent: input.plan.intent || input.text,
             lastParams: params,
             lastSkillId: result.skillId || input.plan.skillId || null,
@@ -673,6 +787,10 @@ async function runTelegramSkill(input: {
                 skillId: reservedSkillId,
             }).catch(() => {});
         }
+        await markTelegramRunCompleted({
+            telegramUserId: input.telegramUserId,
+            identity: input.identity,
+        }).catch(() => {});
         throw error;
     }
 }
@@ -700,6 +818,7 @@ async function handlePendingSelection(input: {
     chatId: number | string;
     replyToMessageId?: number;
     text: string;
+    identity?: TelegramRunIdentity;
 }): Promise<boolean> {
     const conversation = await getConversation(input.telegramUserId);
     if (
@@ -735,6 +854,7 @@ async function handlePendingSelection(input: {
         replyToMessageId: input.replyToMessageId,
         text: pendingPayload.text,
         plan,
+        identity: input.identity,
     });
     return true;
 }
@@ -897,7 +1017,14 @@ export async function POST(req: NextRequest) {
     }
 
     try {
-        if (await handlePendingSelection({ req, telegramUserId, chatId, replyToMessageId: message.message_id, text })) {
+        const identity: TelegramRunIdentity = {
+            updateId: update.update_id,
+            messageId: message.message_id,
+            chatId,
+            text,
+        };
+
+        if (await handlePendingSelection({ req, telegramUserId, chatId, replyToMessageId: message.message_id, text, identity })) {
             return NextResponse.json({ ok: true });
         }
 
@@ -915,7 +1042,7 @@ export async function POST(req: NextRequest) {
         }
         if (plan.action === "ask_clarification") {
             if (planConfidence(plan) >= MIN_RUN_CONFIDENCE && hasSelectedCandidate(plan, candidates)) {
-                await runTelegramSkill({ req, telegramUserId, chatId, replyToMessageId: message.message_id, text, plan });
+                await runTelegramSkill({ req, telegramUserId, chatId, replyToMessageId: message.message_id, text, plan, identity });
                 return NextResponse.json({ ok: true });
             }
 
@@ -964,7 +1091,7 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ ok: true });
         }
 
-        await runTelegramSkill({ req, telegramUserId, chatId, replyToMessageId: message.message_id, text, plan });
+        await runTelegramSkill({ req, telegramUserId, chatId, replyToMessageId: message.message_id, text, plan, identity });
         return NextResponse.json({ ok: true });
     } catch (error) {
         console.error("[telegram/webhook] error:", error);
