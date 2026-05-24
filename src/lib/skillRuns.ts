@@ -9,6 +9,7 @@ import {
     discoverSkills,
     executeSkillViaProvider,
     findExactSkillByIntentWithFilters,
+    MAX_PROVIDER_ATTEMPTS,
     recordSkillCall,
     updateSkillCallCost,
     selectProvider,
@@ -1104,65 +1105,145 @@ export async function runSkill(input: RunSkillInput): Promise<RunSkillResult> {
     const paramsHash = computeSkillParamsHash(skillId, params);
     const isThirdParty = skillMeta.publisherId !== null;
     const providerHint = input.providerHint ?? input.intent;
-    const provider = await selectProvider(skillId, sessionId, input.newApiUserId, paramsHash, isThirdParty, [], providerHint, params);
-    if (!provider) {
-        await deactivateSkillIfNoActiveProviders(skillId);
+
+    // Provider retry loop: try up to MAX_PROVIDER_ATTEMPTS providers on transient failures.
+    // Each failed attempt refunds the charge and excludes the provider from subsequent tries.
+    // Non-retryable errors (error_4xx) or insufficient balance stop immediately.
+    type AttemptResult = {
+        provider: ScoredProvider;
+        executed: Awaited<ReturnType<typeof executeSkillViaProvider>>;
+        charge: SkillCharge;
+        estimatedCostUSD: number;
+        providerTaskId: string | null;
+        lifecycleMode: "sync" | "async_poll";
+        skillCallId: number;
+    };
+    const excludeProviderIds: number[] = [];
+    let successAttempt: AttemptResult | null = null;
+    let lastFailedProviderId: number | undefined;
+    let lastErrorType: string | undefined;
+
+    for (let attempt = 1; attempt <= MAX_PROVIDER_ATTEMPTS; attempt++) {
+        const attemptProvider = await selectProvider(
+            skillId, sessionId, input.newApiUserId, paramsHash, isThirdParty,
+            excludeProviderIds, providerHint, params,
+        );
+        if (!attemptProvider) break;
+        excludeProviderIds.push(attemptProvider.id);
+        lastFailedProviderId = attemptProvider.id;
+
+        const attemptCostUSD = attemptProvider.costPerChar != null && typeof params.text === "string"
+            ? Math.max(0.0001, params.text.length * attemptProvider.costPerChar)
+            : attemptProvider.pricePerCall;
+        const attemptCharge = input.billingMode === "trial"
+            ? { requestedUSD: attemptCostUSD, promoRedemptionId: null, promoCoveredUSD: 0, balanceChargedUSD: 0, error: null }
+            : await deductSkillUsage(input.newApiUserId, skillId, attemptCostUSD);
+        if (attemptCharge.error) {
+            const runId = await createRun({
+                newApiUserId: input.newApiUserId,
+                sessionId,
+                skillId,
+                providerId: attemptProvider.id,
+                status: "failed",
+                lifecycleMode: "none",
+                paramsHash,
+                costUSD: attemptCostUSD,
+                error: { code: "INSUFFICIENT_BALANCE", message: "Insufficient balance.", retryable: false },
+            });
+            return {
+                status: "failed",
+                runId,
+                skillId,
+                skillName,
+                providerId: attemptProvider.id,
+                provider: attemptProvider.name,
+                error: { code: "INSUFFICIENT_BALANCE", message: "Insufficient balance.", retryable: false },
+            };
+        }
+
+        const attemptExecuted = await executeSkillViaProvider(
+            attemptProvider, params, input.authHeader, isThirdParty, input.internalBaseUrl,
+        );
+        const attemptProviderTaskId = attemptExecuted.success ? extractProviderTaskId(attemptExecuted.data) : null;
+        const attemptLifecycleMode = attemptExecuted.success ? lifecycleModeFor(attemptProvider, attemptExecuted.data) : "sync";
+
+        void updateProviderStats(attemptProvider.id, attemptExecuted.latencyMs, attemptExecuted.success, attemptExecuted.errorType === "timeout")
+            .catch((error) => console.error("[runSkill] updateProviderStats:", error));
+
+        const attemptSkillCallId = await recordSkillCall({
+            sessionId,
+            newApiUserId: input.newApiUserId,
+            skillId,
+            providerId: attemptProvider.id,
+            isRetry: attempt > 1,
+            retryAttempt: attempt,
+            latencyMs: attemptExecuted.latencyMs,
+            success: attemptExecuted.success,
+            costUSD: attemptExecuted.success ? attemptCostUSD : 0,
+            promoCoveredUSD: attemptExecuted.success ? attemptCharge.promoCoveredUSD : 0,
+            balanceChargedUSD: attemptExecuted.success ? attemptCharge.balanceChargedUSD : 0,
+            paramsHash,
+            errorType: attemptExecuted.errorType,
+        });
+
+        if (attemptExecuted.success) {
+            successAttempt = {
+                provider: attemptProvider,
+                executed: attemptExecuted,
+                charge: attemptCharge as SkillCharge,
+                estimatedCostUSD: attemptCostUSD,
+                providerTaskId: attemptProviderTaskId,
+                lifecycleMode: attemptLifecycleMode,
+                skillCallId: attemptSkillCallId,
+            };
+            break;
+        }
+
+        lastErrorType = attemptExecuted.errorType;
+        if (input.billingMode !== "trial") {
+            void refundSkillUsage(input.newApiUserId, attemptCharge as SkillCharge)
+                .catch((error) => console.error("[runSkill] refund failed:", error));
+        }
+        if (attemptExecuted.errorType === "error_4xx") break;
+    }
+
+    if (!successAttempt) {
+        if (excludeProviderIds.length === 0) {
+            await deactivateSkillIfNoActiveProviders(skillId);
+        }
+        const error = excludeProviderIds.length === 0
+            ? { code: "NO_ACTIVE_PROVIDER", message: "No active providers available for this skill.", retryable: true }
+            : {
+                code: lastErrorType?.toUpperCase() ?? "PROVIDER_ERROR",
+                message: "Provider submit failed.",
+                retryable: lastErrorType !== "error_4xx",
+            };
         const runId = await createRun({
             newApiUserId: input.newApiUserId,
             sessionId,
             skillId,
+            providerId: lastFailedProviderId,
             status: "failed",
             lifecycleMode: "none",
             paramsHash,
-            error: { code: "NO_ACTIVE_PROVIDER", message: "No active providers available for this skill.", retryable: true },
+            error,
         });
         return {
             status: "failed",
             runId,
             skillId,
             skillName,
-            error: { code: "NO_ACTIVE_PROVIDER", message: "No active providers available for this skill.", retryable: true },
+            error,
         };
     }
 
-    const estimatedCostUSD = provider.costPerChar != null && typeof params.text === "string"
-        ? Math.max(0.0001, params.text.length * provider.costPerChar)
-        : provider.pricePerCall;
-    const charge = input.billingMode === "trial"
-        ? { requestedUSD: estimatedCostUSD, promoRedemptionId: null, promoCoveredUSD: 0, balanceChargedUSD: 0, error: null }
-        : await deductSkillUsage(input.newApiUserId, skillId, estimatedCostUSD);
-    if (charge.error) {
-        const runId = await createRun({
-            newApiUserId: input.newApiUserId,
-            sessionId,
-            skillId,
-            providerId: provider.id,
-            status: "failed",
-            lifecycleMode: "none",
-            paramsHash,
-            costUSD: estimatedCostUSD,
-            error: { code: "INSUFFICIENT_BALANCE", message: "Insufficient balance.", retryable: false },
-        });
-        return {
-            status: "failed",
-            runId,
-            skillId,
-            skillName,
-            providerId: provider.id,
-            provider: provider.name,
-            error: { code: "INSUFFICIENT_BALANCE", message: "Insufficient balance.", retryable: false },
-        };
-    }
-
-    const executed = await executeSkillViaProvider(provider, params, input.authHeader, isThirdParty, input.internalBaseUrl);
-    const providerTaskId = executed.success ? extractProviderTaskId(executed.data) : null;
-    const lifecycleMode = executed.success ? lifecycleModeFor(provider, executed.data) : "sync";
+    const { provider, executed, charge, estimatedCostUSD, providerTaskId, lifecycleMode, skillCallId } = successAttempt;
     const runId = await createRun({
         newApiUserId: input.newApiUserId,
         sessionId,
         skillId,
         providerId: provider.id,
-        status: executed.success ? (lifecycleMode === "async_poll" ? "running" : "succeeded") : "failed",
+        status: lifecycleMode === "async_poll" ? "running" : "succeeded",
         lifecycleMode,
         paramsHash,
         providerTaskId,
@@ -1174,47 +1255,7 @@ export async function runSkill(input: RunSkillInput): Promise<RunSkillResult> {
         nextPollAt: lifecycleMode === "async_poll" ? new Date(Date.now() + 2000) : null,
         expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
     });
-
-    const skillCallId = await recordSkillCall({
-        sessionId,
-        newApiUserId: input.newApiUserId,
-        skillId,
-        providerId: provider.id,
-        latencyMs: executed.latencyMs,
-        success: executed.success,
-        costUSD: executed.success ? estimatedCostUSD : 0,
-        promoCoveredUSD: executed.success ? charge.promoCoveredUSD : 0,
-        balanceChargedUSD: executed.success ? charge.balanceChargedUSD : 0,
-        paramsHash,
-        errorType: executed.errorType,
-    });
     await updateRun(runId, { skillCallId });
-
-    void updateProviderStats(provider.id, executed.latencyMs, executed.success, executed.errorType === "timeout")
-        .catch((error) => console.error("[runSkill] updateProviderStats:", error));
-
-    if (!executed.success) {
-        if (input.billingMode !== "trial") {
-            void refundSkillUsage(input.newApiUserId, charge).catch((error) => console.error("[runSkill] refund failed:", error));
-        }
-        const error = {
-            code: executed.errorType.toUpperCase(),
-            message: "Provider submit failed.",
-            cause: JSON.stringify(executed.data),
-            retryable: executed.errorType !== "error_4xx",
-        };
-        await updateRun(runId, { status: "failed", error, nextPollAt: null });
-        return {
-            status: "failed",
-            runId,
-            skillId,
-            skillName,
-            providerId: provider.id,
-            provider: provider.name,
-            costUSD: 0,
-            error,
-        };
-    }
 
     const shouldWaitInline = waitForResult;
 

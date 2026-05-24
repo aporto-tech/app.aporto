@@ -1,5 +1,101 @@
 <!-- /autoplan restore point: /Users/igortkachenko/.gstack/projects/aporto-tech-app.aporto/main-autoplan-restore-20260421-112806.md -->
 <!-- /autoplan restore point: sandbox blocked ~/.gstack write; current plan amended in-place on 2026-05-20 -->
+<!-- /autoplan restore point: /Users/igortkachenko/.gstack/projects/aporto-tech-app.aporto/main-autoplan-restore-20260524-093743.md -->
+
+## Plan Addendum: Routing + Telegram Reliability Fixes
+
+**Date:** 2026-05-24
+**Branch:** main
+**Scope:** Three production reliability gaps identified via code audit.
+
+---
+
+### Premises
+
+1. `runSkill` (used by Telegram bot and MCP `aporto_run_skill`) selects one provider and returns `failed` immediately on any error. The `/api/routing/execute` endpoint already has a working `MAX_PROVIDER_ATTEMPTS` retry loop — we should bring `runSkill` to parity.
+2. Telegram messages over 3900 chars are silently truncated. The `truncate()` function in `telegramBot.ts` cuts to 3900 chars + `...`. Long LLM responses, search results, or extracted data lose their tail with no indication of how much was cut. Split > truncate.
+3. The MCP tool description for `aporto_run_skill` instructs the AI agent to call `aporto_run_skill` again after a `failed` result — but without passing a consistent `sessionId`, the same provider gets selected again → same failure → the user sees N identical failed calls for a single request. This needs both: (a) provider retry in `runSkill` so the server doesn't need a client-side retry, and (b) explicit `sessionId` guidance in the MCP description.
+
+---
+
+### Fix A: Provider Retry in `runSkill` (`src/lib/skillRuns.ts`)
+
+**Problem:** Lines 1107–1216 of `skillRuns.ts`. After `executeSkillViaProvider` fails, the function immediately refunds, writes a `failed` SkillRun, and returns. No retry.
+
+**What to build:**
+
+Add an `excludeProviderIds: number[]` accumulator. After a sync-provider failure, push `provider.id` to the list and call `selectProvider` again. Repeat up to `MAX_PROVIDER_ATTEMPTS` (currently 3) total attempts.
+
+**Retry gate — only retry when:**
+- `executed.errorType` is `timeout`, `network_error`, or `error_5xx` (not `error_4xx` — those are caller errors, not transient provider failures)
+- `lifecycleMode` is `sync` (async providers that returned a `providerTaskId` should not be re-submitted to a different provider; the async job is already running)
+
+**Billing:** Match the `execute` route pattern: `deductSkillUsage` before each attempt, `refundSkillUsage` on failure, keep charge on success.
+
+**SkillRun record:** Create the SkillRun once using the first provider that succeeds (or the last provider on all-failure), not one per attempt. Record each attempt as a separate `SkillCall` with `isRetry: true` and `retryAttempt: N`.
+
+**`MAX_PROVIDER_ATTEMPTS`** is already exported from `src/lib/routing.ts` (default 3, env-controlled via `SKILL_MAX_PROVIDER_ATTEMPTS`). No new constant needed.
+
+**Files:** `src/lib/skillRuns.ts` only. The function signature of `runSkill` doesn't change.
+
+---
+
+### Fix B: Telegram Message Splitting (`src/lib/telegramBot.ts`)
+
+**Problem:** `sendTelegramMessage` calls `truncate(input.text)` which cuts at 3900 chars + `...`. Any response longer than 3900 chars silently loses its tail.
+
+**What to build:**
+
+Replace `truncate` in `sendTelegramMessage` with a `splitIntoChunks(text, maxChars)` function that:
+- Splits at natural boundaries (prefer `\n\n`, then `\n`, then last space before limit)
+- Sends each chunk as a separate `sendMessage` call
+- Only the first chunk gets `replyToMessageId`; subsequent chunks don't (they appear as follow-up messages in the same chat)
+- Keeps `truncate()` for captions (max 900 chars for `sendPhoto`/`sendDocument`) — only `sendTelegramMessage` changes
+
+**Chunk limit:** 3900 chars (existing `MAX_REPLY_CHARS` constant). No change to the constant.
+
+**`replyMarkup`:** Attach only to the last chunk, so the "Retry / Dashboard / Open run" buttons appear once at the end.
+
+**Files:** `src/lib/telegramBot.ts` only. Callers of `sendTelegramMessage` don't change.
+
+---
+
+### Fix C: MCP `aporto_run_skill` Description Update (`src/app/api/mcp/route.ts`)
+
+**Problem:** The tool description says "call `aporto_run_skill` again with the chosen skillId" after `needs_selection`, and "automatically call `aporto_get_skill_run` every 30 seconds" after `running/waiting`. But it says nothing about what to do on `failed` — so AI agents naturally retry with the same params and get the same provider and the same failure.
+
+**What to build:**
+
+Update the tool description to add: "If status is `failed` and `error.retryable` is true, retry with the same `sessionId` (required for provider exclusion) up to 2 more times before reporting failure. Do not retry if `error.code` is `error_4xx`, `INSUFFICIENT_BALANCE`, `NO_ACTIVE_PROVIDER`, or `SKILL_NOT_FOUND`."
+
+**Why `sessionId` matters:** `selectProvider` excludes providers that already failed in the same session (last 24h). Without passing the same `sessionId`, the provider pool isn't filtered and the same broken provider wins again.
+
+**Files:** `src/app/api/mcp/route.ts` — tool description string only (lines ~539-541). No logic changes.
+
+---
+
+### Acceptance Criteria
+
+- **Fix A:** Call `runSkill` for a skill whose only provider times out. With 2+ active providers, the second provider is tried automatically. User sees `succeeded` instead of `failed`. DB: one `SkillRun(succeeded)` + two `SkillCall` rows (one `isRetry=false`, one `isRetry=true`).
+- **Fix B:** Send a request whose response is 5000 chars. Telegram user receives 2 messages: first ~3900 chars, second ~1100 chars. No truncation marker. Retry/Dashboard buttons appear only on the last message.
+- **Fix C:** After description change, when an AI agent calls `aporto_run_skill` and gets `failed`, it passes the same `sessionId` on retry. The second call selects a different provider.
+
+---
+
+### NOT in scope
+
+- Provider circuit breakers (TODOS.md, deferred since Phase 1)
+- Async provider retry (different failure mode; async job is already submitted to provider)
+- Streaming provider responses
+- Per-provider retry limits (beyond `MAX_PROVIDER_ATTEMPTS`)
+- Telegram pagination UI (numbered "1/3" page indicators)
+
+---
+
+### Decision Audit Trail (this addendum)
+
+| # | Phase | Decision | Classification | Principle | Rationale | Rejected |
+|---|-------|----------|----------------|-----------|-----------|----------|
 
 ## Plan Addendum: Anonymous CLI Trial Runs
 

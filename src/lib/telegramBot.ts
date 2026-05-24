@@ -17,6 +17,22 @@ function truncate(value: string, maxChars = MAX_REPLY_CHARS): string {
     return value.length <= maxChars ? value : `${value.slice(0, maxChars).trim()}...`;
 }
 
+function splitIntoChunks(text: string, maxChars = MAX_REPLY_CHARS): string[] {
+    if (text.length <= maxChars) return [text];
+    const chunks: string[] = [];
+    let remaining = text;
+    while (remaining.length > maxChars) {
+        let cut = remaining.lastIndexOf("\n\n", maxChars);
+        if (cut <= 0) cut = remaining.lastIndexOf("\n", maxChars);
+        if (cut <= 0) cut = remaining.lastIndexOf(" ", maxChars);
+        if (cut <= 0) cut = maxChars;
+        chunks.push(remaining.slice(0, cut).trim());
+        remaining = remaining.slice(cut).trim();
+    }
+    if (remaining) chunks.push(remaining);
+    return chunks;
+}
+
 export async function telegramCall<T = unknown>(method: string, body: Record<string, unknown>): Promise<T> {
     const token = process.env.TELEGRAM_BOT_TOKEN;
     if (!token) throw new Error("TELEGRAM_BOT_TOKEN is not set");
@@ -43,13 +59,16 @@ export async function sendTelegramMessage(input: {
     replyToMessageId?: number;
     replyMarkup?: TelegramReplyMarkup;
 }): Promise<void> {
-    await telegramCall("sendMessage", {
-        chat_id: input.chatId,
-        text: truncate(input.text),
-        disable_web_page_preview: false,
-        ...(input.replyToMessageId ? { reply_to_message_id: input.replyToMessageId } : {}),
-        ...(input.replyMarkup ? { reply_markup: input.replyMarkup } : {}),
-    });
+    const chunks = splitIntoChunks(input.text);
+    for (let i = 0; i < chunks.length; i++) {
+        await telegramCall("sendMessage", {
+            chat_id: input.chatId,
+            text: chunks[i],
+            disable_web_page_preview: false,
+            ...(i === 0 && input.replyToMessageId ? { reply_to_message_id: input.replyToMessageId } : {}),
+            ...(i === chunks.length - 1 && input.replyMarkup ? { reply_markup: input.replyMarkup } : {}),
+        });
+    }
 }
 
 export async function sendTelegramChatAction(
