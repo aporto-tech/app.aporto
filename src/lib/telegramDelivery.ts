@@ -6,22 +6,11 @@ import {
     type TelegramReplyMarkup,
 } from "@/lib/telegramBot";
 
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://app.aporto.tech";
-
 type SkillRunResult = Awaited<ReturnType<typeof getSkillRun>>;
 
-export function telegramRunButtons(runId?: string): TelegramReplyMarkup {
+function telegramRetryButton(): TelegramReplyMarkup {
     return {
-        inline_keyboard: [
-            [
-                { text: "Retry", callback_data: "retry_last" },
-                { text: "Dashboard", url: `${APP_URL}/dashboard` },
-            ],
-            [
-                { text: "Link account", url: `${APP_URL}/settings?tab=api-keys` },
-            ],
-            ...(runId ? [[{ text: "Open run", url: `${APP_URL}/dashboard?runId=${encodeURIComponent(runId)}` }]] : []),
-        ],
+        inline_keyboard: [[{ text: "Retry", callback_data: "retry_last" }]],
     };
 }
 
@@ -135,7 +124,6 @@ export async function sendTelegramRunResult(input: {
             artifacts,
             fallbackText: text,
             replyToMessageId: input.replyToMessageId ?? undefined,
-            replyMarkup: telegramRunButtons(input.result.runId),
             includeJson: true,
         });
         return;
@@ -145,7 +133,7 @@ export async function sendTelegramRunResult(input: {
         chatId: input.chatId,
         text,
         replyToMessageId: input.replyToMessageId ?? undefined,
-        replyMarkup: telegramRunButtons(input.result.runId),
+        replyMarkup: input.result.status === "failed" ? telegramRetryButton() : undefined,
     });
 }
 

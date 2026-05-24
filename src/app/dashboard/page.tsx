@@ -487,7 +487,7 @@ export default function DashboardPage() {
                     </Link>
                 </div>
 
-                <Link href="/settings?tab=api-keys" className={styles.telegramDashboardCta} style={{ marginBottom: 24 }}>
+                <Link href="/settings?tab=integrations" className={styles.telegramDashboardCta} style={{ marginBottom: 24 }}>
                     <div className={styles.telegramCtaIcon}>✈</div>
                     <div className={styles.telegramCtaCopy}>
                         <div className={styles.telegramCtaTitle}>

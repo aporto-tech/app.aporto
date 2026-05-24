@@ -30,13 +30,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Trigger spending alerts
+        env:
+          APP_URL: ${{ secrets.APP_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
         run: |
-          response=$(curl -s -o /dev/null -w "%{http_code}" \
-            -X POST "${{ secrets.APP_URL }}/api/cron/spending-alerts" \
-            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+          base_url="${APP_URL%/}"
+          response=$(curl -L -sS -o response.json -w "%{http_code}" \
+            -X POST "$base_url/api/cron/spending-alerts" \
+            -H "Authorization: Bearer $CRON_SECRET" \
             -H "Content-Type: application/json")
           echo "Response: $response"
           if [ "$response" != "200" ]; then
+            cat response.json || true
             echo "ERROR: spending-alerts returned HTTP $response"
             exit 1
           fi
@@ -50,13 +55,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Trigger weekly digest
+        env:
+          APP_URL: ${{ secrets.APP_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
         run: |
-          response=$(curl -s -o /dev/null -w "%{http_code}" \
-            -X POST "${{ secrets.APP_URL }}/api/cron/weekly-digest" \
-            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+          base_url="${APP_URL%/}"
+          response=$(curl -L -sS -o response.json -w "%{http_code}" \
+            -X POST "$base_url/api/cron/weekly-digest" \
+            -H "Authorization: Bearer $CRON_SECRET" \
             -H "Content-Type: application/json")
           echo "Response: $response"
           if [ "$response" != "200" ]; then
+            cat response.json || true
             echo "ERROR: weekly-digest returned HTTP $response"
             exit 1
           fi
@@ -70,13 +80,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Trigger provider options sync
+        env:
+          APP_URL: ${{ secrets.APP_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
         run: |
-          response=$(curl -s -o /dev/null -w "%{http_code}" \
-            -X POST "${{ secrets.APP_URL }}/api/cron/sync-provider-options" \
-            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+          base_url="${APP_URL%/}"
+          response=$(curl -L -sS -o response.json -w "%{http_code}" \
+            -X POST "$base_url/api/cron/sync-provider-options" \
+            -H "Authorization: Bearer $CRON_SECRET" \
             -H "Content-Type: application/json")
           echo "Response: $response"
           if [ "$response" != "200" ]; then
+            cat response.json || true
             echo "ERROR: sync-provider-options returned HTTP $response"
             exit 1
           fi

@@ -15,13 +15,11 @@ import {
     answerTelegramCallback,
     sendTelegramChatAction,
     sendTelegramMessage,
-    type TelegramReplyMarkup,
 } from "@/lib/telegramBot";
 import {
     registerTelegramDelivery,
     resultText,
     sendTelegramRunResult,
-    telegramRunButtons,
 } from "@/lib/telegramDelivery";
 
 export const dynamic = "force-dynamic";
@@ -277,10 +275,15 @@ function helpMessage(): string {
         "озвучь: Welcome to Aporto",
         "",
         "Команды:",
+        "/dashboard — открыть Aporto dashboard",
+        "/choose — выбрать скил из текущего списка",
+        "/more — показать следующие 10 скилов",
         "/quiet on — не присылать служебные сообщения после результата",
         "/quiet off — снова показывать cost/status сообщения",
+        "/verbose — выключить quiet mode",
+        "/unlink — отвязать Telegram от Aporto",
         "",
-        "Для привязки аккаунта откройте Settings в Aporto, создайте Telegram code и отправьте сюда /link CODE.",
+        "Для привязки аккаунта откройте Settings → Integrations в Aporto, создайте Telegram code и отправьте сюда /link CODE.",
         "Без привязки Telegram работает через trial. Когда лимит закончится, получите API key на https://aporto.tech.",
     ].join("\n");
 }
@@ -291,7 +294,7 @@ function telegramLimitMessage(): string {
         "",
         "Если у вас уже есть аккаунт Aporto:",
         `1. Откройте ${APP_URL}/settings`,
-        "2. В блоке Telegram нажмите Create Link Code",
+        "2. Откройте вкладку Integrations и в блоке Telegram нажмите Create Link Code",
         "3. Отправьте сюда команду /link CODE",
         "",
         "После привязки Telegram будет запускать скилы с вашего Aporto баланса.",
@@ -455,7 +458,11 @@ async function withTelegramPriceLabels(candidates: Awaited<ReturnType<typeof dis
     return candidates.map((candidate) => ({ ...candidate, priceLabel: labels.get(candidate.id) }));
 }
 
-function discoverMessage(candidates: TelegramCandidate[]): string {
+function moreSkillsHint(hasMore?: boolean): string | null {
+    return hasMore ? "Use /more to show the next 10 skills." : null;
+}
+
+function discoverMessage(candidates: TelegramCandidate[], hasMore?: boolean): string {
     if (!candidates.length) return "Не нашел подходящих скилов. Попробуйте описать задачу конкретнее.";
     return [
         "Подходящие скилы:",
@@ -463,8 +470,10 @@ function discoverMessage(candidates: TelegramCandidate[]): string {
             return `${index + 1}. ${skill.name}${priceLabel(skill)}`;
         }),
         "",
+        moreSkillsHint(hasMore),
+        "Use /choose to select one of these skills.",
         "Напишите задачу более конкретно, и я запущу подходящий скил.",
-    ].join("\n");
+    ].filter(Boolean).join("\n");
 }
 
 function planConfidence(plan: TelegramPlan): number {
@@ -477,7 +486,7 @@ function hasSelectedCandidate(plan: TelegramPlan, candidates: TelegramCandidate[
     return typeof plan.skillId === "number" && candidates.some((skill) => skill.id === plan.skillId);
 }
 
-function skillClarificationMessage(candidates: TelegramCandidate[], plan?: TelegramPlan): string {
+function skillClarificationMessage(candidates: TelegramCandidate[], plan?: TelegramPlan, hasMore?: boolean): string {
     if (!candidates.length) return "Не уверен, какой скил нужно вызвать. Опишите задачу конкретнее.";
     const intro = plan?.reply && plan.reply.trim()
         ? plan.reply.trim()
@@ -488,23 +497,10 @@ function skillClarificationMessage(candidates: TelegramCandidate[], plan?: Teleg
             return `${index + 1}. ${skill.name}${priceLabel(skill)}`;
         }),
         "",
+        moreSkillsHint(hasMore),
+        "Use /choose to select one of these skills.",
         "Ответьте номером или названием скила и добавьте параметры, если они нужны.",
-    ].join("\n");
-}
-
-function chooseButtons(hasMore = false): TelegramReplyMarkup {
-    return {
-        inline_keyboard: [
-            ...(hasMore ? [[{ text: "Show next 10 skills", callback_data: "more_skills" }]] : []),
-            [
-                { text: "Choose skill", callback_data: "choose_skill" },
-            ],
-            [
-                { text: "Dashboard", url: `${APP_URL}/dashboard` },
-                { text: "Link account", url: `${APP_URL}/settings?tab=api-keys` },
-            ],
-        ],
-    };
+    ].filter(Boolean).join("\n");
 }
 
 function isPendingRunPayload(value: unknown): value is PendingRunPayload {
@@ -717,7 +713,6 @@ async function runTelegramSkill(input: {
                     chatId: input.chatId,
                     text: telegramLimitMessage(),
                     replyToMessageId: input.replyToMessageId,
-                    replyMarkup: telegramRunButtons(),
                 });
                 return;
             }
@@ -782,7 +777,6 @@ async function runTelegramSkill(input: {
                 chatId: input.chatId,
                 text: resultText(result),
                 replyToMessageId: input.replyToMessageId,
-                replyMarkup: telegramRunButtons(result.runId),
             });
             return;
         }
@@ -873,6 +867,84 @@ async function handlePendingSelection(input: {
     return true;
 }
 
+async function promptCurrentSkillSelection(input: {
+    telegramUserId: string;
+    chatId: number | string;
+    replyToMessageId?: number;
+}): Promise<void> {
+    const conversation = await getConversation(input.telegramUserId);
+    if (isPendingRunPayload(conversation?.pendingPayload) && isFreshPending(conversation.updatedAt)) {
+        await updateConversation({
+            telegramUserId: input.telegramUserId,
+            chatId: input.chatId,
+            pendingAction: "choose_skill",
+            pendingPayload: conversation.pendingPayload,
+        });
+        await sendTelegramMessage({
+            chatId: input.chatId,
+            text: skillClarificationMessage(
+                conversation.pendingPayload.candidates,
+                conversation.pendingPayload.plan,
+                Boolean(conversation.pendingPayload.hasMore),
+            ),
+            replyToMessageId: input.replyToMessageId,
+        });
+        return;
+    }
+
+    await sendTelegramMessage({
+        chatId: input.chatId,
+        text: "No active skill list. Send a task first, then use /choose.",
+        replyToMessageId: input.replyToMessageId,
+    });
+}
+
+async function showNextSkillPage(input: {
+    telegramUserId: string;
+    chatId: number | string;
+    replyToMessageId?: number;
+}): Promise<void> {
+    const conversation = await getConversation(input.telegramUserId);
+    if (!isPendingRunPayload(conversation?.pendingPayload) || !isFreshPending(conversation.updatedAt)) {
+        await sendTelegramMessage({
+            chatId: input.chatId,
+            text: "No skill list is active. Send a new task to discover skills.",
+            replyToMessageId: input.replyToMessageId,
+        });
+        return;
+    }
+
+    const currentPayload = conversation.pendingPayload as PendingRunPayload;
+    const page = (currentPayload.page ?? 0) + 1;
+    const candidates = await telegramDiscoveryPage(currentPayload.text, page);
+    if (!candidates.length) {
+        await sendTelegramMessage({
+            chatId: input.chatId,
+            text: "No more matching skills.",
+            replyToMessageId: input.replyToMessageId,
+        });
+        return;
+    }
+
+    const pendingPayload = {
+        ...currentPayload,
+        candidates,
+        page,
+        hasMore: await telegramDiscoveryHasMore(currentPayload.text, page),
+    };
+    await updateConversation({
+        telegramUserId: input.telegramUserId,
+        chatId: input.chatId,
+        pendingAction: "choose_skill",
+        pendingPayload,
+    });
+    await sendTelegramMessage({
+        chatId: input.chatId,
+        text: skillClarificationMessage(candidates, pendingPayload.plan, Boolean(pendingPayload.hasMore)),
+        replyToMessageId: input.replyToMessageId,
+    });
+}
+
 export async function POST(req: NextRequest) {
     const expectedSecret = process.env.TELEGRAM_WEBHOOK_SECRET;
     const actualSecret = req.headers.get("x-telegram-bot-api-secret-token");
@@ -893,76 +965,26 @@ export async function POST(req: NextRequest) {
         await answerTelegramCallback(callback.id).catch(() => {});
 
         try {
-            const conversation = await getConversation(telegramUserId);
-
             if (data === "choose_skill") {
-                if (isPendingRunPayload(conversation?.pendingPayload)) {
-                    await updateConversation({
-                        telegramUserId,
-                        chatId,
-                        pendingAction: "choose_skill",
-                        pendingPayload: conversation.pendingPayload,
-                    });
-                    await sendTelegramMessage({
-                        chatId,
-                        text: skillClarificationMessage(conversation.pendingPayload.candidates),
-                        replyToMessageId: callback.message?.message_id,
-                        replyMarkup: chooseButtons(Boolean(conversation.pendingPayload.hasMore)),
-                    });
-                } else {
-                    await sendTelegramMessage({
-                        chatId,
-                        text: "Опишите задачу, и я предложу подходящие скилы.",
-                        replyToMessageId: callback.message?.message_id,
-                    });
-                }
+                await promptCurrentSkillSelection({
+                    telegramUserId,
+                    chatId,
+                    replyToMessageId: callback.message?.message_id,
+                });
                 return NextResponse.json({ ok: true });
             }
 
             if (data === "more_skills") {
-                if (!isPendingRunPayload(conversation?.pendingPayload)) {
-                    await sendTelegramMessage({
-                        chatId,
-                        text: "No skill list is active. Send a new task to discover skills.",
-                        replyToMessageId: callback.message?.message_id,
-                    });
-                    return NextResponse.json({ ok: true });
-                }
-
-                const currentPayload = conversation.pendingPayload as PendingRunPayload;
-                const page = (currentPayload.page ?? 0) + 1;
-                const candidates = await telegramDiscoveryPage(currentPayload.text, page);
-                if (!candidates.length) {
-                    await sendTelegramMessage({
-                        chatId,
-                        text: "No more matching skills.",
-                        replyToMessageId: callback.message?.message_id,
-                    });
-                    return NextResponse.json({ ok: true });
-                }
-
-                const pendingPayload = {
-                    ...currentPayload,
-                    candidates,
-                    page,
-                    hasMore: await telegramDiscoveryHasMore(currentPayload.text, page),
-                };
-                await updateConversation({
+                await showNextSkillPage({
                     telegramUserId,
                     chatId,
-                    pendingAction: "choose_skill",
-                    pendingPayload,
-                });
-                await sendTelegramMessage({
-                    chatId,
-                    text: skillClarificationMessage(candidates, pendingPayload.plan),
                     replyToMessageId: callback.message?.message_id,
-                    replyMarkup: chooseButtons(Boolean(pendingPayload.hasMore)),
                 });
                 return NextResponse.json({ ok: true });
             }
 
             if (data === "retry_last") {
+                const conversation = await getConversation(telegramUserId);
                 if (!conversation?.lastIntent) {
                     await sendTelegramMessage({
                         chatId,
@@ -998,7 +1020,6 @@ export async function POST(req: NextRequest) {
                 chatId,
                 text: `Ошибка: ${String(error)}`,
                 replyToMessageId: callback.message?.message_id,
-                replyMarkup: telegramRunButtons(),
             }).catch(() => {});
             return NextResponse.json({ ok: true });
         }
@@ -1015,7 +1036,30 @@ export async function POST(req: NextRequest) {
             chatId,
             text: helpMessage(),
             replyToMessageId: message.message_id,
-            replyMarkup: telegramRunButtons(),
+        });
+        return NextResponse.json({ ok: true });
+    }
+    if (text === "/choose") {
+        await promptCurrentSkillSelection({
+            telegramUserId,
+            chatId,
+            replyToMessageId: message.message_id,
+        });
+        return NextResponse.json({ ok: true });
+    }
+    if (text === "/more") {
+        await showNextSkillPage({
+            telegramUserId,
+            chatId,
+            replyToMessageId: message.message_id,
+        });
+        return NextResponse.json({ ok: true });
+    }
+    if (text === "/dashboard") {
+        await sendTelegramMessage({
+            chatId,
+            text: `${APP_URL}/dashboard`,
+            replyToMessageId: message.message_id,
         });
         return NextResponse.json({ ok: true });
     }
@@ -1036,7 +1080,6 @@ export async function POST(req: NextRequest) {
                 ? `Telegram подключен к Aporto${linked.linkedEmail ? ` (${linked.linkedEmail})` : ""}. Теперь запуски идут с вашего аккаунта.`
                 : linked.message,
             replyToMessageId: message.message_id,
-            replyMarkup: telegramRunButtons(),
         });
         return NextResponse.json({ ok: true });
     }
@@ -1093,7 +1136,6 @@ export async function POST(req: NextRequest) {
                 chatId,
                 text: helpMessage(),
                 replyToMessageId: message.message_id,
-                replyMarkup: telegramRunButtons(),
             });
             return NextResponse.json({ ok: true });
         }
@@ -1111,9 +1153,8 @@ export async function POST(req: NextRequest) {
             });
             await sendTelegramMessage({
                 chatId,
-                text: skillClarificationMessage(candidates, plan),
+                text: skillClarificationMessage(candidates, plan, hasMore),
                 replyToMessageId: message.message_id,
-                replyMarkup: chooseButtons(hasMore),
             });
             return NextResponse.json({ ok: true });
         }
@@ -1126,9 +1167,8 @@ export async function POST(req: NextRequest) {
             });
             await sendTelegramMessage({
                 chatId,
-                text: plan.reply || discoverMessage(candidates),
+                text: discoverMessage(candidates, hasMore),
                 replyToMessageId: message.message_id,
-                replyMarkup: chooseButtons(hasMore),
             });
             return NextResponse.json({ ok: true });
         }
@@ -1141,9 +1181,8 @@ export async function POST(req: NextRequest) {
             });
             await sendTelegramMessage({
                 chatId,
-                text: skillClarificationMessage(candidates, plan),
+                text: skillClarificationMessage(candidates, plan, hasMore),
                 replyToMessageId: message.message_id,
-                replyMarkup: chooseButtons(hasMore),
             });
             return NextResponse.json({ ok: true });
         }
@@ -1156,7 +1195,6 @@ export async function POST(req: NextRequest) {
             chatId,
             text: `Ошибка: ${String(error)}`,
             replyToMessageId: message.message_id,
-            replyMarkup: telegramRunButtons(),
         }).catch(() => {});
         return NextResponse.json({ ok: true });
     }

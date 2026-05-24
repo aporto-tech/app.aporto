@@ -141,7 +141,6 @@ export async function sendTelegramArtifacts(input: {
     artifacts?: StoredArtifact[];
     fallbackText: string;
     replyToMessageId?: number;
-    replyMarkup?: TelegramReplyMarkup;
     includeJson?: boolean;
 }): Promise<void> {
     const artifacts = input.artifacts?.filter((artifact) => input.includeJson || artifact.type !== "json") ?? [];
@@ -151,7 +150,6 @@ export async function sendTelegramArtifacts(input: {
                 chatId: input.chatId,
                 text: input.fallbackText,
                 replyToMessageId: input.replyToMessageId,
-                replyMarkup: input.replyMarkup,
             });
         }
         return;
@@ -162,7 +160,6 @@ export async function sendTelegramArtifacts(input: {
             chatId: input.chatId,
             text: input.fallbackText,
             replyToMessageId: input.replyToMessageId,
-            replyMarkup: input.replyMarkup,
         });
     }
 

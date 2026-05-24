@@ -86,6 +86,12 @@ else
 fi
 
 if [ -n "$TELEGRAM_BOT_TOKEN" ] && [ -n "$TELEGRAM_WEBHOOK_SECRET" ]; then
+    echo "Syncing Telegram bot commands..."
+    curl -fsS -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/setMyCommands" \
+        -H "Content-Type: application/json" \
+        -d '{"commands":[{"command":"help","description":"Show examples and commands"},{"command":"dashboard","description":"Open your Aporto dashboard"},{"command":"choose","description":"Choose a skill from the current list"},{"command":"more","description":"Show the next 10 matching skills"},{"command":"link","description":"Link your Aporto account"},{"command":"quiet","description":"Toggle quiet result messages"},{"command":"verbose","description":"Show status and cost messages"},{"command":"unlink","description":"Unlink your Aporto account"}]}'
+    echo
+
     echo "Syncing Telegram webhook to ${TELEGRAM_WEBHOOK_URL}..."
     curl -fsS -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/setWebhook" \
         -H "Content-Type: application/json" \

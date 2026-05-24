@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useEffect, useState, useCallback } from "react";import { useSession } from "next-auth/react";
+import React, { useEffect, useState, useCallback } from "react";
+import { useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import DashboardLayout from "../components/DashboardLayout";
 import AddFundsModal from "../components/AddFundsModal";
@@ -33,7 +34,7 @@ function SettingsContent() {
     const { data: session, status } = useSession();
     const router = useRouter();
     const searchParams = useSearchParams();
-    const [activeTab, setActiveTab] = useState<"api-keys" | "billing" | "history">("api-keys");
+    const [activeTab, setActiveTab] = useState<"api-keys" | "billing" | "history" | "integrations">("api-keys");
 
     useEffect(() => {
         const tab = searchParams.get("tab");
@@ -41,6 +42,8 @@ function SettingsContent() {
             setActiveTab("billing");
         } else if (tab === "api-keys") {
             setActiveTab("api-keys");
+        } else if (tab === "integrations") {
+            setActiveTab("integrations");
         } else if (tab === "history") {
             setActiveTab("history");
         }
@@ -120,6 +123,7 @@ function SettingsContent() {
             router.push("/login");
         } else if (status === "authenticated" && activeTab === "api-keys") {
             fetchTokens();
+        } else if (status === "authenticated" && activeTab === "integrations") {
             fetchTelegramStatus();
         } else if (status === "authenticated" && activeTab === "history") {
             fetchHistory();
@@ -231,6 +235,12 @@ function SettingsContent() {
                         Billing
                     </button>
                     <button
+                        className={`${styles.tab} ${activeTab === "integrations" ? styles.active : ""}`}
+                        onClick={() => setActiveTab("integrations")}
+                    >
+                        Integrations
+                    </button>
+                    <button
                         className={`${styles.tab} ${activeTab === "history" ? styles.active : ""}`}
                         onClick={() => setActiveTab("history")}
                     >
@@ -296,6 +306,10 @@ function SettingsContent() {
                         )}
                     </div>
 
+                    </>
+                )}
+
+                {activeTab === "integrations" && (
                     <div className={styles.integrationCard}>
                         <div className={styles.cardHeader}>
                             <h2>Telegram</h2>
@@ -337,7 +351,6 @@ function SettingsContent() {
                             </div>
                         )}
                     </div>
-                    </>
                 )}
 
                 {activeTab === "billing" && (
