@@ -46,8 +46,8 @@ done
 git pull origin main || git pull origin master
 
 # 2. Update/Install dependencies
-echo "Installing npm dependencies..."
-npm install
+echo "Installing npm dependencies, including build-time dev dependencies..."
+npm install --include=dev
 
 # 3. Apply any pending database migrations
 echo "Applying database migrations..."
