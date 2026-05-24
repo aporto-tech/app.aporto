@@ -15,14 +15,9 @@
  */
 
 import { PrismaClient } from "@prisma/client";
+import { buildApifyInputMappings, fetchApifyActorInputSchema } from "./lib/apify-input-schema.mjs";
 
 const prisma = new PrismaClient();
-const DEFAULT_APIFY_INPUT_MAPPINGS = {
-    query: ["query", "searchQuery", "keyword", "searchStringsArray"],
-    limit: ["maxResults", "maxItems", "limit", "resultsLimit", "maxPosts"],
-    url: ["url", "urls", "startUrls", "profileUrls", "companyUrls", "jobUrls"],
-    location: ["location", "city", "area"],
-};
 const APIFY_BASE = "https://api.apify.com/v2";
 const APIFY_API_KEY = process.env.APIFY_API_KEY;
 const NEWAPI_URL = process.env.NEWAPI_URL ?? "https://api.aporto.tech";
@@ -402,11 +397,13 @@ async function ensureProvider(skillId, skill, provider) {
     }
 
     const pricePerCall = pricing.primaryEventPriceUsd ?? skill.pricePerCall;
+    const actorInputSchema = await fetchApifyActorInputSchema(actorId, APIFY_API_KEY, fetch);
 
     const syncConfig = JSON.stringify({
         actorId,
         pricing,
-        inputMappings: DEFAULT_APIFY_INPUT_MAPPINGS,
+        actorInputSchema,
+        inputMappings: buildApifyInputMappings(actorInputSchema),
         source: "apify-store",
         sourceUrl: actor.url,
         importedAt: new Date().toISOString(),

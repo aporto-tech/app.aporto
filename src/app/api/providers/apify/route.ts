@@ -24,6 +24,21 @@ const APIFY_BASE = "https://api.apify.com/v2";
 // default). All Apify jobs are completed via SkillRun async polling instead.
 const WAIT_SECS = 0;
 const APIFY_FAILED_STATUSES = new Set(["FAILED", "TIMED-OUT", "ABORTED"]);
+const PROVIDER_CONFIG_INPUT_KEYS = new Set([
+    "actorId",
+    "actorInputSchema",
+    "classifier",
+    "importedAt",
+    "inputMappings",
+    "pricing",
+    "requestType",
+    "responseCapBytes",
+    "runId",
+    "skippedReason",
+    "source",
+    "sourceUrl",
+    "timeoutMs",
+]);
 
 type ApifyRunData = {
     id?: string;
@@ -157,6 +172,12 @@ function hasNonEmptyValue(value: unknown): boolean {
     if (typeof value === "string") return value.trim().length > 0;
     if (Array.isArray(value)) return value.length > 0;
     return value != null;
+}
+
+function stripProviderConfigFields(input: Record<string, unknown>): Record<string, unknown> {
+    return Object.fromEntries(
+        Object.entries(input).filter(([key]) => !PROVIDER_CONFIG_INPUT_KEYS.has(key)),
+    );
 }
 
 function normalizeActorInput(actorId: string, input: Record<string, unknown>): Record<string, unknown> {
@@ -363,7 +384,7 @@ export async function POST(req: NextRequest) {
         // Run actor synchronously — waits up to WAIT_SECS for completion
         let actorInput = normalizeActorInput(
             actorId,
-            applyProviderInputMappings(rawActorInput, body),
+            applyProviderInputMappings(stripProviderConfigFields(rawActorInput), body),
         );
         let { runRes, runData } = await startActor(actorId, actorInput, apiKey);
         if (!runRes.ok && apifyAuthError(runData) && fallbackApiKey && fallbackApiKey !== apiKey) {

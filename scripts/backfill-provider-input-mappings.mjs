@@ -6,38 +6,10 @@
  */
 
 import { PrismaClient } from "@prisma/client";
+import { buildApifyInputMappings, fetchApifyActorInputSchema } from "./lib/apify-input-schema.mjs";
 
 const prisma = new PrismaClient();
-
-const APIFY_INPUT_MAPPINGS = {
-    query: ["query", "searchQuery", "keyword", "searchStringsArray"],
-    limit: [
-        "maxResults",
-        "maxItems",
-        "limit",
-        "resultsLimit",
-        "maxCrawledPlaces",
-        "maxCrawledPlacesPerSearch",
-        "maxPlacesPerSearch",
-        "maxTotalPlaces",
-        "totalMaxPlaces",
-        "count",
-        "pageSize",
-        "numResults",
-        "resultsCount",
-        "maximumResults",
-    ],
-    url: [
-        "url",
-        "urls",
-        "startUrls",
-        "profileUrls",
-        "companyUrls",
-        "jobUrls",
-    ],
-    location: ["location", "city", "area", "country", "address", "place"],
-    text: ["text", "prompt", "input", "content", "message"],
-};
+const APIFY_API_KEY = process.env.APIFY_API_KEY;
 
 function parseConfig(value) {
     if (!value) return {};
@@ -74,9 +46,17 @@ async function main() {
     let updated = 0;
     for (const provider of providers) {
         const config = parseConfig(provider.syncConfig);
+        const actorInputSchema = config.actorInputSchema
+            ?? (config.actorId && APIFY_API_KEY
+                ? await fetchApifyActorInputSchema(config.actorId, APIFY_API_KEY)
+                : null);
         const nextConfig = {
             ...config,
-            inputMappings: mergeMappings(config.inputMappings, APIFY_INPUT_MAPPINGS),
+            actorInputSchema,
+            inputMappings: mergeMappings(
+                config.inputMappings,
+                buildApifyInputMappings(actorInputSchema),
+            ),
         };
         await prisma.$executeRawUnsafe(
             `UPDATE "Provider" SET "syncConfig" = $2 WHERE id = $1`,

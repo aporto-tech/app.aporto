@@ -139,6 +139,11 @@ export function buildApifyInputMappings(inputSchema?: unknown): InputMappings {
 
     return {
         ...DEFAULT_APIFY_INPUT_MAPPINGS,
-        ...bySemantic,
+        ...Object.fromEntries(
+            Object.entries(bySemantic).map(([semantic, targets]) => [
+                semantic,
+                [...new Set([...(DEFAULT_APIFY_INPUT_MAPPINGS[semantic] ?? []), ...targets])],
+            ]),
+        ),
     };
 }
