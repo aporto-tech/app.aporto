@@ -8,6 +8,7 @@ import {
     executeSkillViaProvider,
     recordSkillCall,
     selectProvider,
+    shouldRetryProviderFailure,
     updateProviderStats,
 } from "@/lib/routing";
 import { prisma } from "@/lib/prisma";
@@ -226,7 +227,7 @@ export async function POST(req: NextRequest) {
 
             lastFailure ??= { provider: provider.name, latencyMs, errorType: recordedErrorType, result: data };
 
-            if (recordedErrorType === "error_4xx" || recordedErrorType === "storage_error") {
+            if (recordedErrorType === "storage_error" || !shouldRetryProviderFailure(provider, recordedErrorType)) {
                 break;
             }
         }

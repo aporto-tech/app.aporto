@@ -112,6 +112,23 @@ function toScoredProvider(row: ProviderRow): ScoredProvider {
     };
 }
 
+export function isKieLlmProvider(provider: Pick<ScoredProvider, "endpoint">): boolean {
+    return provider.endpoint.includes("/api/providers/kie-llm");
+}
+
+export function shouldRetryProviderFailure(
+    provider: Pick<ScoredProvider, "endpoint">,
+    errorType: string,
+): boolean {
+    if (errorType === "error_4xx") return false;
+
+    // Temporary: KIE LLM calls can run longer than MCP/client timeouts. Retrying
+    // creates duplicate Claude/Sonnet requests while the first call may still be running.
+    if (isKieLlmProvider(provider)) return false;
+
+    return true;
+}
+
 export function normalizeSkillText(value: string): string {
     return value.toLowerCase().replace(/[^a-z0-9]+/g, "");
 }

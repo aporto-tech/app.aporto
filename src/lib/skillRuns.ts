@@ -12,6 +12,7 @@ import {
     findExactSkillByIntentWithFilters,
     MAX_PROVIDER_ATTEMPTS,
     recordSkillCall,
+    shouldRetryProviderFailure,
     updateSkillCallCost,
     selectProvider,
     updateProviderStats,
@@ -1222,7 +1223,7 @@ export async function runSkill(input: RunSkillInput): Promise<RunSkillResult> {
             void disableProviderIfOthersActive(attemptProvider.id, skillId)
                 .catch((error) => console.error("[runSkill] disableProviderIfOthersActive:", error));
         }
-        if (attemptExecuted.errorType === "error_4xx") break;
+        if (!shouldRetryProviderFailure(attemptProvider, attemptExecuted.errorType)) break;
     }
 
     if (!successAttempt) {
