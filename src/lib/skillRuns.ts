@@ -6,6 +6,7 @@ import { storeSkillResultArtifacts, type StoredArtifact } from "@/lib/artifacts"
 import {
     createSkillRevenue,
     deactivateSkillIfNoActiveProviders,
+    disableProviderIfOthersActive,
     discoverSkills,
     executeSkillViaProvider,
     findExactSkillByIntentWithFilters,
@@ -468,7 +469,10 @@ function normalizeKieRecordInfo(data: unknown): NormalizedProviderTask {
     if (typeof payload.successFlag === "number") {
         if (payload.successFlag === 1) {
             const response = parseJsonMaybe(payload.response);
-            if (!hasUsefulResultPayload(response)) return { status: "running" };
+            // Use a basic non-empty check instead of hasUsefulResultPayload, which only
+            // recognises media/URL shapes and would incorrectly treat LLM text responses
+            // (Claude/OpenAI format) as "still running", causing an infinite poll loop.
+            if (response == null || isEmptyResultValue(response)) return { status: "running" };
             return {
                 status: "succeeded",
                 data: {
@@ -504,7 +508,7 @@ function normalizeKieRecordInfo(data: unknown): NormalizedProviderTask {
 
     if (["success", "succeeded", "completed", "complete"].includes(state)) {
         const parsedResult = parseJsonMaybe(payload.resultJson ?? payload.result ?? payload.response);
-        if (!hasUsefulResultPayload(parsedResult)) return { status: "running" };
+        if (parsedResult == null || isEmptyResultValue(parsedResult)) return { status: "running" };
         const result = isPlainObject(parsedResult)
             ? parsedResult
             : { result: parsedResult ?? payload };
@@ -1203,6 +1207,12 @@ export async function runSkill(input: RunSkillInput): Promise<RunSkillResult> {
         if (input.billingMode !== "trial") {
             void refundSkillUsage(input.newApiUserId, attemptCharge as SkillCharge)
                 .catch((error) => console.error("[runSkill] refund failed:", error));
+        }
+        // Auto-disable failing Apify providers when the skill has other active providers,
+        // so bad actors don't keep being selected on future runs.
+        if (isApifyProvider(attemptProvider)) {
+            void disableProviderIfOthersActive(attemptProvider.id, skillId)
+                .catch((error) => console.error("[runSkill] disableProviderIfOthersActive:", error));
         }
         if (attemptExecuted.errorType === "error_4xx") break;
     }

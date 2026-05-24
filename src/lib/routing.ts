@@ -540,6 +540,38 @@ async function selectAttributedProvider(
     return toScoredProvider(row);
 }
 
+/**
+ * Disables a provider if there are other active providers for the same skill.
+ * Used to automatically retire failing providers without taking the skill offline.
+ * Returns true if the provider was disabled.
+ */
+export async function disableProviderIfOthersActive(providerId: number, skillId: number): Promise<boolean> {
+    const rows = await prisma.$queryRawUnsafe<{ count: number }[]>(
+        `SELECT COUNT(*)::int AS count
+         FROM "Provider"
+         WHERE "skillId" = $1
+           AND "isActive" = true
+           AND id != $2`,
+        skillId,
+        providerId,
+    );
+
+    if ((rows[0]?.count ?? 0) === 0) return false;
+
+    const updated = await prisma.$executeRawUnsafe(
+        `UPDATE "Provider"
+         SET "isActive" = false,
+             "updatedAt" = NOW()
+         WHERE id = $1
+           AND "isActive" = true`,
+        providerId,
+    );
+    if (updated > 0) {
+        console.warn(`[routing] provider ${providerId} disabled (skill ${skillId} has other active providers)`);
+    }
+    return updated > 0;
+}
+
 export async function deactivateSkillIfNoActiveProviders(skillId: number): Promise<boolean> {
     const rows = await prisma.$queryRawUnsafe<{ count: number }[]>(
         `SELECT COUNT(*)::int AS count
