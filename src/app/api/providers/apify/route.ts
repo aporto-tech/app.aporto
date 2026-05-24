@@ -19,9 +19,10 @@ import { applyProviderInputMappings } from "@/lib/inputMappings";
 export const dynamic = "force-dynamic";
 
 const APIFY_BASE = "https://api.apify.com/v2";
-// Keep the initial submit below routing's default 10s provider timeout.
-// Longer Apify actors are completed by SkillRun async polling.
-const WAIT_SECS = 5;
+// Keep waitSecs=0 so the submit returns immediately with a runId (~1-2 s).
+// Waiting for completion here causes timeouts in executeSkillViaProvider (10 s
+// default). All Apify jobs are completed via SkillRun async polling instead.
+const WAIT_SECS = 0;
 const APIFY_FAILED_STATUSES = new Set(["FAILED", "TIMED-OUT", "ABORTED"]);
 
 type ApifyRunData = {
