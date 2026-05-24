@@ -453,6 +453,20 @@ function normalizeApifyRunResult(data: unknown): NormalizedProviderTask {
     if (!isPlainObject(data)) return { status: "running" };
 
     if (data.success === false) {
+        const detail = isPlainObject(data.detail) ? data.detail : null;
+        const detailData = detail && isPlainObject(detail.data) ? detail.data : null;
+        const status = String(data.status ?? detailData?.status ?? "").toUpperCase();
+        if (["FAILED", "TIMED-OUT", "ABORTED"].includes(status)) {
+            return {
+                status: "failed",
+                error: {
+                    code: `APIFY_${status.replace("-", "_")}`,
+                    message: String(data.message ?? `Apify actor run ${status}.`),
+                    cause: JSON.stringify(data),
+                    retryable: status !== "ABORTED",
+                },
+            };
+        }
         return {
             status: "failed",
             error: {
@@ -799,6 +813,28 @@ async function waitForProviderResult(input: {
         });
 
         if (!polled.success) {
+            const normalized = adapter.normalize(polled.data);
+            if (normalized.status === "failed") {
+                if (input.billingMode !== "trial") {
+                    await refundSkillUsage(input.newApiUserId, input.charge).catch((error) => {
+                        console.error("[waitForProviderResult] refund failed:", error);
+                    });
+                }
+                await updateRun(input.runId, {
+                    status: "failed",
+                    error: normalized.error,
+                    nextPollAt: null,
+                });
+                return {
+                    status: "failed",
+                    runId: input.runId,
+                    skillId: input.skillId,
+                    providerId: input.provider.id,
+                    provider: input.provider.name,
+                    providerTaskId: input.providerTaskId,
+                    error: normalized.error,
+                };
+            }
             continue;
         }
 

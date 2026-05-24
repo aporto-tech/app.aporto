@@ -21,6 +21,7 @@ const APIFY_BASE = "https://api.apify.com/v2";
 // Keep the initial submit below routing's default 10s provider timeout.
 // Longer Apify actors are completed by SkillRun async polling.
 const WAIT_SECS = 5;
+const APIFY_FAILED_STATUSES = new Set(["FAILED", "TIMED-OUT", "ABORTED"]);
 
 function apifyAuthError(data: unknown): boolean {
     if (!data || typeof data !== "object") return false;
@@ -233,11 +234,15 @@ export async function POST(req: NextRequest) {
 
             const run = runData.data;
             const status = run?.status;
-            if (status === "FAILED" || status === "TIMED-OUT" || status === "ABORTED") {
-                return NextResponse.json(
-                    { success: false, message: `Actor run ${status}`, runId: run?.id, status },
-                    { status: 502 },
-                );
+            if (status && APIFY_FAILED_STATUSES.has(status)) {
+                return NextResponse.json({
+                    success: true,
+                    runId: run?.id ?? runId,
+                    status,
+                    datasetId: run?.defaultDatasetId,
+                    exitCode: run?.exitCode,
+                    message: `Actor run ${status}`,
+                });
             }
             if (status !== "SUCCEEDED") {
                 return NextResponse.json({
@@ -310,7 +315,7 @@ export async function POST(req: NextRequest) {
         const status = run?.status;
 
         // FAILED or TIMED-OUT — return error with status
-        if (status === "FAILED" || status === "TIMED-OUT" || status === "ABORTED") {
+        if (status && APIFY_FAILED_STATUSES.has(status)) {
             return NextResponse.json(
                 { success: false, message: `Actor run ${status}`, runId: run?.id, status },
                 { status: 502 },
