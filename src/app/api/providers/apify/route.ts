@@ -23,6 +23,40 @@ const APIFY_BASE = "https://api.apify.com/v2";
 const WAIT_SECS = 5;
 const APIFY_FAILED_STATUSES = new Set(["FAILED", "TIMED-OUT", "ABORTED"]);
 
+type ApifyRunData = {
+    id?: string;
+    status?: string;
+    defaultDatasetId?: string;
+    exitCode?: number;
+    statusMessage?: string;
+    usageTotalUsd?: number;
+    usageUsd?: unknown;
+    chargedEventCounts?: Record<string, number>;
+    pricingInfo?: unknown;
+    stats?: unknown;
+};
+
+function runBillingFields(run?: ApifyRunData) {
+    return {
+        usageTotalUsd: run?.usageTotalUsd,
+        usageUsd: run?.usageUsd,
+        chargedEventCounts: run?.chargedEventCounts,
+        pricingInfo: run?.pricingInfo,
+        actorRun: run
+            ? {
+                id: run.id,
+                status: run.status,
+                defaultDatasetId: run.defaultDatasetId,
+                usageTotalUsd: run.usageTotalUsd,
+                usageUsd: run.usageUsd,
+                chargedEventCounts: run.chargedEventCounts,
+                pricingInfo: run.pricingInfo,
+                stats: run.stats,
+            }
+            : undefined,
+    };
+}
+
 function apifyAuthError(data: unknown): boolean {
     if (!data || typeof data !== "object") return false;
     const error = (data as { error?: { type?: string; message?: string } }).error;
@@ -45,13 +79,7 @@ async function startActor(actorId: string, actorInput: Record<string, unknown>, 
     );
 
     const runData = await runRes.json() as {
-        data?: {
-            id?: string;
-            status?: string;
-            defaultDatasetId?: string;
-            exitCode?: number;
-            statusMessage?: string;
-        };
+        data?: ApifyRunData;
         error?: { type?: string; message?: string };
     };
 
@@ -64,13 +92,7 @@ async function fetchRun(runId: string, apiKey: string) {
         signal: AbortSignal.timeout(30_000),
     });
     const runData = await runRes.json() as {
-        data?: {
-            id?: string;
-            status?: string;
-            defaultDatasetId?: string;
-            exitCode?: number;
-            statusMessage?: string;
-        };
+        data?: ApifyRunData;
         error?: { type?: string; message?: string };
     };
     return { runRes, runData };
@@ -280,6 +302,7 @@ export async function POST(req: NextRequest) {
                     datasetId: run?.defaultDatasetId,
                     exitCode: run?.exitCode,
                     message: run?.statusMessage ?? `Actor run ${status}`,
+                    ...runBillingFields(run),
                 });
             }
             if (status !== "SUCCEEDED") {
@@ -288,6 +311,7 @@ export async function POST(req: NextRequest) {
                     runId: run?.id ?? runId,
                     status,
                     datasetId: run?.defaultDatasetId,
+                    ...runBillingFields(run),
                 });
             }
 
@@ -306,6 +330,7 @@ export async function POST(req: NextRequest) {
                 datasetId,
                 runId: run?.id,
                 status,
+                ...runBillingFields(run),
             });
         }
 
@@ -355,7 +380,13 @@ export async function POST(req: NextRequest) {
         // FAILED or TIMED-OUT — return error with status
         if (status && APIFY_FAILED_STATUSES.has(status)) {
             return NextResponse.json(
-                { success: false, message: run?.statusMessage ?? `Actor run ${status}`, runId: run?.id, status },
+                {
+                    success: false,
+                    message: run?.statusMessage ?? `Actor run ${status}`,
+                    runId: run?.id,
+                    status,
+                    ...runBillingFields(run),
+                },
                 { status: 502 },
             );
         }
@@ -372,6 +403,7 @@ export async function POST(req: NextRequest) {
                 runId: run?.id,
                 status,
                 datasetId,
+                ...runBillingFields(run),
             });
         }
 
@@ -385,6 +417,7 @@ export async function POST(req: NextRequest) {
             datasetId,
             runId: run?.id,
             status,
+            ...runBillingFields(run),
         });
     } catch (error) {
         console.error("[providers/apify] POST error:", error);

@@ -366,7 +366,77 @@ function resolveKieLlmUsageCostUSD(provider: ScoredProvider, result: unknown): n
     return total > 0 ? Math.max(0.0001, total) : null;
 }
 
+function findObjectKey(value: unknown, keys: string[]): Record<string, unknown> | null {
+    if (!value || typeof value !== "object") return null;
+    if (Array.isArray(value)) {
+        for (const item of value) {
+            const found = findObjectKey(item, keys);
+            if (found) return found;
+        }
+        return null;
+    }
+
+    const object = value as Record<string, unknown>;
+    for (const key of keys) {
+        if (isPlainObject(object[key])) return object[key] as Record<string, unknown>;
+    }
+    for (const child of Object.values(object)) {
+        const found = findObjectKey(child, keys);
+        if (found) return found;
+    }
+    return null;
+}
+
+function eventPriceFromConfig(provider: ScoredProvider, eventName: string): number | null {
+    const pricing = provider.syncConfig?.pricing;
+    if (!isPlainObject(pricing)) return null;
+
+    const snapshot = isPlainObject(pricing.pricingSnapshot) ? pricing.pricingSnapshot : null;
+    const pricingPerEvent = snapshot && isPlainObject(snapshot.pricingPerEvent) ? snapshot.pricingPerEvent : null;
+    const actorChargeEvents = pricingPerEvent && isPlainObject(pricingPerEvent.actorChargeEvents)
+        ? pricingPerEvent.actorChargeEvents
+        : null;
+    const eventConfig = actorChargeEvents && isPlainObject(actorChargeEvents[eventName])
+        ? actorChargeEvents[eventName] as Record<string, unknown>
+        : null;
+    const eventPrice = eventConfig ? numberFromConfig(eventConfig.eventPriceUsd) : null;
+    if (eventPrice != null) return eventPrice;
+
+    const primaryEventName = typeof pricing.primaryEventName === "string" ? pricing.primaryEventName : null;
+    if (primaryEventName === eventName) return numberFromConfig(pricing.primaryEventPriceUsd);
+    return null;
+}
+
+function resolveApifyUsageCostUSD(provider: ScoredProvider, result: unknown): number | null {
+    const usageTotalUsd = findNumberKey(result, [
+        "usageTotalUsd",
+        "usage_total_usd",
+        "totalUsageUsd",
+        "total_usage_usd",
+    ]);
+    if (usageTotalUsd != null && usageTotalUsd > 0) return Math.max(0.0001, usageTotalUsd);
+
+    const chargedEventCounts = findObjectKey(result, ["chargedEventCounts", "charged_event_counts"]);
+    if (!chargedEventCounts) return null;
+
+    let total = 0;
+    for (const [eventName, rawCount] of Object.entries(chargedEventCounts)) {
+        const count = numberFromConfig(rawCount);
+        const price = eventPriceFromConfig(provider, eventName);
+        if (count != null && count > 0 && price != null && price > 0) {
+            total += count * price;
+        }
+    }
+
+    return total > 0 ? Math.max(0.0001, total) : null;
+}
+
 function resolveActualCostUSD(provider: ScoredProvider, result: unknown, estimatedCostUSD: number): number {
+    if (isApifyProvider(provider)) {
+        const apifyUsageCost = resolveApifyUsageCostUSD(provider, result);
+        if (apifyUsageCost != null) return apifyUsageCost;
+    }
+
     if (!isKieProvider(provider)) return estimatedCostUSD;
 
     const creditsConsumed = findNumberKey(result, ["creditsConsumed", "credits_consumed", "creditConsumed", "credit_consumed"]);

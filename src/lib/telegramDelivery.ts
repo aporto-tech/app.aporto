@@ -118,9 +118,10 @@ export async function sendTelegramRunResult(input: {
 }): Promise<void> {
     const text = resultText(input.result, { quietMode: input.quietMode });
     if (resultCanSendFiles(input.result)) {
+        const artifacts = telegramDownloadableArtifacts(input.result);
         await sendTelegramArtifacts({
             chatId: input.chatId,
-            artifacts: input.result.artifacts,
+            artifacts,
             fallbackText: text,
             replyToMessageId: input.replyToMessageId ?? undefined,
             replyMarkup: telegramRunButtons(input.result.runId),

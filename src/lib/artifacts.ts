@@ -190,6 +190,9 @@ export async function storeSkillResultArtifacts(input: StoreSkillArtifactsInput)
         expires_at: expiresAt.toISOString(),
     };
 
+    const artifacts: StoredArtifact[] = [];
+    artifacts.push(...mediaCopy.artifacts);
+
     const jsonKey = `${prefix}.json`;
     const jsonUrl = await uploadToR2(
         jsonKey,
@@ -197,16 +200,13 @@ export async function storeSkillResultArtifacts(input: StoreSkillArtifactsInput)
         "application/json",
         { expiresAt },
     );
-
-    const artifacts: StoredArtifact[] = [{
+    const jsonArtifact: StoredArtifact = {
         type: "json",
         url: jsonUrl,
         storage_key: jsonKey,
         expires_at: expiresAt.toISOString(),
         content_type: "application/json",
-    }];
-
-    artifacts.push(...mediaCopy.artifacts);
+    };
 
     const rows = findTabularRows(mediaCopy.value);
     if (rows) {
@@ -259,8 +259,10 @@ export async function storeSkillResultArtifacts(input: StoreSkillArtifactsInput)
         }
     }
 
+    artifacts.push(jsonArtifact);
+
     return {
-        artifact: artifacts[0],
+        artifact: artifacts[0] ?? jsonArtifact,
         artifacts,
     };
 }

@@ -182,7 +182,30 @@ function getAnonymousClientId(): string {
     return id;
 }
 
-function printRun(result: { status?: string; runId?: string; skillId?: number; skillName?: string; provider?: string; costUSD?: number; artifacts?: Array<{ url?: string }>; artifact?: { url?: string }; error?: { message?: string; code?: string }; choices?: Array<{ skillId?: number; id?: number; name?: string }> }): void {
+type PrintableArtifact = {
+    type?: string;
+    url?: string;
+    content_type?: string;
+};
+
+function isJsonArtifact(artifact: PrintableArtifact): boolean {
+    return artifact.type === "json"
+        || artifact.content_type === "application/json"
+        || /\.json(?:[?#].*)?$/i.test(artifact.url ?? "");
+}
+
+function preferredArtifactUrls(result: { artifacts?: PrintableArtifact[]; artifact?: PrintableArtifact }): string[] {
+    const artifacts = result.artifacts ?? [];
+    const preferred = artifacts.filter((artifact) => !isJsonArtifact(artifact));
+    const visible = preferred.length ? preferred : artifacts;
+    const urls = [
+        ...visible.map((artifact) => artifact.url),
+        preferred.length || artifacts.length ? undefined : result.artifact?.url,
+    ].filter((url): url is string => Boolean(url));
+    return Array.from(new Set(urls));
+}
+
+function printRun(result: { status?: string; runId?: string; skillId?: number; skillName?: string; provider?: string; costUSD?: number; artifacts?: PrintableArtifact[]; artifact?: PrintableArtifact; error?: { message?: string; code?: string }; choices?: Array<{ skillId?: number; id?: number; name?: string }> }): void {
     process.stdout.write(`status: ${result.status ?? "unknown"}\n`);
     if (result.runId) process.stdout.write(`runId: ${result.runId}\n`);
     if (result.skillId) process.stdout.write(`skillId: ${result.skillId}\n`);
@@ -190,10 +213,7 @@ function printRun(result: { status?: string; runId?: string; skillId?: number; s
     if (result.provider) process.stdout.write(`provider: ${result.provider}\n`);
     if (result.costUSD !== undefined) process.stdout.write(`costUSD: ${result.costUSD}\n`);
 
-    const urls = [
-        ...(result.artifacts ?? []).map((artifact) => artifact.url).filter(Boolean),
-        result.artifact?.url,
-    ].filter(Boolean);
+    const urls = preferredArtifactUrls(result);
     for (const url of urls) process.stdout.write(`artifact: ${url}\n`);
 
     if (result.choices?.length) {
