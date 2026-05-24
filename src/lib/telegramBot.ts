@@ -17,6 +17,23 @@ function truncate(value: string, maxChars = MAX_REPLY_CHARS): string {
     return value.length <= maxChars ? value : `${value.slice(0, maxChars).trim()}...`;
 }
 
+function stripMarkdown(text: string): string {
+    return text
+        // Code fences — keep content, drop the fences
+        .replace(/```[^\n]*\n([\s\S]*?)```/g, (_, code: string) => code.trim())
+        .replace(/```[\s\S]*?```/g, (m) => m.slice(3, -3).trim())
+        // Inline code — drop backticks
+        .replace(/`([^`\n]+)`/g, "$1")
+        // Bold **text** or __text__
+        .replace(/\*\*([^*]+)\*\*/g, "$1")
+        .replace(/__([^_\n]+)__/g, "$1")
+        // Markdown headers — remove leading # symbols
+        .replace(/^#{1,6}\s+/gm, "")
+        // Collapse 3+ blank lines to 2
+        .replace(/\n{3,}/g, "\n\n")
+        .trim();
+}
+
 function splitIntoChunks(text: string, maxChars = MAX_REPLY_CHARS): string[] {
     if (text.length <= maxChars) return [text];
     const chunks: string[] = [];
@@ -59,7 +76,7 @@ export async function sendTelegramMessage(input: {
     replyToMessageId?: number;
     replyMarkup?: TelegramReplyMarkup;
 }): Promise<void> {
-    const chunks = splitIntoChunks(input.text);
+    const chunks = splitIntoChunks(stripMarkdown(input.text));
     for (let i = 0; i < chunks.length; i++) {
         await telegramCall("sendMessage", {
             chat_id: input.chatId,
