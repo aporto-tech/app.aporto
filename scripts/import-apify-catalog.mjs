@@ -19,6 +19,12 @@ import path from "node:path";
 import { PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
+const DEFAULT_APIFY_INPUT_MAPPINGS = {
+    query: ["query", "searchQuery", "keyword", "searchStringsArray"],
+    limit: ["maxResults", "maxItems", "limit", "resultsLimit"],
+    url: ["url", "urls", "startUrls"],
+    location: ["location", "city", "area"],
+};
 const APIFY_BASE = "https://api.apify.com/v2";
 const APIFY_API_KEY = process.env.APIFY_API_KEY;
 const NEWAPI_URL = process.env.NEWAPI_URL ?? "https://api.aporto.tech";
@@ -482,6 +488,7 @@ async function upsertProvider(skillId, actor, classification) {
     const syncConfig = JSON.stringify({
         actorId,
         pricing,
+        inputMappings: DEFAULT_APIFY_INPUT_MAPPINGS,
         classifier: {
             confidence: classification.confidence,
             platform: classification.platform,

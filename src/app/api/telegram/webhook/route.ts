@@ -99,6 +99,33 @@ function parseJsonObject(value: string): TelegramPlan {
     }
 }
 
+function requestedResultLimitFromText(value: string): number | null {
+    const patterns = [
+        /\b(?:find|collect|get|scrape|return|show|найди|собери|получи|покажи)\s+(\d{1,3})\b/i,
+        /\b(\d{1,3})\s+(?:restaurants?|places?|businesses?|companies?|profiles?|leads?|results?|items?|reviews?|ресторан(?:а|ов)?|мест(?:а)?|компани(?:й|и|ю)|профил(?:ей|я)?|лид(?:ов|а)?|результат(?:ов|а)?|отзыв(?:ов|а)?)\b/i,
+    ];
+    for (const pattern of patterns) {
+        const match = value.match(pattern);
+        const number = Number(match?.[1]);
+        if (Number.isInteger(number) && number > 0 && number <= 500) return number;
+    }
+    return null;
+}
+
+function applyRequestedResultLimit(params: Record<string, unknown>, userText: string): Record<string, unknown> {
+    const limit = requestedResultLimitFromText(userText);
+    if (limit == null) return params;
+    return {
+        ...params,
+        maxResults: limit,
+        maxItems: limit,
+        limit,
+        resultsLimit: limit,
+        maxCrawledPlaces: limit,
+        maxCrawledPlacesPerSearch: limit,
+    };
+}
+
 function systemPrompt(): string {
     return [
         "You are Aporto's Telegram skill router.",
@@ -116,7 +143,7 @@ function systemPrompt(): string {
         "For media generation, put the user's creative request in params.prompt.",
         "For LLM/model chat skills, put the user's request in params.prompt. If the user gives a system/developer instruction, put it in params.system. Pass explicit model controls only when the user asks for them: reasoning_effort, reasoning, thinkingFlag, include_thoughts, temperature, max_tokens, response_format, tools.",
         "For text-to-speech, put speakable text in params.text. Do not invent voice_id. If the user names a common voice, use the lowercase voice name, e.g. rachel, adam, bella.",
-        "For search/scraping, preserve the user's query in params.query unless a candidate schema clearly needs another key.",
+        "For search/scraping, preserve the user's query in params.query unless a candidate schema clearly needs another key. If the user asks for a concrete number of results, pass that number as maxResults/maxItems/limit.",
         "Schema: {\"action\":\"run_skill|ask_clarification|discover|help\",\"intent\":\"short skill intent\",\"skillId\":number|null,\"confidence\":number,\"providerHint\":\"string|null\",\"params\":object,\"reply\":\"short user-facing Russian or English message\"}",
     ].join(" ");
 }
@@ -550,6 +577,7 @@ async function runTelegramSkill(input: {
         await sendTelegramChatAction(input.chatId, "upload_document");
 
         let params = input.plan.params && typeof input.plan.params === "object" ? input.plan.params : {};
+        params = applyRequestedResultLimit(params, input.text);
         if (typeof input.plan.skillId === "number" && await shouldInjectLlmPrompt(input.plan.skillId, params)) {
             params = { ...params, prompt: extractPromptAfterModelName(input.text) };
         }

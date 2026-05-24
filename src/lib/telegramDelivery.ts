@@ -147,11 +147,32 @@ export async function deliverDueTelegramSkillRuns(input: {
     internalBaseUrl?: string;
 } = {}): Promise<{ checked: number; sent: number; failed: number; skipped: number; errors: Array<{ runId: string; error: string }> }> {
     const limit = Math.min(50, Math.max(1, input.limit ?? 20));
-    const deliveries = await prisma.telegramSkillDelivery.findMany({
-        where: { status: "pending" },
-        orderBy: { createdAt: "asc" },
-        take: limit,
-    });
+    const deliveries = await prisma.$queryRawUnsafe<Array<{
+        id: string;
+        runId: string;
+        telegramUserId: string;
+        chatId: string;
+        replyToMessageId: number | null;
+        attempts: number;
+    }>>(
+        `UPDATE "TelegramSkillDelivery"
+         SET status = 'sending',
+             attempts = attempts + 1,
+             "updatedAt" = NOW()
+         WHERE id IN (
+             SELECT d.id
+             FROM "TelegramSkillDelivery" d
+             JOIN "SkillRun" r ON r.id = d."runId"
+             WHERE (d.status = 'pending'
+                OR (d.status = 'sending' AND d."updatedAt" < NOW() - INTERVAL '10 minutes'))
+               AND r.status IN ('succeeded', 'failed')
+             ORDER BY d."createdAt" ASC
+             FOR UPDATE SKIP LOCKED
+             LIMIT $1
+         )
+         RETURNING id, "runId", "telegramUserId", "chatId", "replyToMessageId", attempts`,
+        limit,
+    );
 
     const summary = { checked: 0, sent: 0, failed: 0, skipped: 0, errors: [] as Array<{ runId: string; error: string }> };
 
@@ -162,6 +183,10 @@ export async function deliverDueTelegramSkillRuns(input: {
             select: { newApiUserId: true, status: true },
         });
         if (!run || !["succeeded", "failed"].includes(run.status)) {
+            await prisma.telegramSkillDelivery.update({
+                where: { id: delivery.id },
+                data: { status: "pending" },
+            });
             summary.skipped += 1;
             continue;
         }
@@ -179,6 +204,10 @@ export async function deliverDueTelegramSkillRuns(input: {
                 internalBaseUrl: input.internalBaseUrl,
             });
             if (!result) {
+                await prisma.telegramSkillDelivery.update({
+                    where: { id: delivery.id },
+                    data: { status: "pending" },
+                });
                 summary.skipped += 1;
                 continue;
             }
@@ -203,8 +232,7 @@ export async function deliverDueTelegramSkillRuns(input: {
             await prisma.telegramSkillDelivery.update({
                 where: { id: delivery.id },
                 data: {
-                    status: delivery.attempts >= 4 ? "failed" : "pending",
-                    attempts: { increment: 1 },
+                    status: delivery.attempts >= 5 ? "failed" : "pending",
                     lastError: message,
                 },
             });

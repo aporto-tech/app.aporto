@@ -14,6 +14,7 @@
  *   e.g. Google Maps Places Extractor charges $0.003/place-scraped.
  */
 import { NextRequest, NextResponse } from "next/server";
+import { applyProviderInputMappings } from "@/lib/inputMappings";
 
 export const dynamic = "force-dynamic";
 
@@ -167,6 +168,10 @@ function normalizeActorInput(actorId: string, input: Record<string, unknown>): R
         normalized.limit,
         normalized.resultsLimit,
         normalized.maxCrawledPlaces,
+        normalized.maxCrawledPlacesPerSearch,
+        normalized.maxPlacesPerSearch,
+        normalized.maxTotalPlaces,
+        normalized.totalMaxPlaces,
     );
 
     if (
@@ -179,7 +184,17 @@ function normalizeActorInput(actorId: string, input: Record<string, unknown>): R
     }
 
     if (actorText.includes("google-maps") && maxResults != null) {
-        for (const field of ["maxResults", "maxItems", "limit", "resultsLimit", "maxCrawledPlaces"]) {
+        for (const field of [
+            "maxResults",
+            "maxItems",
+            "limit",
+            "resultsLimit",
+            "maxCrawledPlaces",
+            "maxCrawledPlacesPerSearch",
+            "maxPlacesPerSearch",
+            "maxTotalPlaces",
+            "totalMaxPlaces",
+        ]) {
             if (normalized[field] === undefined) normalized[field] = maxResults;
         }
     }
@@ -212,6 +227,10 @@ function valueForField(field: string, input: Record<string, unknown>): unknown {
         input.limit,
         input.resultsLimit,
         input.maxCrawledPlaces,
+        input.maxCrawledPlacesPerSearch,
+        input.maxPlacesPerSearch,
+        input.maxTotalPlaces,
+        input.totalMaxPlaces,
     );
 
     if (/^(keyword|query|search|term|searchQuery|searchString)$/i.test(field) && query) {
@@ -220,7 +239,7 @@ function valueForField(field: string, input: Record<string, unknown>): unknown {
     if (/^(searchStringsArray|queries)$/i.test(field) && query) {
         return [query];
     }
-    if (/^(maxItems|maxResults|limit|resultsLimit|maxCrawledPlaces)$/i.test(field) && maxResults != null) {
+    if (/^(maxItems|maxResults|limit|resultsLimit|maxCrawledPlaces|maxCrawledPlacesPerSearch|maxPlacesPerSearch|maxTotalPlaces|totalMaxPlaces)$/i.test(field) && maxResults != null) {
         return maxResults;
     }
     if (/^(location|city|area)$/i.test(field)) {
@@ -341,7 +360,10 @@ export async function POST(req: NextRequest) {
         }
 
         // Run actor synchronously — waits up to WAIT_SECS for completion
-        let actorInput = normalizeActorInput(actorId, rawActorInput);
+        let actorInput = normalizeActorInput(
+            actorId,
+            applyProviderInputMappings(rawActorInput, body),
+        );
         let { runRes, runData } = await startActor(actorId, actorInput, apiKey);
         if (!runRes.ok && apifyAuthError(runData) && fallbackApiKey && fallbackApiKey !== apiKey) {
             console.warn("[providers/apify] providerSecret auth failed; retrying with APIFY_API_KEY env fallback");

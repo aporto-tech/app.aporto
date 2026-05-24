@@ -13,6 +13,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { embedQuery } from "@/lib/embeddings";
+import { applyProviderInputMappings } from "@/lib/inputMappings";
 
 const PAGE_SIZE = 10;
 export const MAX_PROVIDER_ATTEMPTS = Math.min(
@@ -602,9 +603,12 @@ export async function executeSkillViaProvider(
 
     // Merge provider-level config (e.g. actorId for Apify) into params.
     // syncConfig keys are set by provider admin and never exposed to callers.
-    const mergedParams = mergeSyncConfig && provider.syncConfig
-        ? { ...params, ...provider.syncConfig }
+    const mappedParams = mergeSyncConfig
+        ? applyProviderInputMappings(params, provider.syncConfig)
         : params;
+    const mergedParams = mergeSyncConfig && provider.syncConfig
+        ? { ...mappedParams, ...provider.syncConfig }
+        : mappedParams;
 
     const configuredTimeoutMs = Number(provider.syncConfig?.timeoutMs);
     const timeoutMs = Number.isFinite(configuredTimeoutMs) && configuredTimeoutMs > 0

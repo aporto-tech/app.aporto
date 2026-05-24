@@ -131,10 +131,19 @@ export async function sendTelegramArtifacts(input: {
     }
 
     for (const artifact of artifacts.slice(0, 5)) {
-        await sendTelegramArtifact({
-            chatId: input.chatId,
-            artifact,
-            replyToMessageId: input.replyToMessageId,
-        });
+        try {
+            await sendTelegramArtifact({
+                chatId: input.chatId,
+                artifact,
+                replyToMessageId: input.replyToMessageId,
+            });
+        } catch (error) {
+            console.error("[telegram] artifact delivery failed:", error);
+            await sendTelegramMessage({
+                chatId: input.chatId,
+                text: `Не удалось прикрепить файл напрямую. Ссылка: ${artifact.url}`,
+                replyToMessageId: input.replyToMessageId,
+            });
+        }
     }
 }
