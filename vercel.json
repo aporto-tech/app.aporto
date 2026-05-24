@@ -1,0 +1,7 @@
+{
+  "functions": {
+    "src/app/api/cron/**": { "maxDuration": 300 },
+    "src/app/api/skill-runs/[runId]/route.ts": { "maxDuration": 300 },
+    "src/app/api/mcp/route.ts": { "maxDuration": 300 }
+  }
+}

@@ -1275,7 +1275,11 @@ export async function runSkill(input: RunSkillInput): Promise<RunSkillResult> {
     });
     await updateRun(runId, { skillCallId });
 
-    const shouldWaitInline = waitForResult;
+    // For async_poll runs (e.g. Apify) never wait inline — the job can take minutes
+    // and the host function (Vercel Pro: 60 s limit) would time out, causing the caller
+    // to lose the runId and re-launch the skill. Always return immediately and let the
+    // client poll via getSkillRun / aporto_get_skill_run.
+    const shouldWaitInline = waitForResult && lifecycleMode !== "async_poll";
 
     if (lifecycleMode === "async_poll" && providerTaskId) {
         if (!shouldWaitInline) {
