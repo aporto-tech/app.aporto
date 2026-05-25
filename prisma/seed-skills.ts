@@ -80,14 +80,14 @@ const SKILLS = [
     },
     {
         name: "Text to Speech",
-        description: "Convert text to natural-sounding speech using ElevenLabs. Returns a URL to the generated MP3 audio. Supports multiple models: eleven_flash_v2_5 (fast, $0.08/1K chars), eleven_turbo_v2_5 ($0.15/1K), eleven_multilingual_v2 ($0.24/1K, 29 languages), eleven_v3 ($0.30/1K, best quality).",
+        description: "Convert text to natural-sounding speech using ElevenLabs. Returns a URL to the generated MP3 audio. Pricing aligned to KIE rates: eleven_flash_v2_5/eleven_turbo_v2_5 ($0.03/1K chars), eleven_multilingual_v2 ($0.06/1K), eleven_v3 ($0.07/1K).",
         paramsSchema: { text: "string (max 5000 chars)", voice_id: "string (ElevenLabs voice ID, default: Rachel 21m00Tcm4TlvDq8ikWAM)", model_id: "string (eleven_multilingual_v2|eleven_flash_v2_5|eleven_turbo_v2_5|eleven_v3, default: eleven_multilingual_v2)", output_format: "string (default: mp3_44100_128)" },
         tags: ["tts", "audio", "voice", "speech", "elevenlabs"],
         category: "media/audio",
         capabilities: ["generate", "convert"],
         inputTypes: ["text"],
         outputTypes: ["url", "audio"],
-        providers: [{ name: "ElevenLabs", endpoint: `${BASE_URL}/api/providers/tts`, pricePerCall: 0, costPerChar: 0.00024 }],
+        providers: [{ name: "ElevenLabs", endpoint: `${BASE_URL}/api/providers/tts`, pricePerCall: 0, costPerChar: 0.00006 }],
     },
     {
         name: "LLM Chat",

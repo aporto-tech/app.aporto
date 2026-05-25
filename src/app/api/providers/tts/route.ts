@@ -12,10 +12,10 @@
  *   output_format string  — mp3_44100_128 (default)
  *
  * Per-char pricing by model (billed via costPerChar on Provider row):
- *   eleven_flash_v2_5:       $0.00008 / char  ($0.08 / 1K)
- *   eleven_turbo_v2_5:       $0.00015 / char  ($0.15 / 1K)
- *   eleven_multilingual_v2:  $0.00024 / char  ($0.24 / 1K)
- *   eleven_v3:               $0.00030 / char  ($0.30 / 1K)
+ *   eleven_flash_v2_5:       $0.00003 / char  ($0.03 / 1K, aligned to KIE turbo)
+ *   eleven_turbo_v2_5:       $0.00003 / char  ($0.03 / 1K)
+ *   eleven_multilingual_v2:  $0.00006 / char  ($0.06 / 1K)
+ *   eleven_v3:               $0.00007 / char  ($0.07 / 1K)
  */
 import { NextRequest, NextResponse } from "next/server";
 import { artifactExpiresAt, uploadToR2 } from "@/lib/r2";
