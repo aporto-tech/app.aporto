@@ -27,6 +27,7 @@ import {
     telegramMessageText,
     uploadTelegramAttachments,
     type TelegramMessageWithFiles,
+    type TelegramUploadedAttachment,
 } from "@/lib/telegramFiles";
 
 export const dynamic = "force-dynamic";
@@ -86,6 +87,7 @@ type TelegramCandidate = Awaited<ReturnType<typeof discoverSkills>>[number] & { 
 
 type PendingRunPayload = {
     text: string;
+    routingText?: string;
     plan: TelegramPlan;
     candidates: TelegramCandidate[];
     attachmentParams?: Record<string, unknown>;
@@ -160,6 +162,7 @@ function systemPrompt(): string {
         "If confidence is below 0.70, do not run a skill. Choose ask_clarification and include 2-5 concrete skill options in reply.",
         "If the user asks what is available, asks a broad question, or candidates are weak, choose discover or ask_clarification.",
         "If required params are missing, choose ask_clarification and ask exactly one short question.",
+        "When attachments metadata is present, use filename, extension, MIME type, and kind to pick format-specific skills such as PNG to PDF or PDF to PNG. The server adds file URLs separately; do not invent or request file URLs.",
         "Never choose extractor, scraper, parser, downloader, listing, post, review, TikTok, Reddit, LinkedIn, or Google Maps skills for requests to create/generate media. Those skills read existing content; they do not generate new media.",
         "For create/generate video requests, choose only skills whose name/category/capabilities/output mention video generation, text-to-video, or image-to-video.",
         "For media generation, put the user's creative request in params.prompt.",
@@ -200,7 +203,35 @@ function filterCandidatesForIntent(userText: string, candidates: Awaited<ReturnT
     return filtered.length ? filtered : candidates;
 }
 
-function buildPlannerPrompt(userText: string, candidates: TelegramCandidate[]): string {
+function attachmentExtension(filename: string): string | null {
+    const match = filename.toLowerCase().match(/\.([a-z0-9]{1,10})$/);
+    return match?.[1] ?? null;
+}
+
+function compactAttachmentMetadata(attachments: TelegramUploadedAttachment[]) {
+    return attachments.map((attachment) => ({
+        filename: attachment.filename,
+        contentType: attachment.contentType,
+        extension: attachmentExtension(attachment.filename),
+        kind: attachment.kind,
+        size: attachment.size,
+    }));
+}
+
+function routingTextWithAttachments(userText: string, attachments: TelegramUploadedAttachment[]): string {
+    if (!attachments.length) return userText;
+    const attachmentText = compactAttachmentMetadata(attachments)
+        .map((attachment) => [
+            attachment.filename,
+            attachment.contentType,
+            attachment.extension ? `${attachment.extension} file` : null,
+            attachment.kind,
+        ].filter(Boolean).join(" "))
+        .join(" ");
+    return `${userText}\nAttached file metadata for routing: ${attachmentText}`;
+}
+
+function buildPlannerPrompt(userText: string, candidates: TelegramCandidate[], attachments: TelegramUploadedAttachment[] = []): string {
     const compactCandidates = candidates.slice(0, TELEGRAM_SKILL_CHOICES_LIMIT).map((skill) => ({
         id: skill.id,
         name: skill.name,
@@ -218,26 +249,30 @@ function buildPlannerPrompt(userText: string, candidates: TelegramCandidate[]): 
 
     return JSON.stringify({
         userText: truncate(userText, MAX_USER_TEXT_CHARS),
+        attachments: compactAttachmentMetadata(attachments),
         candidates: compactCandidates,
     });
 }
 
-async function telegramDiscoveryPage(userText: string, page: number): Promise<TelegramCandidate[]> {
-    return withTelegramPriceLabels(filterCandidatesForIntent(userText, await discoverSkills(userText, page)));
+async function telegramDiscoveryPage(userText: string, page: number, attachments: TelegramUploadedAttachment[] = []): Promise<TelegramCandidate[]> {
+    const routingText = routingTextWithAttachments(userText, attachments);
+    return withTelegramPriceLabels(filterCandidatesForIntent(routingText, await discoverSkills(routingText, page)));
 }
 
-async function telegramDiscoveryHasMore(userText: string, page: number): Promise<boolean> {
-    return (await telegramDiscoveryPage(userText, page + 1)).length > 0;
+async function telegramDiscoveryHasMore(userText: string, page: number, attachments: TelegramUploadedAttachment[] = []): Promise<boolean> {
+    return (await telegramDiscoveryPage(userText, page + 1, attachments)).length > 0;
 }
 
-async function planTelegramRequest(userText: string): Promise<{ plan: TelegramPlan; candidates: TelegramCandidate[]; hasMore: boolean }> {
-    const candidates = await telegramDiscoveryPage(userText, 0);
-    const hasMore = await telegramDiscoveryHasMore(userText, 0);
+async function planTelegramRequest(userText: string, attachments: TelegramUploadedAttachment[] = []): Promise<{ plan: TelegramPlan; candidates: TelegramCandidate[]; hasMore: boolean; routingText: string }> {
+    const routingText = routingTextWithAttachments(userText, attachments);
+    const candidates = await telegramDiscoveryPage(userText, 0, attachments);
+    const hasMore = await telegramDiscoveryHasMore(userText, 0, attachments);
     const exactModel = explicitModelCandidate(userText, candidates);
     if (exactModel) {
         return {
             candidates,
             hasMore,
+            routingText,
             plan: {
                 action: "run_skill",
                 intent: exactModel.name,
@@ -262,7 +297,7 @@ async function planTelegramRequest(userText: string): Promise<{ plan: TelegramPl
             model: TELEGRAM_MODEL,
             messages: [
                 { role: "system", content: systemPrompt() },
-                { role: "user", content: buildPlannerPrompt(userText, candidates) },
+                { role: "user", content: buildPlannerPrompt(userText, candidates, attachments) },
             ],
             temperature: 0,
             max_tokens: 220,
@@ -273,7 +308,7 @@ async function planTelegramRequest(userText: string): Promise<{ plan: TelegramPl
 
     const data = await res.json() as { choices?: Array<{ message?: { content?: string } }> };
     const content = data.choices?.[0]?.message?.content ?? "{}";
-    return { plan: parseJsonObject(content), candidates, hasMore };
+    return { plan: parseJsonObject(content), candidates, hasMore, routingText };
 }
 
 function helpMessage(): string {
@@ -929,7 +964,8 @@ async function showNextSkillPage(input: {
 
     const currentPayload = conversation.pendingPayload as PendingRunPayload;
     const page = (currentPayload.page ?? 0) + 1;
-    const candidates = await telegramDiscoveryPage(currentPayload.text, page);
+    const discoveryText = currentPayload.routingText ?? currentPayload.text;
+    const candidates = await telegramDiscoveryPage(discoveryText, page);
     if (!candidates.length) {
         await sendTelegramMessage({
             chatId: input.chatId,
@@ -943,7 +979,7 @@ async function showNextSkillPage(input: {
         ...currentPayload,
         candidates,
         page,
-        hasMore: await telegramDiscoveryHasMore(currentPayload.text, page),
+        hasMore: await telegramDiscoveryHasMore(discoveryText, page),
     };
     await updateConversation({
         telegramUserId: input.telegramUserId,
@@ -1142,9 +1178,10 @@ export async function POST(req: NextRequest) {
 
     try {
         let attachmentParams: Record<string, unknown> | undefined;
+        let attachments: TelegramUploadedAttachment[] = [];
         if (hasAttachments) {
             await sendTelegramChatAction(chatId, "upload_document").catch(() => {});
-            const attachments = await uploadTelegramAttachments(message);
+            attachments = await uploadTelegramAttachments(message);
             attachmentParams = telegramAttachmentParams(attachments);
         }
 
@@ -1160,7 +1197,7 @@ export async function POST(req: NextRequest) {
         }
 
         await sendTelegramChatAction(chatId);
-        const { plan, candidates, hasMore } = await planTelegramRequest(text);
+        const { plan, candidates, hasMore, routingText } = await planTelegramRequest(text, attachments);
 
         if (plan.action === "help") {
             await sendTelegramMessage({
@@ -1180,7 +1217,7 @@ export async function POST(req: NextRequest) {
                 telegramUserId,
                 chatId,
                 pendingAction: "choose_skill",
-                pendingPayload: { text, plan, candidates, attachmentParams, page: 0, hasMore },
+                pendingPayload: { text, routingText, plan, candidates, attachmentParams, page: 0, hasMore },
             });
             await sendTelegramMessage({
                 chatId,
@@ -1194,7 +1231,7 @@ export async function POST(req: NextRequest) {
                 telegramUserId,
                 chatId,
                 pendingAction: "choose_skill",
-                pendingPayload: { text, plan, candidates, attachmentParams, page: 0, hasMore },
+                pendingPayload: { text, routingText, plan, candidates, attachmentParams, page: 0, hasMore },
             });
             await sendTelegramMessage({
                 chatId,
@@ -1208,7 +1245,7 @@ export async function POST(req: NextRequest) {
                 telegramUserId,
                 chatId,
                 pendingAction: "choose_skill",
-                pendingPayload: { text, plan, candidates, attachmentParams, page: 0, hasMore },
+                pendingPayload: { text, routingText, plan, candidates, attachmentParams, page: 0, hasMore },
             });
             await sendTelegramMessage({
                 chatId,
