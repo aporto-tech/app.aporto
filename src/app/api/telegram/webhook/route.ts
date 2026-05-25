@@ -43,7 +43,9 @@ const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://app.aporto.tech";
 const GENERATION_TERMS = /\b(generate|create|make|render|produce|сгенерируй|создай|сделай|нарисуй|создать|генерац)\b/i;
 const VIDEO_TERMS = /\b(video|ролик|видео|анимац)\b/i;
 const IMAGE_TERMS = /\b(image|photo|picture|картин|изображ|фото)\b/i;
-const AUDIO_TERMS = /\b(audio|voice|speech|tts|озвуч|голос|аудио|музык|music|song|песн)\b/i;
+const AUDIO_TERMS = /\b(audio|voice|speech|speach|tts|озвуч|голос|аудио|музык|music|song|песн)\b/i;
+const TEXT_TO_SPEECH_TERMS = /\b(?:text\s*[- ]?to\s*[- ]?spe(?:e|a)ch|tts)\b|озвуч/i;
+const KIE_PROVIDER_TERMS = /\bkie(?:\s+provider)?\b/i;
 const EXTRACTOR_TERMS = /\b(extract|extractor|scrape|scraper|parser|parse|download|downloader|listing|posts?|reviews?|comments?|tiktok|reddit|linkedin|google maps|извлеч|спарс|парс)\b/i;
 
 type TelegramUpdate = {
@@ -185,6 +187,13 @@ function candidateText(skill: Awaited<ReturnType<typeof discoverSkills>>[number]
     ].filter(Boolean).join(" ").toLowerCase();
 }
 
+function normalizeRoutingText(userText: string): string {
+    return userText
+        .replace(/\bspeach\b/gi, "speech")
+        .replace(/\btext\s*[- ]?to\s*[- ]?speech\b/gi, "text to speech tts voice audio")
+        .replace(/\bkie\s+provider\b/gi, "kie");
+}
+
 function filterCandidatesForIntent(userText: string, candidates: Awaited<ReturnType<typeof discoverSkills>>) {
     if (!GENERATION_TERMS.test(userText)) return candidates;
 
@@ -219,7 +228,8 @@ function compactAttachmentMetadata(attachments: TelegramUploadedAttachment[]) {
 }
 
 function routingTextWithAttachments(userText: string, attachments: TelegramUploadedAttachment[]): string {
-    if (!attachments.length) return userText;
+    const normalizedUserText = normalizeRoutingText(userText);
+    if (!attachments.length) return normalizedUserText;
     const attachmentText = compactAttachmentMetadata(attachments)
         .map((attachment) => [
             attachment.filename,
@@ -228,7 +238,7 @@ function routingTextWithAttachments(userText: string, attachments: TelegramUploa
             attachment.kind,
         ].filter(Boolean).join(" "))
         .join(" ");
-    return `${userText}\nAttached file metadata for routing: ${attachmentText}`;
+    return `${normalizedUserText}\nAttached file metadata for routing: ${attachmentText}`;
 }
 
 function buildPlannerPrompt(userText: string, candidates: TelegramCandidate[], attachments: TelegramUploadedAttachment[] = []): string {
@@ -267,6 +277,22 @@ async function planTelegramRequest(userText: string, attachments: TelegramUpload
     const routingText = routingTextWithAttachments(userText, attachments);
     const candidates = await telegramDiscoveryPage(userText, 0, attachments);
     const hasMore = await telegramDiscoveryHasMore(userText, 0, attachments);
+    const ttsCandidate = explicitTextToSpeechCandidate(userText, candidates);
+    if (ttsCandidate) {
+        return {
+            candidates,
+            hasMore,
+            routingText,
+            plan: {
+                action: "run_skill",
+                intent: "text to speech",
+                skillId: ttsCandidate.id,
+                confidence: 0.97,
+                providerHint: KIE_PROVIDER_TERMS.test(userText) ? "KIE" : null,
+                params: { text: extractTextToSpeechText(userText) },
+            },
+        };
+    }
     const exactModel = explicitModelCandidate(userText, candidates);
     if (exactModel) {
         return {
@@ -455,6 +481,25 @@ function explicitModelCandidate(userText: string, candidates: TelegramCandidate[
         if (matched || normalizedName.includes(text)) return candidate;
     }
     return null;
+}
+
+function explicitTextToSpeechCandidate(userText: string, candidates: TelegramCandidate[]): TelegramCandidate | null {
+    if (!TEXT_TO_SPEECH_TERMS.test(userText)) return null;
+    return candidates.find((candidate) => {
+        const text = candidateText(candidate);
+        return /text.?to.?speech|tts/.test(text)
+            || (text.includes("elevenlabs") && text.includes("speech"));
+    }) ?? null;
+}
+
+function extractTextToSpeechText(userText: string): string {
+    const dashMatch = userText.match(/[-:—]\s*(.+)$/);
+    if (dashMatch?.[1]?.trim()) return dashMatch[1].trim();
+    return userText
+        .replace(TEXT_TO_SPEECH_TERMS, "")
+        .replace(KIE_PROVIDER_TERMS, "")
+        .replace(/\bprovider\b/gi, "")
+        .trim() || userText;
 }
 
 function extractPromptAfterModelName(userText: string): string {
