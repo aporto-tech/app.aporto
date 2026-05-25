@@ -21,6 +21,13 @@ import {
     resultText,
     sendTelegramRunResult,
 } from "@/lib/telegramDelivery";
+import {
+    hasTelegramAttachments,
+    telegramAttachmentParams,
+    telegramMessageText,
+    uploadTelegramAttachments,
+    type TelegramMessageWithFiles,
+} from "@/lib/telegramFiles";
 
 export const dynamic = "force-dynamic";
 
@@ -43,9 +50,10 @@ type TelegramUpdate = {
     message?: {
         message_id?: number;
         text?: string;
+        caption?: string;
         chat?: { id?: number | string };
         from?: { id?: number; username?: string; first_name?: string };
-    };
+    } & TelegramMessageWithFiles;
     callback_query?: {
         id: string;
         data?: string;
@@ -80,6 +88,7 @@ type PendingRunPayload = {
     text: string;
     plan: TelegramPlan;
     candidates: TelegramCandidate[];
+    attachmentParams?: Record<string, unknown>;
     page?: number;
     hasMore?: boolean;
 };
@@ -675,6 +684,7 @@ async function runTelegramSkill(input: {
     replyToMessageId?: number;
     text: string;
     plan: TelegramPlan;
+    attachmentParams?: Record<string, unknown>;
     identity?: TelegramRunIdentity;
 }): Promise<void> {
     const linkedAccount = await findLinkedTelegramAccount(input.telegramUserId);
@@ -691,6 +701,7 @@ async function runTelegramSkill(input: {
         await sendTelegramChatAction(input.chatId, "upload_document");
 
         let params = input.plan.params && typeof input.plan.params === "object" ? input.plan.params : {};
+        params = { ...params, ...(input.attachmentParams ?? {}) };
         params = applyRequestedResultLimit(params, input.text);
         if (typeof input.plan.skillId === "number" && await shouldInjectLlmPrompt(input.plan.skillId, params)) {
             params = { ...params, prompt: extractPromptAfterModelName(input.text) };
@@ -826,6 +837,7 @@ async function handlePendingSelection(input: {
     chatId: number | string;
     replyToMessageId?: number;
     text: string;
+    attachmentParams?: Record<string, unknown>;
     identity?: TelegramRunIdentity;
 }): Promise<boolean> {
     const conversation = await getConversation(input.telegramUserId);
@@ -862,6 +874,7 @@ async function handlePendingSelection(input: {
         replyToMessageId: input.replyToMessageId,
         text: pendingPayload.text,
         plan,
+        attachmentParams: input.attachmentParams ?? pendingPayload.attachmentParams,
         identity: input.identity,
     });
     return true;
@@ -1027,9 +1040,20 @@ export async function POST(req: NextRequest) {
 
     const message = update.message;
     const chatId = message?.chat?.id;
-    const text = message?.text?.trim();
-    if (!chatId || !text) return NextResponse.json({ ok: true });
+    const text = message ? telegramMessageText(message) : "";
+    const hasAttachments = message ? hasTelegramAttachments(message) : false;
+    if (!chatId || !message) return NextResponse.json({ ok: true });
     const telegramUserId = telegramUserIdFor(message);
+
+    if (!text && hasAttachments) {
+        await sendTelegramMessage({
+            chatId,
+            text: "Please add an instruction or caption with the file, for example: convert this PNG to PDF.",
+            replyToMessageId: message.message_id,
+        });
+        return NextResponse.json({ ok: true });
+    }
+    if (!text) return NextResponse.json({ ok: true });
 
     if (text === "/start" || text === "/help") {
         await sendTelegramMessage({
@@ -1117,6 +1141,13 @@ export async function POST(req: NextRequest) {
     }
 
     try {
+        let attachmentParams: Record<string, unknown> | undefined;
+        if (hasAttachments) {
+            await sendTelegramChatAction(chatId, "upload_document").catch(() => {});
+            const attachments = await uploadTelegramAttachments(message);
+            attachmentParams = telegramAttachmentParams(attachments);
+        }
+
         const identity: TelegramRunIdentity = {
             updateId: update.update_id,
             messageId: message.message_id,
@@ -1124,7 +1155,7 @@ export async function POST(req: NextRequest) {
             text,
         };
 
-        if (await handlePendingSelection({ req, telegramUserId, chatId, replyToMessageId: message.message_id, text, identity })) {
+        if (await handlePendingSelection({ req, telegramUserId, chatId, replyToMessageId: message.message_id, text, attachmentParams, identity })) {
             return NextResponse.json({ ok: true });
         }
 
@@ -1141,7 +1172,7 @@ export async function POST(req: NextRequest) {
         }
         if (plan.action === "ask_clarification") {
             if (planConfidence(plan) >= MIN_RUN_CONFIDENCE && hasSelectedCandidate(plan, candidates)) {
-                await runTelegramSkill({ req, telegramUserId, chatId, replyToMessageId: message.message_id, text, plan, identity });
+                await runTelegramSkill({ req, telegramUserId, chatId, replyToMessageId: message.message_id, text, plan, attachmentParams, identity });
                 return NextResponse.json({ ok: true });
             }
 
@@ -1149,7 +1180,7 @@ export async function POST(req: NextRequest) {
                 telegramUserId,
                 chatId,
                 pendingAction: "choose_skill",
-                pendingPayload: { text, plan, candidates, page: 0, hasMore },
+                pendingPayload: { text, plan, candidates, attachmentParams, page: 0, hasMore },
             });
             await sendTelegramMessage({
                 chatId,
@@ -1163,7 +1194,7 @@ export async function POST(req: NextRequest) {
                 telegramUserId,
                 chatId,
                 pendingAction: "choose_skill",
-                pendingPayload: { text, plan, candidates, page: 0, hasMore },
+                pendingPayload: { text, plan, candidates, attachmentParams, page: 0, hasMore },
             });
             await sendTelegramMessage({
                 chatId,
@@ -1177,7 +1208,7 @@ export async function POST(req: NextRequest) {
                 telegramUserId,
                 chatId,
                 pendingAction: "choose_skill",
-                pendingPayload: { text, plan, candidates, page: 0, hasMore },
+                pendingPayload: { text, plan, candidates, attachmentParams, page: 0, hasMore },
             });
             await sendTelegramMessage({
                 chatId,
@@ -1187,7 +1218,7 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ ok: true });
         }
 
-        await runTelegramSkill({ req, telegramUserId, chatId, replyToMessageId: message.message_id, text, plan, identity });
+        await runTelegramSkill({ req, telegramUserId, chatId, replyToMessageId: message.message_id, text, plan, attachmentParams, identity });
         return NextResponse.json({ ok: true });
     } catch (error) {
         console.error("[telegram/webhook] error:", error);
