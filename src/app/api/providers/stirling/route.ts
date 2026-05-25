@@ -39,6 +39,7 @@ function isObject(value: unknown): value is Record<string, unknown> {
     return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
+
 function stripConfig(input: Record<string, unknown>): Record<string, unknown> {
     return Object.fromEntries(Object.entries(input).filter(([key]) => !CONFIG_KEYS.has(key)));
 }
@@ -143,6 +144,14 @@ function buildPath(path: string, params: Record<string, unknown>): string {
     });
 }
 
+function buildStirlingUrl(apiBaseUrl: string, path: string): URL {
+    const base = new URL(apiBaseUrl.endsWith("/") ? apiBaseUrl : `${apiBaseUrl}/`);
+    const basePath = base.pathname.replace(/\/$/, "");
+    const requestPath = path.replace(/^\//, "");
+    base.pathname = [basePath, requestPath].filter(Boolean).join("/");
+    return base;
+}
+
 function extensionForResponse(contentType: string, fallback?: string): string {
     if (fallback) return fallback.replace(/^\./, "");
     if (contentType.includes("pdf")) return "pdf";
@@ -185,7 +194,7 @@ export async function POST(req: NextRequest) {
             ...(isObject(config.fixedParams) ? config.fixedParams : {}),
         };
         const apiBaseUrl = config.apiBaseUrl ?? "https://yieldcars.com/publisher/stirling";
-        const url = new URL(buildPath(config.path, params), apiBaseUrl.endsWith("/") ? apiBaseUrl : `${apiBaseUrl}/`);
+        const url = buildStirlingUrl(apiBaseUrl, buildPath(config.path, params));
         const fields = isObject(config.fields) ? config.fields : {};
         const method = config.method?.toUpperCase() ?? "POST";
         const headers: Record<string, string> = {
@@ -251,4 +260,3 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ success: false, message: String(error) }, { status: 500 });
     }
 }
-
