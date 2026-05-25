@@ -46,6 +46,8 @@ const IMAGE_TERMS = /\b(image|photo|picture|картин|изображ|фото
 const AUDIO_TERMS = /\b(audio|voice|speech|speach|tts|озвуч|голос|аудио|музык|music|song|песн)\b/i;
 const TEXT_TO_SPEECH_TERMS = /\b(?:text\s*[- ]?to\s*[- ]?spe(?:e|a)ch|tts)\b|озвуч/i;
 const KIE_PROVIDER_TERMS = /\bkie(?:\s+provider)?\b/i;
+const LLM_MODEL_TERMS = /\b(llm|ai\s+models?|models?|model|chatgpt|gpt|claude|sonnet|opus|haiku|gemini|codex)\b|(?:ии|ai)\s+модел|(?:какие|what|which).*(?:модел|models?)/i;
+const LLM_CATALOG_TERMS = /(?:какие|какой|что|список|варианты|доступн|есть|предложи|покажи|what|which|list|available|options?).*(?:llm|ai\s+models?|models?|model|модел)|(?:llm|ai\s+models?|models?|model|модел).*(?:какие|что|список|варианты|доступн|есть|available|options?|list)/i;
 const EXTRACTOR_TERMS = /\b(extract|extractor|scrape|scraper|parser|parse|download|downloader|listing|posts?|reviews?|comments?|tiktok|reddit|linkedin|google maps|извлеч|спарс|парс)\b/i;
 
 type TelegramUpdate = {
@@ -188,10 +190,14 @@ function candidateText(skill: Awaited<ReturnType<typeof discoverSkills>>[number]
 }
 
 function normalizeRoutingText(userText: string): string {
-    return userText
+    let normalized = userText
         .replace(/\bspeach\b/gi, "speech")
         .replace(/\btext\s*[- ]?to\s*[- ]?speech\b/gi, "text to speech tts voice audio")
         .replace(/\bkie\s+provider\b/gi, "kie");
+    if (LLM_MODEL_TERMS.test(normalized)) {
+        normalized = `${normalized} llm chat model claude sonnet gpt gemini codex`;
+    }
+    return normalized;
 }
 
 function filterCandidatesForIntent(userText: string, candidates: Awaited<ReturnType<typeof discoverSkills>>) {
@@ -264,7 +270,75 @@ function buildPlannerPrompt(userText: string, candidates: TelegramCandidate[], a
     });
 }
 
+async function telegramLlmModelPage(page: number): Promise<TelegramCandidate[]> {
+    const offset = page * TELEGRAM_SKILL_CHOICES_LIMIT;
+    const rows = await prisma.$queryRawUnsafe<Array<{
+        id: number;
+        name: string;
+        description: string;
+        category: string | null;
+        capabilities: string | null;
+        input_types: string | null;
+        output_types: string | null;
+        params_schema: string | null;
+        tags: string | null;
+        min_price: number | null;
+        trial_available: boolean;
+    }>>(
+        `SELECT
+             s.id,
+             s.name,
+             s.description,
+             s.category,
+             s.capabilities,
+             s."inputTypes" AS input_types,
+             s."outputTypes" AS output_types,
+             s."paramsSchema" AS params_schema,
+             s.tags,
+             MIN(p."pricePerCall") AS min_price,
+             s."trialAvailable" AS trial_available
+         FROM "Skill" s
+         JOIN "Provider" p ON p."skillId" = s.id
+         WHERE s."isActive" = true
+           AND s.status = 'live'
+           AND p."isActive" = true
+           AND p.endpoint LIKE '%/api/providers/kie-llm%'
+         GROUP BY s.id
+         ORDER BY
+           CASE
+             WHEN s.name ILIKE 'Claude Sonnet%' THEN 1
+             WHEN s.name ILIKE 'GPT %Chat%' THEN 2
+             WHEN s.name ILIKE 'Gemini%' THEN 3
+             WHEN s.name ILIKE 'Claude Opus%' THEN 4
+             WHEN s.name ILIKE 'Claude Haiku%' THEN 5
+             WHEN s.name ILIKE '%Codex%' THEN 6
+             ELSE 9
+           END,
+           s.name
+         LIMIT $1 OFFSET $2`,
+        TELEGRAM_SKILL_CHOICES_LIMIT,
+        offset,
+    );
+
+    const candidates = rows.map((row) => ({
+        id: row.id,
+        name: row.name,
+        description: row.description,
+        category: row.category,
+        capabilities: row.capabilities ? JSON.parse(row.capabilities) : [],
+        inputTypes: row.input_types ? JSON.parse(row.input_types) : [],
+        outputTypes: row.output_types ? JSON.parse(row.output_types) : [],
+        paramsSchema: row.params_schema,
+        tags: row.tags,
+        similarity: 1,
+        priceUSD: row.min_price != null ? Number(row.min_price) : null,
+        trialAvailable: Boolean(row.trial_available),
+    }));
+    return withTelegramPriceLabels(candidates);
+}
+
 async function telegramDiscoveryPage(userText: string, page: number, attachments: TelegramUploadedAttachment[] = []): Promise<TelegramCandidate[]> {
+    if (isLlmCatalogRequest(userText)) return telegramLlmModelPage(page);
     const routingText = routingTextWithAttachments(userText, attachments);
     return withTelegramPriceLabels(filterCandidatesForIntent(routingText, await discoverSkills(routingText, page)));
 }
@@ -277,6 +351,22 @@ async function planTelegramRequest(userText: string, attachments: TelegramUpload
     const routingText = routingTextWithAttachments(userText, attachments);
     const candidates = await telegramDiscoveryPage(userText, 0, attachments);
     const hasMore = await telegramDiscoveryHasMore(userText, 0, attachments);
+    if (isLlmCatalogRequest(userText)) {
+        return {
+            candidates,
+            hasMore,
+            routingText,
+            plan: {
+                action: "discover",
+                intent: "available LLM chat models",
+                skillId: null,
+                confidence: 0.95,
+                providerHint: null,
+                params: {},
+                reply: "Available LLM model skills:",
+            },
+        };
+    }
     const ttsCandidate = explicitTextToSpeechCandidate(userText, candidates);
     if (ttsCandidate) {
         return {
@@ -453,6 +543,10 @@ async function linkTelegramAccount(
 
 function normalizeModelText(value: string): string {
     return value.toLowerCase().replace(/[^a-z0-9а-яё]+/gi, "");
+}
+
+function isLlmCatalogRequest(userText: string): boolean {
+    return LLM_CATALOG_TERMS.test(userText) && LLM_MODEL_TERMS.test(userText);
 }
 
 function explicitModelCandidate(userText: string, candidates: TelegramCandidate[]): TelegramCandidate | null {
