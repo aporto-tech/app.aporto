@@ -31,14 +31,16 @@ function keyPrefix(input: StoreSkillArtifactsInput, now = new Date()): string {
     return `skill-results/${datePrefix(now)}/user-${input.userId}/skill-${input.skillId}/${callPart}`;
 }
 
-const MEDIA_URL_RE = /^https?:\/\/\S+\.(png|jpe?g|webp|gif|mp3|wav|m4a|aac|ogg|mp4|mov|webm)(?:[?#]\S*)?$/i;
+const FILE_URL_RE = /^https?:\/\/\S+\.(pdf|zip|png|jpe?g|webp|gif|mp3|wav|m4a|aac|ogg|mp4|mov|webm|csv|xlsx?|docx?|pptx?|txt|html?|md|xml)(?:[?#]\S*)?$/i;
 
 function extensionForUrl(url: string): string {
-    const match = url.match(/\.(png|jpe?g|webp|gif|mp3|wav|m4a|aac|ogg|mp4|mov|webm)(?:[?#]|$)/i);
+    const match = url.match(/\.(pdf|zip|png|jpe?g|webp|gif|mp3|wav|m4a|aac|ogg|mp4|mov|webm|csv|xlsx?|docx?|pptx?|txt|html?|md|xml)(?:[?#]|$)/i);
     return (match?.[1] ?? "bin").toLowerCase().replace("jpeg", "jpg");
 }
 
 function contentTypeForExtension(ext: string): string {
+    if (ext === "pdf") return "application/pdf";
+    if (ext === "zip") return "application/zip";
     if (ext === "jpg" || ext === "jpeg") return "image/jpeg";
     if (ext === "png") return "image/png";
     if (ext === "webp") return "image/webp";
@@ -51,6 +53,17 @@ function contentTypeForExtension(ext: string): string {
     if (ext === "mp4") return "video/mp4";
     if (ext === "mov") return "video/quicktime";
     if (ext === "webm") return "video/webm";
+    if (ext === "csv") return "text/csv";
+    if (ext === "xls") return "application/vnd.ms-excel";
+    if (ext === "xlsx") return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+    if (ext === "doc") return "application/msword";
+    if (ext === "docx") return "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+    if (ext === "ppt") return "application/vnd.ms-powerpoint";
+    if (ext === "pptx") return "application/vnd.openxmlformats-officedocument.presentationml.presentation";
+    if (ext === "txt") return "text/plain";
+    if (ext === "html" || ext === "htm") return "text/html";
+    if (ext === "md") return "text/markdown";
+    if (ext === "xml") return "application/xml";
     return "application/octet-stream";
 }
 
@@ -128,7 +141,7 @@ async function copyMediaUrls(value: unknown, prefix: string, expiresAt: Date): P
 
     async function visit(node: unknown): Promise<unknown> {
         if (typeof node === "string") {
-            if (!MEDIA_URL_RE.test(node)) return node;
+            if (!FILE_URL_RE.test(node)) return node;
 
             const existing = copied.get(node);
             if (existing) return existing.url;
