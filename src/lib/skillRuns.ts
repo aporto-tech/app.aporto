@@ -585,6 +585,39 @@ function lifecycleModeFor(provider: ScoredProvider, data: unknown): "sync" | "as
     return "sync";
 }
 
+function providerErrorMessage(data: unknown): string | null {
+    if (typeof data === "string") {
+        const trimmed = data.trim();
+        return trimmed ? trimmed.slice(0, 500) : null;
+    }
+    if (!isPlainObject(data)) return null;
+
+    const direct = findStringKey(data, ["message", "error", "msg"]);
+    if (direct) return direct.slice(0, 500);
+
+    const detail = data.detail;
+    if (typeof detail === "string" && detail.trim()) return detail.trim().slice(0, 500);
+    if (isPlainObject(detail)) {
+        const nested = findStringKey(detail, ["message", "error", "msg"]);
+        if (nested) return nested.slice(0, 500);
+    }
+
+    return null;
+}
+
+function providerErrorCause(data: unknown): string | undefined {
+    if (data == null) return undefined;
+    if (typeof data === "string") {
+        const trimmed = data.trim();
+        return trimmed ? trimmed.slice(0, 2000) : undefined;
+    }
+    try {
+        return JSON.stringify(data).slice(0, 2000);
+    } catch {
+        return String(data).slice(0, 2000);
+    }
+}
+
 function providerFromRow(row: ProviderLookupRow): ScoredProvider {
     return {
         id: row.id,
@@ -1135,6 +1168,8 @@ export async function runSkill(input: RunSkillInput): Promise<RunSkillResult> {
     let successAttempt: AttemptResult | null = null;
     let lastFailedProviderId: number | undefined;
     let lastErrorType: string | undefined;
+    let lastProviderErrorMessage: string | null = null;
+    let lastProviderErrorCause: string | undefined;
 
     for (let attempt = 1; attempt <= MAX_PROVIDER_ATTEMPTS; attempt++) {
         const attemptProvider = await selectProvider(
@@ -1213,6 +1248,8 @@ export async function runSkill(input: RunSkillInput): Promise<RunSkillResult> {
         }
 
         lastErrorType = attemptExecuted.errorType;
+        lastProviderErrorMessage = providerErrorMessage(attemptExecuted.data);
+        lastProviderErrorCause = providerErrorCause(attemptExecuted.data);
         if (input.billingMode !== "trial") {
             void refundSkillUsage(input.newApiUserId, attemptCharge as SkillCharge)
                 .catch((error) => console.error("[runSkill] refund failed:", error));
@@ -1234,8 +1271,9 @@ export async function runSkill(input: RunSkillInput): Promise<RunSkillResult> {
             ? { code: "NO_ACTIVE_PROVIDER", message: "No active providers available for this skill.", retryable: true }
             : {
                 code: lastErrorType?.toUpperCase() ?? "PROVIDER_ERROR",
-                message: "Provider submit failed.",
+                message: lastProviderErrorMessage ?? "Provider submit failed.",
                 retryable: lastErrorType !== "error_4xx",
+                cause: lastProviderErrorCause,
             };
         const runId = await createRun({
             newApiUserId: input.newApiUserId,

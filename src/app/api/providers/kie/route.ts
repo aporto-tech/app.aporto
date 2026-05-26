@@ -125,6 +125,29 @@ function cleanPath(path: string) {
     return path;
 }
 
+function isKieClientErrorMessage(message: string): boolean {
+    return /\b(required|missing|invalid|unsupported|not supported|verify your input|bad request)\b/i.test(message);
+}
+
+function statusForKiePayload(payload: { code?: number; msg?: string; message?: string }): number {
+    const code = payload.code;
+    const message = `${payload.msg ?? ""} ${payload.message ?? ""}`.trim();
+
+    if (code === 401) return 401;
+    if (code === 402) return 402;
+    if (code === 404) return 404;
+    if (code === 408) return 408;
+    if (code === 422) return 422;
+    if (typeof code === "number" && code >= 400 && code < 500) return code;
+
+    // KIE sometimes reports request validation/model-selection errors with
+    // a provider code of 500. Treat those as caller/provider-config errors so
+    // the routing layer does not retry them as transient 5xx failures.
+    if (message && isKieClientErrorMessage(message)) return 400;
+
+    return 502;
+}
+
 async function parseKieResponse(res: Response, options: { storeArtifacts?: boolean } = {}) {
     const text = await res.text();
     let data: unknown;
@@ -143,7 +166,7 @@ async function parseKieResponse(res: Response, options: { storeArtifacts?: boole
 
     const payload = data as { code?: number; msg?: string; message?: string; data?: unknown };
     if (typeof payload.code === "number" && payload.code !== 200) {
-        const status = payload.code === 402 ? 402 : payload.code === 401 ? 401 : 502;
+        const status = statusForKiePayload(payload);
         return NextResponse.json(
             { success: false, message: payload.msg ?? payload.message ?? "KIE request failed", detail: payload },
             { status },
