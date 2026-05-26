@@ -70,6 +70,45 @@ export async function telegramCall<T = unknown>(method: string, body: Record<str
     return data as T;
 }
 
+async function telegramMultipartCall<T = unknown>(
+    method: string,
+    fields: Record<string, unknown>,
+    fileField: string,
+    artifact: StoredArtifact,
+): Promise<T> {
+    const token = process.env.TELEGRAM_BOT_TOKEN;
+    if (!token) throw new Error("TELEGRAM_BOT_TOKEN is not set");
+
+    const file = await fetch(artifact.url, { signal: AbortSignal.timeout(30_000) });
+    if (!file.ok) {
+        throw new Error(`Artifact download failed ${file.status}: ${await file.text()}`);
+    }
+
+    const form = new FormData();
+    for (const [key, value] of Object.entries(fields)) {
+        if (value == null) continue;
+        form.set(key, typeof value === "object" ? JSON.stringify(value) : String(value));
+    }
+    const filename = artifact.storage_key.split("/").pop() || "aporto-result";
+    const blob = new Blob([await file.arrayBuffer()], { type: artifact.content_type });
+    form.set(fileField, blob, filename);
+
+    const res = await fetch(`${TELEGRAM_API}/bot${token}/${method}`, {
+        method: "POST",
+        body: form,
+        signal: AbortSignal.timeout(60_000),
+    });
+    const text = await res.text();
+    let data: unknown;
+    try {
+        data = JSON.parse(text);
+    } catch {
+        data = { raw: text };
+    }
+    if (!res.ok) throw new Error(`Telegram ${method} multipart error ${res.status}: ${text}`);
+    return data as T;
+}
+
 export async function sendTelegramMessage(input: {
     chatId: number | string;
     text: string;
@@ -128,12 +167,44 @@ export async function sendTelegramArtifact(input: {
 }): Promise<void> {
     const target = artifactMethod(input.artifact);
     await sendTelegramChatAction(input.chatId, target.action).catch(() => {});
-    await telegramCall(target.method, {
+    const basePayload = {
         chat_id: input.chatId,
-        [target.field]: input.artifact.url,
         ...(input.caption ? { caption: truncate(input.caption, 900) } : {}),
         ...(input.replyToMessageId ? { reply_to_message_id: input.replyToMessageId } : {}),
-    });
+    };
+
+    try {
+        await telegramCall(target.method, {
+            ...basePayload,
+            [target.field]: input.artifact.url,
+        });
+        return;
+    } catch (primaryError) {
+        if (target.method === "sendDocument") {
+            await telegramMultipartCall("sendDocument", basePayload, "document", input.artifact);
+            return;
+        }
+
+        try {
+            await sendTelegramChatAction(input.chatId, "upload_document").catch(() => {});
+            await telegramCall("sendDocument", {
+                ...basePayload,
+                document: input.artifact.url,
+            });
+            return;
+        } catch (documentUrlError) {
+            try {
+                await telegramMultipartCall("sendDocument", basePayload, "document", input.artifact);
+                return;
+            } catch (multipartError) {
+                throw new Error([
+                    `primary=${String(primaryError)}`,
+                    `documentUrl=${String(documentUrlError)}`,
+                    `multipart=${String(multipartError)}`,
+                ].join(" | "));
+            }
+        }
+    }
 }
 
 export async function sendTelegramArtifacts(input: {
