@@ -48,6 +48,7 @@ const TEXT_TO_SPEECH_TERMS = /\b(?:text\s*[- ]?to\s*[- ]?spe(?:e|a)ch|tts)\b|о�
 const KIE_PROVIDER_TERMS = /\bkie(?:\s+provider)?\b/i;
 const LLM_MODEL_TERMS = /\b(llm|ai\s+models?|models?|model|chatgpt|gpt|claude|sonnet|opus|haiku|gemini|codex)\b|(?:ии|ai)\s+модел|(?:какие|what|which).*(?:модел|models?)/i;
 const LLM_CATALOG_TERMS = /(?:какие|какой|что|список|варианты|доступн|есть|предложи|покажи|what|which|list|available|options?).*(?:llm|ai\s+models?|models?|model|модел)|(?:llm|ai\s+models?|models?|model|модел).*(?:какие|что|список|варианты|доступн|есть|available|options?|list)/i;
+const LLM_TASK_TERMS = /\b(write|draft|compose|summarize|translate|explain|analyze|rewrite|shorten|напиши|составь|переведи|объясни|проанализ|перепиши|сократи|придумай)\b/i;
 const EXTRACTOR_TERMS = /\b(extract|extractor|scrape|scraper|parser|parse|download|downloader|listing|posts?|reviews?|comments?|tiktok|reddit|linkedin|google maps|извлеч|спарс|парс)\b/i;
 
 type TelegramUpdate = {
@@ -229,6 +230,14 @@ function filterCandidatesForIntent(userText: string, candidates: Awaited<ReturnT
     return filtered.length ? filtered : candidates;
 }
 
+function filterTelegramVisibleCandidates(candidates: Awaited<ReturnType<typeof discoverSkills>>) {
+    return candidates.filter((skill) => {
+        if (skill.category === "media/task") return false;
+        const text = candidateText(skill);
+        return !/task-status|poll-async-generation|check-task-status|kie media task status/.test(text);
+    });
+}
+
 function attachmentExtension(filename: string): string | null {
     const match = filename.toLowerCase().match(/\.([a-z0-9]{1,10})$/);
     return match?.[1] ?? null;
@@ -351,7 +360,7 @@ async function telegramLlmModelPage(page: number): Promise<TelegramCandidate[]> 
 async function telegramDiscoveryPage(userText: string, page: number, attachments: TelegramUploadedAttachment[] = []): Promise<TelegramCandidate[]> {
     if (isLlmCatalogRequest(userText)) return telegramLlmModelPage(page);
     const routingText = routingTextWithAttachments(userText, attachments);
-    return withTelegramPriceLabels(filterCandidatesForIntent(routingText, await discoverSkills(routingText, page)));
+    return withTelegramPriceLabels(filterTelegramVisibleCandidates(filterCandidatesForIntent(routingText, await discoverSkills(routingText, page))));
 }
 
 async function telegramDiscoveryHasMore(userText: string, page: number, attachments: TelegramUploadedAttachment[] = []): Promise<boolean> {
@@ -573,7 +582,26 @@ function normalizeModelText(value: string): string {
 }
 
 function isLlmCatalogRequest(userText: string): boolean {
+    if (LLM_TASK_TERMS.test(userText)) return false;
     return LLM_CATALOG_TERMS.test(userText) && LLM_MODEL_TERMS.test(userText);
+}
+
+const EXACT_LLM_MODEL_PATTERNS: Array<{ user: RegExp; candidate: RegExp }> = [
+    { user: /\bsonnet\s*4[.\s-]?6\b/i, candidate: /\bsonnet\s*4[.\s-]?6\b/i },
+    { user: /\bsonnet\s*4[.\s-]?5\b/i, candidate: /\bsonnet\s*4[.\s-]?5\b/i },
+    { user: /\bopus\s*4[.\s-]?7\b/i, candidate: /\bopus\s*4[.\s-]?7\b/i },
+    { user: /\bopus\s*4[.\s-]?6\b/i, candidate: /\bopus\s*4[.\s-]?6\b/i },
+    { user: /\bopus\s*4[.\s-]?5\b/i, candidate: /\bopus\s*4[.\s-]?5\b/i },
+    { user: /\bhaiku\s*4[.\s-]?5\b/i, candidate: /\bhaiku\s*4[.\s-]?5\b/i },
+    { user: /\bgpt\s*5[.\s-]?4\b/i, candidate: /\bgpt\s*5[.\s-]?4\b/i },
+    { user: /\bgpt\s*5[.\s-]?2\b/i, candidate: /\bgpt\s*5[.\s-]?2\b/i },
+    { user: /\bgemini\s*3[.\s-]?1\b/i, candidate: /\bgemini\s*3[.\s-]?1\b/i },
+    { user: /\bgemini\s*3\b/i, candidate: /\bgemini\s*3\b/i },
+    { user: /\bgemini\s*2[.\s-]?5\b/i, candidate: /\bgemini\s*2[.\s-]?5\b/i },
+];
+
+function exactLlmModelMentioned(userText: string, candidateName: string): boolean {
+    return EXACT_LLM_MODEL_PATTERNS.some((pattern) => pattern.user.test(userText) && pattern.candidate.test(candidateName));
 }
 
 function explicitModelCandidate(userText: string, candidates: TelegramCandidate[]): TelegramCandidate | null {
@@ -581,6 +609,10 @@ function explicitModelCandidate(userText: string, candidates: TelegramCandidate[
     const modelMentioned = /\b(model|модель)\b/i.test(userText)
         || /(haiku|opus|sonnet|claude|gemini|gpt|codex)/i.test(userText);
     if (!modelMentioned) return null;
+
+    const exact = candidates.find((candidate) => exactLlmModelMentioned(userText, candidate.name));
+    if (exact) return exact;
+    if (EXACT_LLM_MODEL_PATTERNS.some((pattern) => pattern.user.test(userText))) return null;
 
     const familyChecks: Array<{ family: RegExp; version?: RegExp }> = [
         { family: /haiku/i, version: /4\.?5/i },
