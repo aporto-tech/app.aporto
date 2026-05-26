@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { pollDueSkillRuns } from "@/lib/skillRuns";
 import { deliverDueTelegramSkillRuns } from "@/lib/telegramDelivery";
+import { deleteExpiredThreads } from "@/lib/skillThread";
 
 export const dynamic = "force-dynamic";
 
@@ -25,6 +26,8 @@ export async function POST(req: NextRequest) {
             limit: parsePositiveInt(searchParams.get("telegramLimit"), 20),
             internalBaseUrl: req.nextUrl.origin,
         });
+
+        await deleteExpiredThreads().catch(() => {});
 
         return NextResponse.json({ success: true, ...result, telegram });
     } catch (error) {

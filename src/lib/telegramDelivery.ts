@@ -5,6 +5,7 @@ import {
     sendTelegramMessage,
     type TelegramReplyMarkup,
 } from "@/lib/telegramBot";
+import { saveAssistantMessageIfThread } from "@/lib/skillThread";
 
 type SkillRunResult = Awaited<ReturnType<typeof getSkillRun>>;
 
@@ -14,7 +15,7 @@ function telegramRetryButton(): TelegramReplyMarkup {
     };
 }
 
-function textFromResultData(data: unknown): string | null {
+export function textFromResultData(data: unknown): string | null {
     if (typeof data === "string" && data.trim()) return data.trim();
     if (!data || typeof data !== "object" || Array.isArray(data)) return null;
     const object = data as Record<string, unknown>;
@@ -179,7 +180,7 @@ export async function deliverDueTelegramSkillRuns(input: {
         summary.checked += 1;
         const run = await prisma.skillRun.findUnique({
             where: { id: delivery.runId },
-            select: { newApiUserId: true, status: true },
+            select: { newApiUserId: true, status: true, skillId: true },
         });
         if (!run || !["succeeded", "failed"].includes(run.status)) {
             await prisma.telegramSkillDelivery.update({
@@ -216,6 +217,14 @@ export async function deliverDueTelegramSkillRuns(input: {
                 replyToMessageId: delivery.replyToMessageId,
                 quietMode: conversation?.quietMode ?? false,
             });
+
+            if (result.status === "succeeded" && run.skillId) {
+                const assistantText = textFromResultData(result.data);
+                if (assistantText) {
+                    await saveAssistantMessageIfThread(delivery.telegramUserId, run.skillId, assistantText).catch(() => {});
+                }
+            }
+
             await prisma.telegramSkillDelivery.update({
                 where: { id: delivery.id },
                 data: {

@@ -20,7 +20,14 @@ import {
     registerTelegramDelivery,
     resultText,
     sendTelegramRunResult,
+    textFromResultData,
 } from "@/lib/telegramDelivery";
+import {
+    appendThreadMessage,
+    getOrCreateThread,
+    getThreadMessages,
+    saveAssistantMessageIfThread,
+} from "@/lib/skillThread";
 import {
     hasTelegramAttachments,
     telegramAttachmentParams,
@@ -954,7 +961,15 @@ async function runTelegramSkill(input: {
         params = { ...params, ...(input.attachmentParams ?? {}) };
         params = applyRequestedResultLimit(params, input.text);
         if (typeof input.plan.skillId === "number" && await shouldInjectLlmPrompt(input.plan.skillId, params)) {
-            params = { ...params, prompt: extractPromptAfterModelName(input.text) };
+            const userText = extractPromptAfterModelName(input.text);
+            const thread = await getOrCreateThread(input.telegramUserId, input.plan.skillId);
+            const history = await getThreadMessages(thread.id);
+            await appendThreadMessage(thread.id, "user", userText);
+            if (history.length > 0) {
+                params = { ...params, messages: [...history, { role: "user", content: userText }] };
+            } else {
+                params = { ...params, prompt: userText };
+            }
         }
         const sessionId = linkedAccount
             ? `telegram-linked-${linkedAccount.newApiUserId}-${new Date().toISOString().slice(0, 10)}`
@@ -1048,6 +1063,11 @@ async function runTelegramSkill(input: {
             replyToMessageId: input.replyToMessageId,
             quietMode: (await getConversation(input.telegramUserId))?.quietMode ?? false,
         });
+
+        const assistantText = textFromResultData(result.data);
+        if (assistantText && result.skillId) {
+            await saveAssistantMessageIfThread(input.telegramUserId, result.skillId, assistantText).catch(() => {});
+        }
     } catch (error) {
         if (reservedUsageId) {
             await completeAnonymousTrialRun({
