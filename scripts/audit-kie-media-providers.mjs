@@ -80,6 +80,58 @@ function normalizeNanoBanana2(config) {
     return changes;
 }
 
+function normalizeNanoBananaPro(config) {
+    if (config.model !== "google/nano-banana-pro" && config.model !== "nano-banana-pro") return [];
+    const changes = [];
+    const inputDefaults = isObject(config.inputDefaults) ? { ...config.inputDefaults } : {};
+
+    if (config.model !== "nano-banana-pro") {
+        config.model = "nano-banana-pro";
+        changes.push("nano-banana-pro: model google/nano-banana-pro -> nano-banana-pro");
+    }
+    if (typeof inputDefaults.quality === "string" && typeof inputDefaults.resolution !== "string") {
+        inputDefaults.resolution = inputDefaults.quality.toUpperCase();
+        changes.push("nano-banana-pro: quality -> resolution");
+    }
+    if ("quality" in inputDefaults) {
+        delete inputDefaults.quality;
+        changes.push("nano-banana-pro: removed unsupported quality");
+    }
+    if (typeof inputDefaults.resolution !== "string") {
+        inputDefaults.resolution = "2K";
+        changes.push("nano-banana-pro: added default resolution");
+    }
+    if (!Array.isArray(inputDefaults.image_input)) {
+        inputDefaults.image_input = [];
+        changes.push("nano-banana-pro: added image_input []");
+    }
+    if (typeof inputDefaults.output_format !== "string") {
+        inputDefaults.output_format = "png";
+        changes.push("nano-banana-pro: added output_format png");
+    }
+
+    config.inputDefaults = inputDefaults;
+    return changes;
+}
+
+function normalizeGptImage15(config) {
+    if (config.model !== "gpt-image/1.5-text-to-image" && config.model !== "gpt-image/1.5-image-to-image") return [];
+    const changes = [];
+    const inputDefaults = isObject(config.inputDefaults) ? { ...config.inputDefaults } : {};
+
+    if (typeof inputDefaults.quality !== "string") {
+        inputDefaults.quality = "high";
+        changes.push("gpt-image-1.5: added default quality high");
+    }
+    if ("num_images" in inputDefaults) {
+        delete inputDefaults.num_images;
+        changes.push("gpt-image-1.5: removed unsupported num_images");
+    }
+
+    config.inputDefaults = inputDefaults;
+    return changes;
+}
+
 function validateCommon(config) {
     const issues = [];
     if (config.requestType === "jobs.createTask") {
@@ -97,6 +149,8 @@ function normalizeConfig(config) {
     const changes = [
         ...normalizeHappyHorse(normalized),
         ...normalizeNanoBanana2(normalized),
+        ...normalizeNanoBananaPro(normalized),
+        ...normalizeGptImage15(normalized),
     ];
     const issues = validateCommon(normalized);
     return { normalized, changes, issues };

@@ -75,7 +75,7 @@ function extractModel(row) {
     if (desc.includes("qwen image") && desc.includes("image-to-image")) return "qwen/image-to-image";
     if (desc.includes("recraft remove background")) return "recraft/remove-background";
     if (desc.includes("recraft crisp upscale")) return "recraft/crisp-upscale";
-    if (desc.includes("google nano banana pro")) return "google/nano-banana-pro";
+    if (desc.includes("google nano banana pro")) return "nano-banana-pro";
     if (desc.includes("google nano banana") && desc.includes("text-to-image")) return "google/nano-banana";
     if (desc.includes("google nano banana") && desc.includes("image-to-image")) return "google/nano-banana-edit";
     if (desc.includes("wan 2.2 animate") && desc.includes("replace")) return "wan/2-2-animate-replace";
@@ -262,6 +262,10 @@ function inputDefaults(row) {
         if (row.modelDescription.toLowerCase().includes("nano banana 2")) {
             defaults.resolution = value.toUpperCase();
         }
+        if (row.modelDescription.toLowerCase().includes("nano banana pro")) {
+            defaults.resolution = value.toUpperCase();
+            delete defaults.quality;
+        }
     }
 
     if (row.interfaceType === "video") {
@@ -277,9 +281,13 @@ function inputDefaults(row) {
     }
 
     if (row.interfaceType === "image") {
-        defaults.num_images = "1";
         defaults.aspect_ratio = "1:1";
-        if (row.modelDescription.toLowerCase().includes("nano banana 2")) {
+        if (row.modelDescription.toLowerCase().includes("gpt image 1.5")) {
+            defaults.quality = text.includes("medium") ? "medium" : "high";
+        } else {
+            defaults.num_images = "1";
+        }
+        if (row.modelDescription.toLowerCase().includes("nano banana 2") || row.modelDescription.toLowerCase().includes("nano banana pro")) {
             defaults.image_input = [];
             defaults.output_format = "png";
         }
