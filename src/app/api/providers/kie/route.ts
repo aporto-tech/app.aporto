@@ -17,6 +17,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { randomUUID } from "crypto";
 import { copyUrlToR2 } from "@/lib/r2";
+import { canonicalKieModel, normalizeKieCreateTaskInput } from "@/lib/kieModelRules";
 
 export const dynamic = "force-dynamic";
 
@@ -31,29 +32,6 @@ interface KieConfig {
     model?: string;
     inputDefaults?: Record<string, unknown>;
     bodyDefaults?: Record<string, unknown>;
-}
-
-function normalizeCreateTaskInput(model: string, input: Record<string, unknown>): Record<string, unknown> {
-    const normalized = { ...input };
-
-    if (model.startsWith("happyhorse/")) {
-        if (typeof normalized.quality === "string" && typeof normalized.resolution !== "string") {
-            normalized.resolution = normalized.quality;
-        }
-        delete normalized.quality;
-
-        if (typeof normalized.duration === "string") {
-            const duration = Number(normalized.duration);
-            if (Number.isFinite(duration)) normalized.duration = duration;
-        }
-        if (model === "happyhorse/video-edit") {
-            delete normalized.duration;
-            delete normalized.aspect_ratio;
-            normalized.audio_setting ??= "auto";
-        }
-    }
-
-    return normalized;
 }
 
 type StoredArtifact = {
@@ -232,10 +210,11 @@ export async function POST(req: NextRequest) {
                 ...params,
             };
             delete (input as Record<string, unknown>).callBackUrl;
+            const canonicalModel = canonicalKieModel(model);
             requestBody = {
-                model,
+                model: canonicalModel,
                 ...(typeof callBackUrl === "string" ? { callBackUrl } : {}),
-                input: normalizeCreateTaskInput(model, input),
+                input: normalizeKieCreateTaskInput(canonicalModel, input),
             };
         } else {
             requestBody = {

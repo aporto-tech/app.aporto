@@ -13,6 +13,10 @@
  */
 
 import { PrismaClient } from "@prisma/client";
+import {
+    kieModelAliasForDescription,
+    normalizeKieInputDefaults,
+} from "./lib/kie-model-rules.mjs";
 
 const prisma = new PrismaClient();
 
@@ -61,6 +65,9 @@ function extractModel(row) {
     }
 
     const desc = row.modelDescription.toLowerCase();
+    const alias = kieModelAliasForDescription(row.modelDescription);
+    if (alias) return alias;
+
     const explicit = desc.match(/\b([a-z0-9-]+\/[a-z0-9-.]+(?:-[a-z0-9.]+)*)\b/i);
     if (explicit) return explicit[1];
 
@@ -69,27 +76,24 @@ function extractModel(row) {
     if (desc.includes("kling 2.6") && desc.includes("text-to-video")) return "kling-2.6/text-to-video";
     if (desc.includes("kling 2.6") && desc.includes("image-to-video")) return "kling-2.6/image-to-video";
     if (desc.includes("kling 3.0")) return "kling/kling-3.0";
-    if (desc.includes("qwen2") && desc.includes("image edit")) return "qwen2/image-edit";
-    if (desc.includes("qwen z-image")) return "z-image";
-    if (desc.includes("qwen image") && desc.includes("text-to-image")) return "qwen/text-to-image";
-    if (desc.includes("qwen image") && desc.includes("image-to-image")) return "qwen/image-to-image";
-    if (desc.includes("recraft remove background")) return "recraft/remove-background";
-    if (desc.includes("recraft crisp upscale")) return "recraft/crisp-upscale";
-    if (desc.includes("google nano banana pro")) return "nano-banana-pro";
-    if (desc.includes("google nano banana") && desc.includes("text-to-image")) return "google/nano-banana";
-    if (desc.includes("google nano banana") && desc.includes("image-to-image")) return "google/nano-banana-edit";
-    if (desc.includes("wan 2.2 animate") && desc.includes("replace")) return "wan/2-2-animate-replace";
-    if (desc.includes("wan 2.2 animate") && desc.includes("move")) return "wan/2-2-animate-move";
-    if (desc.includes("wan 2.2") && desc.includes("speech to video")) return "wan/2-2-a14b-speech-to-video-turbo";
-    if (desc.includes("wan 2.2") && desc.includes("image-to-video")) return "wan/2-2-a14b-image-to-video-turbo";
-    if (desc.includes("meigen-ai") || desc.includes("infinitetalk") || desc.includes("infinitalk")) return "infinitalk/from-audio";
-    if (desc.includes("ideogram v3 reframe")) return "ideogram/v3-reframe";
-    if (desc.includes("ideogram character")) return "ideogram/character";
-    if (desc.includes("topaz image upscaler") || (desc.includes("topaz") && desc.includes("image-upscale"))) return "topaz/image-upscale";
-    if (desc.includes("kling 2.6 motion control")) return "kling-2.6/motion-control";
-    if (desc.includes("wan 2.7 image pro")) return "wan/2-7-image-pro";
-    if (desc.includes("wan 2.7 image")) return "wan/2-7-image";
-    if (desc.includes("google nano banana 2")) return "nano-banana-2";
+    if (desc.includes("gpt image 1.5") && desc.includes("text-to-image")) return "gpt-image/1.5-text-to-image";
+    if (desc.includes("gpt image 1.5") && desc.includes("image-to-image")) return "gpt-image/1.5-image-to-image";
+    if (desc.includes("gpt image 2") && desc.includes("text-to-image")) return "gpt-image-2-text-to-image";
+    if (desc.includes("gpt image 2") && desc.includes("image-to-image")) return "gpt-image-2-image-to-image";
+    if (desc.includes("seedream 5.0 lite") && desc.includes("text-to-image")) return "seedream/5-lite-text-to-image";
+    if (desc.includes("seedream 5.0 lite") && desc.includes("image-to-image")) return "seedream/5-lite-image-to-image";
+    if (desc.includes("seedream 4.5") && desc.includes("text-to-image")) return "seedream/4.5-text-to-image";
+    if (desc.includes("seedream 4.5") && desc.includes("image-to-image")) return "seedream/4.5-edit";
+    if (desc.includes("wan 2.2") && desc.includes("text-to-video")) return "wan/2-2-a14b-text-to-video-turbo";
+    if (desc.includes("wan 2.5") && desc.includes("text-to-video")) return "wan/2-5-text-to-video";
+    if (desc.includes("wan 2.5") && desc.includes("image-to-video")) return "wan/2-5-image-to-video";
+    if (desc.includes("wan 2.6") && desc.includes("text to video")) return "wan/2-6-text-to-video";
+    if (desc.includes("wan 2.6") && desc.includes("image-to-video")) return "wan/2-6-image-to-video";
+    if (desc.includes("wan 2.6") && desc.includes("video-to-video")) return "wan/2-6-video-to-video";
+    if (desc.includes("wan 2.7 video") && desc.includes("text-to-video")) return "wan/2-7-text-to-video";
+    if (desc.includes("wan 2.7 video") && desc.includes("image-to-video")) return "wan/2-7-image-to-video";
+    if (desc.includes("wan 2.7 video") && desc.includes("videoedit")) return "wan/2-7-videoedit";
+    if (desc.includes("wan 2.7 video") && desc.includes("r2v")) return "wan/2-7-r2v";
     return null;
 }
 
@@ -401,12 +405,13 @@ function requestConfig(row) {
         };
     }
 
+    const model = extractModel(row);
     return {
         requestType: "jobs.createTask",
         apiPath: "/api/v1/jobs/createTask",
         method: "POST",
-        model: extractModel(row),
-        inputDefaults: inputDefaults(row),
+        model,
+        inputDefaults: normalizeKieInputDefaults(model, inputDefaults(row), row.modelDescription),
     };
 }
 

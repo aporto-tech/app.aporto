@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { PrismaClient } from "@prisma/client";
+import { normalizeKieProviderConfig } from "./lib/kie-model-rules.mjs";
 
 const prisma = new PrismaClient();
 const APPLY = process.argv.includes("--apply");
@@ -144,9 +145,10 @@ function validateCommon(config) {
     return issues;
 }
 
-function normalizeConfig(config) {
-    const normalized = { ...config };
+function normalizeConfig(config, description = "") {
+    const normalized = normalizeKieProviderConfig(config, description);
     const changes = [
+        ...(JSON.stringify(normalized) !== JSON.stringify(config) ? ["kie-model-rules: normalized alias/defaults"] : []),
         ...normalizeHappyHorse(normalized),
         ...normalizeNanoBanana2(normalized),
         ...normalizeNanoBananaPro(normalized),
@@ -217,7 +219,8 @@ async function main() {
             continue;
         }
 
-        const { normalized, changes, issues } = normalizeConfig(config);
+        const description = config.pricing?.modelDescription ?? "";
+        const { normalized, changes, issues } = normalizeConfig(config, description);
         if (issues.length) invalid.push({ id: row.id, provider: row.name, skill: row.skill_name, active: row.isActive, issues });
         const mismatchIssues = [interfaceMismatch(row, config), expectedFamilyMismatch(row, config)].filter(Boolean);
         if (mismatchIssues.length) mismatched.push({ id: row.id, provider: row.name, skill: row.skill_name, active: row.isActive, issues: mismatchIssues });

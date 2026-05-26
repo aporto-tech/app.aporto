@@ -1,0 +1,239 @@
+[
+  {
+    "id": "happyhorse",
+    "family": "HappyHorse",
+    "modelPrefixes": ["happyhorse/"],
+    "descriptionPatterns": ["happyhorse"],
+    "qualityToResolution": "lower",
+    "removeInputKeys": ["quality"],
+    "coerceNumberKeys": ["duration"],
+    "defaults": {
+      "duration": 5,
+      "aspect_ratio": "16:9"
+    },
+    "modelOverrides": {
+      "happyhorse/video-edit": {
+        "removeInputKeys": ["duration", "aspect_ratio"],
+        "defaults": {
+          "audio_setting": "auto"
+        }
+      }
+    }
+  },
+  {
+    "id": "nano-banana-2",
+    "family": "Nano Banana 2",
+    "modelAliases": {
+      "google/nano-banana-2": "nano-banana-2"
+    },
+    "modelExact": ["nano-banana-2", "google/nano-banana-2"],
+    "descriptionPatterns": ["google nano banana 2"],
+    "model": "nano-banana-2",
+    "qualityToResolution": "upper",
+    "removeInputKeys": ["num_images"],
+    "defaults": {
+      "image_input": [],
+      "output_format": "png"
+    }
+  },
+  {
+    "id": "nano-banana-pro",
+    "family": "Nano Banana Pro",
+    "modelAliases": {
+      "google/nano-banana-pro": "nano-banana-pro"
+    },
+    "modelExact": ["nano-banana-pro", "google/nano-banana-pro"],
+    "descriptionPatterns": ["google nano banana pro"],
+    "model": "nano-banana-pro",
+    "qualityToResolution": "upper",
+    "removeInputKeys": ["quality", "num_images"],
+    "defaults": {
+      "image_input": [],
+      "output_format": "png"
+    }
+  },
+  {
+    "id": "gpt-image-1.5",
+    "family": "GPT Image 1.5",
+    "modelExact": ["gpt-image/1.5-text-to-image", "gpt-image/1.5-image-to-image"],
+    "descriptionPatterns": ["gpt image 1.5"],
+    "removeInputKeys": ["num_images"],
+    "defaults": {
+      "quality": "high"
+    },
+    "descriptionDefaultFields": {
+      "quality": [
+        { "pattern": "medium", "value": "medium" },
+        { "pattern": "high", "value": "high" }
+      ]
+    }
+  },
+  {
+    "id": "google-nano-banana-text",
+    "family": "Nano Banana",
+    "descriptionPatterns": ["google nano banana, text-to-image"],
+    "model": "google/nano-banana"
+  },
+  {
+    "id": "google-nano-banana-edit",
+    "family": "Nano Banana Edit",
+    "descriptionPatterns": ["google nano banana edit", "google nano banana, image-to-image"],
+    "model": "google/nano-banana-edit"
+  },
+  {
+    "id": "google-imagen4-ultra",
+    "family": "Google Imagen 4",
+    "descriptionPatterns": ["google imagen4, text-to-image, ultra"],
+    "model": "google/imagen4-ultra"
+  },
+  {
+    "id": "google-imagen4-fast",
+    "family": "Google Imagen 4",
+    "descriptionPatterns": ["google imagen4, text-to-image, fast"],
+    "model": "google/imagen4-fast"
+  },
+  {
+    "id": "google-imagen4",
+    "family": "Google Imagen 4",
+    "descriptionPatterns": ["google imagen4, text-to-image, default"],
+    "model": "google/imagen4"
+  },
+  {
+    "id": "qwen2-image-edit",
+    "family": "Qwen2 Image Edit",
+    "descriptionPatterns": ["qwen2 - image edit, image-to-image"],
+    "model": "qwen2/image-edit"
+  },
+  {
+    "id": "qwen2-text-to-image",
+    "family": "Qwen2 Image",
+    "descriptionPatterns": ["qwen2 - image edit, text-to-image"],
+    "model": "qwen2/text-to-image"
+  },
+  {
+    "id": "qwen-image-text",
+    "family": "Qwen Image",
+    "descriptionPatterns": ["qwen image , text-to-image", "qwen image, text-to-image"],
+    "model": "qwen/text-to-image"
+  },
+  {
+    "id": "qwen-image-edit",
+    "family": "Qwen Image Edit",
+    "descriptionPatterns": ["qwen image-edit, image-to-image", "qwen image, image-to-image"],
+    "model": "qwen/image-to-image"
+  },
+  {
+    "id": "qwen-z-image",
+    "family": "Qwen Z-Image",
+    "descriptionPatterns": ["qwen z-image"],
+    "model": "z-image"
+  },
+  {
+    "id": "recraft-remove-background",
+    "family": "Recraft",
+    "descriptionPatterns": ["recraft remove background"],
+    "model": "recraft/remove-background"
+  },
+  {
+    "id": "recraft-crisp-upscale",
+    "family": "Recraft",
+    "descriptionPatterns": ["recraft crisp upscale"],
+    "model": "recraft/crisp-upscale"
+  },
+  {
+    "id": "topaz-image-upscale",
+    "family": "Topaz",
+    "descriptionPatterns": ["topaz image upscaler", "topaz image-upscale"],
+    "model": "topaz/image-upscale"
+  },
+  {
+    "id": "ideogram-v3-reframe",
+    "family": "Ideogram",
+    "descriptionPatterns": ["ideogram v3 reframe"],
+    "model": "ideogram/v3-reframe"
+  },
+  {
+    "id": "ideogram-character",
+    "family": "Ideogram",
+    "descriptionPatterns": ["ideogram character, image-to-image"],
+    "model": "ideogram/character"
+  },
+  {
+    "id": "wan-2.2-speech-to-video",
+    "family": "Wan",
+    "descriptionPatterns": ["wan 2.2", "speech to video"],
+    "model": "wan/2-2-a14b-speech-to-video-turbo"
+  },
+  {
+    "id": "wan-2.2-image-to-video",
+    "family": "Wan",
+    "descriptionPatterns": ["wan 2.2", "image-to-video"],
+    "model": "wan/2-2-a14b-image-to-video-turbo"
+  },
+  {
+    "id": "wan-2.2-animate-replace",
+    "family": "Wan",
+    "descriptionPatterns": ["wan 2.2 animate", "replace"],
+    "model": "wan/2-2-animate-replace"
+  },
+  {
+    "id": "wan-2.2-animate-move",
+    "family": "Wan",
+    "descriptionPatterns": ["wan 2.2 animate", "move"],
+    "model": "wan/2-2-animate-move"
+  },
+  {
+    "id": "wan-2.7-image-pro",
+    "family": "Wan",
+    "descriptionPatterns": ["wan 2.7 image pro"],
+    "model": "wan/2-7-image-pro"
+  },
+  {
+    "id": "wan-2.7-image",
+    "family": "Wan",
+    "descriptionPatterns": ["wan 2.7 image"],
+    "model": "wan/2-7-image"
+  },
+  {
+    "id": "infinitalk-from-audio",
+    "family": "InfiniteTalk",
+    "descriptionPatterns": ["meigen-ai infinitetalk"],
+    "model": "infinitalk/from-audio"
+  },
+  {
+    "id": "kling-2.6-motion-control",
+    "family": "Kling",
+    "descriptionPatterns": ["kling 2.6 motion control"],
+    "model": "kling-2.6/motion-control"
+  },
+  {
+    "id": "kling-2.6-text-to-video",
+    "family": "Kling",
+    "descriptionPatterns": ["kling 2.6", "text-to-video"],
+    "model": "kling-2.6/text-to-video"
+  },
+  {
+    "id": "kling-2.6-image-to-video",
+    "family": "Kling",
+    "descriptionPatterns": ["kling 2.6", "image-to-video"],
+    "model": "kling-2.6/image-to-video"
+  },
+  {
+    "id": "kling-3.0",
+    "family": "Kling",
+    "descriptionPatterns": ["kling 3.0"],
+    "model": "kling/kling-3.0"
+  },
+  {
+    "id": "sora-2-text-to-video",
+    "family": "Sora",
+    "descriptionPatterns": ["sora 2", "text-to-video"],
+    "model": "sora-2/text-to-video"
+  },
+  {
+    "id": "sora-2-image-to-video",
+    "family": "Sora",
+    "descriptionPatterns": ["sora 2", "image-to-video"],
+    "model": "sora-2/image-to-video"
+  }
+]
