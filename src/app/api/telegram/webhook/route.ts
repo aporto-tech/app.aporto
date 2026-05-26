@@ -201,17 +201,28 @@ function normalizeRoutingText(userText: string): string {
 }
 
 function filterCandidatesForIntent(userText: string, candidates: Awaited<ReturnType<typeof discoverSkills>>) {
-    if (!GENERATION_TERMS.test(userText)) return candidates;
-
     const wantsVideo = VIDEO_TERMS.test(userText);
     const wantsImage = IMAGE_TERMS.test(userText);
     const wantsAudio = AUDIO_TERMS.test(userText);
+    const hasExplicitGenerationIntent = GENERATION_TERMS.test(userText);
+    const shouldPreferImage =
+        !hasExplicitGenerationIntent
+        && !wantsVideo
+        && !wantsAudio
+        && !EXTRACTOR_TERMS.test(userText)
+        && !LLM_MODEL_TERMS.test(userText)
+        && candidates.some((skill) => /media\/image|kie-image|image-generation|text-to-image/.test(candidateText(skill)))
+        && candidates.some((skill) => /media\/video|kie-video|text-to-video|image-to-video/.test(candidateText(skill)));
+
+    if (!hasExplicitGenerationIntent && !shouldPreferImage) return candidates;
+
     const filtered = candidates.filter((skill) => {
         const text = candidateText(skill);
         if (EXTRACTOR_TERMS.test(text)) return false;
         if (wantsVideo) return /video|text-to-video|image-to-video|generate-video|video-generation/.test(text);
         if (wantsImage) return /image|photo|picture|generate-image|image-generation/.test(text);
         if (wantsAudio) return /audio|speech|voice|tts|music|sound|text-to-speech/.test(text);
+        if (shouldPreferImage) return /media\/image|kie-image|image-generation|text-to-image/.test(text);
         return true;
     });
 
@@ -380,6 +391,22 @@ async function planTelegramRequest(userText: string, attachments: TelegramUpload
                 confidence: 0.97,
                 providerHint: KIE_PROVIDER_TERMS.test(userText) ? "KIE" : null,
                 params: { text: extractTextToSpeechText(userText) },
+            },
+        };
+    }
+    const exactSkill = explicitSkillCandidate(userText, candidates);
+    if (exactSkill) {
+        return {
+            candidates,
+            hasMore,
+            routingText,
+            plan: {
+                action: "run_skill",
+                intent: exactSkill.name,
+                skillId: exactSkill.id,
+                confidence: 0.98,
+                providerHint: exactSkill.name,
+                params: { prompt: extractPromptAfterModelName(userText) },
             },
         };
     }
@@ -577,6 +604,16 @@ function explicitModelCandidate(userText: string, candidates: TelegramCandidate[
     return null;
 }
 
+function explicitSkillCandidate(userText: string, candidates: TelegramCandidate[]): TelegramCandidate | null {
+    const normalizedText = normalizeModelText(userText);
+    if (normalizedText.length < 6) return null;
+    const matches = candidates
+        .map((candidate) => ({ candidate, normalizedName: normalizeModelText(candidate.name) }))
+        .filter(({ normalizedName }) => normalizedText.includes(normalizedName))
+        .sort((a, b) => b.normalizedName.length - a.normalizedName.length);
+    return matches[0]?.candidate ?? null;
+}
+
 function explicitTextToSpeechCandidate(userText: string, candidates: TelegramCandidate[]): TelegramCandidate | null {
     if (!TEXT_TO_SPEECH_TERMS.test(userText)) return null;
     return candidates.find((candidate) => {
@@ -604,6 +641,12 @@ function extractPromptAfterModelName(userText: string): string {
         .replace(/\bmodel\b/gi, "")
         .replace(/\b(claude|haiku|opus|sonnet|gemini|gpt|codex)\b\s*[\w. -]*/i, "")
         .trim() || userText;
+}
+
+function extractSelectionPrompt(text: string): string | null {
+    const match = text.trim().match(/^(?:#|skill\s*)?\d+\s*[-:—]\s*(.+)$/i);
+    const prompt = match?.[1]?.trim();
+    return prompt || null;
 }
 
 function priceLabel(skill: TelegramCandidate): string {
@@ -834,6 +877,7 @@ async function markTelegramRunCompleted(input: {
 function chooseSkillFromText(text: string, candidates: TelegramCandidate[]) {
     const trimmed = text.trim();
     const numberMatch = trimmed.match(/^(?:#|skill\s*)?(\d+)$/i)
+        ?? trimmed.match(/^(?:#|skill\s*)?(\d+)\s*[-:—]\s*.+$/i)
         ?? trimmed.match(/^(?:выбери|выбираю|вариант|номер|option|choose|pick)\s+(?:#|skill\s*)?(\d+)$/i);
     const asNumber = Number(numberMatch?.[1]);
     if (Number.isInteger(asNumber) && asNumber >= 1 && asNumber <= candidates.length) {
@@ -1040,13 +1084,17 @@ async function handlePendingSelection(input: {
         action: "run_skill" as const,
         skillId: selected.id,
         confidence: 1,
+        params: {
+            ...(pendingPayload.plan.params ?? {}),
+            ...(extractSelectionPrompt(input.text) ? { prompt: extractSelectionPrompt(input.text) } : {}),
+        },
     };
     await runTelegramSkill({
         req: input.req,
         telegramUserId: input.telegramUserId,
         chatId: input.chatId,
         replyToMessageId: input.replyToMessageId,
-        text: pendingPayload.text,
+        text: extractSelectionPrompt(input.text) ?? pendingPayload.text,
         plan,
         attachmentParams: input.attachmentParams ?? pendingPayload.attachmentParams,
         identity: input.identity,

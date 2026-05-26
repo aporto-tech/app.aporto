@@ -156,9 +156,47 @@ function normalizeConfig(config) {
     return { normalized, changes, issues };
 }
 
+function providerFamilyText(row, config) {
+    return `${row.name} ${config.model ?? ""} ${config.pricing?.modelDescription ?? ""}`.toLowerCase();
+}
+
+function expectedFamilyMismatch(row, config) {
+    if (!row.isActive) return null;
+    const skill = String(row.skill_name ?? "").toLowerCase();
+    const provider = providerFamilyText(row, config);
+    const checks = [
+        { skill: "nano banana", provider: "nano banana" },
+        { skill: "gpt image", provider: "gpt image" },
+        { skill: "happyhorse", provider: "happyhorse" },
+        { skill: "sora", provider: "sora" },
+        { skill: "kling", provider: "kling" },
+        { skill: "veo", provider: "veo" },
+        { skill: "wan", provider: "wan" },
+        { skill: "seedream", provider: "seedream" },
+        { skill: "qwen", provider: "qwen" },
+        { skill: "flux", provider: "flux" },
+        { skill: "recraft", provider: "recraft" },
+        { skill: "topaz", provider: "topaz" },
+        { skill: "ideogram", provider: "ideogram" },
+    ];
+    const mismatch = checks.find((check) => skill.includes(check.skill) && !provider.includes(check.provider));
+    return mismatch ? `skill family "${mismatch.skill}" does not match provider/model text` : null;
+}
+
+function interfaceMismatch(row, config) {
+    if (!row.isActive) return null;
+    const category = String(row.category ?? "").toLowerCase();
+    const interfaceType = String(config.pricing?.interfaceType ?? "").toLowerCase();
+    if (!interfaceType) return null;
+    if (category === "media/image" && interfaceType !== "image") return `skill category media/image does not match interfaceType ${interfaceType}`;
+    if (category === "media/video" && interfaceType !== "video") return `skill category media/video does not match interfaceType ${interfaceType}`;
+    if (category === "media/music" && interfaceType !== "music") return `skill category media/music does not match interfaceType ${interfaceType}`;
+    return null;
+}
+
 async function main() {
     const rows = await prisma.$queryRawUnsafe(
-        `SELECT p.id, p.name, p."isActive", p."syncConfig", s.name AS skill_name
+        `SELECT p.id, p.name, p."isActive", p."syncConfig", s.name AS skill_name, s.category
          FROM "Provider" p
          JOIN "Skill" s ON s.id = p."skillId"
          WHERE p.endpoint = $1
@@ -168,6 +206,7 @@ async function main() {
 
     const changed = [];
     const invalid = [];
+    const mismatched = [];
 
     for (const row of rows) {
         let config;
@@ -180,6 +219,8 @@ async function main() {
 
         const { normalized, changes, issues } = normalizeConfig(config);
         if (issues.length) invalid.push({ id: row.id, provider: row.name, skill: row.skill_name, active: row.isActive, issues });
+        const mismatchIssues = [interfaceMismatch(row, config), expectedFamilyMismatch(row, config)].filter(Boolean);
+        if (mismatchIssues.length) mismatched.push({ id: row.id, provider: row.name, skill: row.skill_name, active: row.isActive, issues: mismatchIssues });
         if (!changes.length) continue;
 
         changed.push({ id: row.id, provider: row.name, skill: row.skill_name, changes });
@@ -207,6 +248,13 @@ async function main() {
     for (const item of invalid) {
         if (item.active) continue;
         console.log(`- #${item.id} ${item.skill} / ${item.provider}: ${item.issues.join("; ")}`);
+    }
+    console.log(`Mismatched active providers: ${mismatched.length}`);
+    for (const item of mismatched) {
+        console.log(`- #${item.id} ${item.skill} / ${item.provider}: ${item.issues.join("; ")}`);
+    }
+    if (activeInvalid.length > 0 || mismatched.length > 0) {
+        process.exitCode = 1;
     }
 }
 
