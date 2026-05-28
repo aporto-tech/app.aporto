@@ -131,7 +131,23 @@ interface StatsData {
     };
 }
 
-type Tab = "promo" | "hello" | "skills" | "stats" | "runs" | "pending" | "publishers";
+interface DiscoveryRow {
+    id: string;
+    created_at: string;
+    source: string;
+    query: string;
+    normalized: string;
+    result_count: number;
+    top_skill_ids: string | null;
+    top_similarity: number | null;
+    no_results: boolean;
+    latency_ms: number | null;
+    session_id: string | null;
+    new_api_user_id: number;
+    error: string | null;
+}
+
+type Tab = "promo" | "hello" | "skills" | "stats" | "runs" | "discovery" | "pending" | "publishers";
 
 // ── Main Component ────────────────────────────────────────────────────────────
 
@@ -162,13 +178,13 @@ export default function AdminPage() {
 
             {/* Tab bar */}
             <div className={styles.tabBar}>
-                {(["promo", "hello", "skills", "stats", "runs", "pending", "publishers"] as Tab[]).map((t) => (
+                {(["promo", "hello", "skills", "stats", "runs", "discovery", "pending", "publishers"] as Tab[]).map((t) => (
                     <button
                         key={t}
                         className={`${styles.tabBtn} ${activeTab === t ? styles.tabBtnActive : ""}`}
                         onClick={() => setActiveTab(t)}
                     >
-                        {t === "promo" ? "Promo Codes" : t === "hello" ? "Hello Bar" : t === "skills" ? "Skills & Providers" : t === "stats" ? "Stats" : t === "runs" ? "Skill Runs" : t === "pending" ? "Pending Review" : "Publishers"}
+                        {t === "promo" ? "Promo Codes" : t === "hello" ? "Hello Bar" : t === "skills" ? "Skills & Providers" : t === "stats" ? "Stats" : t === "runs" ? "Skill Runs" : t === "discovery" ? "Discovery" : t === "pending" ? "Pending Review" : "Publishers"}
                     </button>
                 ))}
             </div>
@@ -178,6 +194,7 @@ export default function AdminPage() {
             {activeTab === "skills" && <SkillsTab />}
             {activeTab === "stats" && <StatsTab />}
             {activeTab === "runs" && <SkillRunsTab />}
+            {activeTab === "discovery" && <DiscoveryTab />}
             {activeTab === "pending" && <PendingReviewTab />}
             {activeTab === "publishers" && <PublishersTab />}
         </div>
@@ -2063,6 +2080,176 @@ function PublishersTab() {
                     </div>
                 </div>
             ))}
+        </div>
+    );
+}
+
+// ── Discovery Tab ─────────────────────────────────────────────────────────────
+
+function DiscoveryTab() {
+    const [rows, setRows] = useState<DiscoveryRow[]>([]);
+    const [total, setTotal] = useState(0);
+    const [loading, setLoading] = useState(true);
+    const [sourceFilter, setSourceFilter] = useState("all");
+    const [noResultsFilter, setNoResultsFilter] = useState("all");
+    const [queryFilter, setQueryFilter] = useState("");
+    const [userFilter, setUserFilter] = useState("");
+    const [pageSize, setPageSize] = useState(50);
+    const [page, setPage] = useState(0);
+
+    const load = useCallback(() => {
+        setLoading(true);
+        const params = new URLSearchParams({
+            limit: String(pageSize),
+            offset: String(page * pageSize),
+        });
+        if (sourceFilter !== "all") params.set("source", sourceFilter);
+        if (noResultsFilter !== "all") params.set("noResults", noResultsFilter);
+        if (queryFilter.trim()) params.set("query", queryFilter.trim());
+        if (userFilter.trim()) params.set("userId", userFilter.trim());
+        fetch(`/api/admin/discovery?${params.toString()}`, { cache: "no-store" })
+            .then((r) => r.json())
+            .then((d) => {
+                if (d.success) {
+                    setRows(d.rows ?? []);
+                    setTotal(Number(d.total ?? 0));
+                }
+            })
+            .finally(() => setLoading(false));
+    }, [sourceFilter, noResultsFilter, queryFilter, userFilter, pageSize, page]);
+
+    useEffect(() => { load(); }, [load]);
+
+    const pageCount = Math.max(1, Math.ceil(total / pageSize));
+    const from = total === 0 ? 0 : page * pageSize + 1;
+    const to = Math.min(total, (page + 1) * pageSize);
+
+    const sourceColor = (src: string) => {
+        if (src === "telegram") return "#3b82f6";
+        if (src === "mcp") return "#8b5cf6";
+        if (src === "rest") return "#10b981";
+        return "#94a3b8";
+    };
+
+    return (
+        <div>
+            <div style={{ display: "flex", justifyContent: "space-between", gap: 16, alignItems: "center", marginBottom: 16 }}>
+                <h2 style={{ margin: 0, fontSize: 18 }}>Discovery Calls ({total})</h2>
+                <button onClick={load} style={{ padding: "6px 12px", borderRadius: 6, border: "1px solid #334155", background: "transparent", color: "#cbd5e1", cursor: "pointer" }}>Refresh</button>
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "130px 130px 1fr 120px 130px", gap: 10, marginBottom: 16, alignItems: "end" }}>
+                <div className={styles.formGroup} style={{ marginBottom: 0 }}>
+                    <label>Source</label>
+                    <select className={styles.formInput} value={sourceFilter} onChange={e => { setSourceFilter(e.target.value); setPage(0); }}>
+                        <option value="all">All</option>
+                        <option value="telegram">Telegram</option>
+                        <option value="rest">REST</option>
+                        <option value="mcp">MCP</option>
+                    </select>
+                </div>
+                <div className={styles.formGroup} style={{ marginBottom: 0 }}>
+                    <label>Results</label>
+                    <select className={styles.formInput} value={noResultsFilter} onChange={e => { setNoResultsFilter(e.target.value); setPage(0); }}>
+                        <option value="all">All</option>
+                        <option value="false">Found skills</option>
+                        <option value="true">No results</option>
+                    </select>
+                </div>
+                <div className={styles.formGroup} style={{ marginBottom: 0 }}>
+                    <label>Query</label>
+                    <input className={styles.formInput} value={queryFilter} onChange={e => { setQueryFilter(e.target.value); setPage(0); }} placeholder="Search query text" />
+                </div>
+                <div className={styles.formGroup} style={{ marginBottom: 0 }}>
+                    <label>User ID</label>
+                    <input className={styles.formInput} value={userFilter} onChange={e => { setUserFilter(e.target.value.replace(/\D/g, "")); setPage(0); }} placeholder="51" />
+                </div>
+                <div className={styles.formGroup} style={{ marginBottom: 0 }}>
+                    <label>Rows</label>
+                    <select className={styles.formInput} value={pageSize} onChange={e => { setPageSize(Number(e.target.value)); setPage(0); }}>
+                        <option value={25}>25</option>
+                        <option value={50}>50</option>
+                        <option value={100}>100</option>
+                    </select>
+                </div>
+            </div>
+
+            {loading ? (
+                <div style={{ color: "#64748b", padding: "24px 0" }}>Loading...</div>
+            ) : (
+                <>
+                    <div className={styles.tableWrapper}>
+                        <table className={styles.table}>
+                            <thead>
+                                <tr>
+                                    <th>Time</th>
+                                    <th>Source</th>
+                                    <th>Query</th>
+                                    <th style={{ textAlign: "center" }}>Skills</th>
+                                    <th>Top match</th>
+                                    <th style={{ textAlign: "right" }}>Latency</th>
+                                    <th>User</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {rows.length === 0 ? (
+                                    <tr className={styles.emptyRow}><td colSpan={7}>No discovery calls match these filters.</td></tr>
+                                ) : rows.map((row) => {
+                                    const topIds: number[] = row.top_skill_ids ? JSON.parse(row.top_skill_ids) : [];
+                                    return (
+                                        <tr key={row.id}>
+                                            <td style={{ whiteSpace: "nowrap", color: "#94a3b8", fontSize: 13 }}>{new Date(row.created_at).toLocaleString()}</td>
+                                            <td>
+                                                <span style={{
+                                                    background: `${sourceColor(row.source)}22`,
+                                                    color: sourceColor(row.source),
+                                                    padding: "3px 7px",
+                                                    borderRadius: 4,
+                                                    fontSize: 12,
+                                                    fontWeight: 600,
+                                                }}>{row.source}</span>
+                                            </td>
+                                            <td style={{ maxWidth: 400, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                                {row.no_results && (
+                                                    <span style={{ color: "#ef4444", fontSize: 11, fontWeight: 600, marginRight: 6 }}>NO RESULTS</span>
+                                                )}
+                                                {row.error && (
+                                                    <span style={{ color: "#f59e0b", fontSize: 11, fontWeight: 600, marginRight: 6 }}>ERROR</span>
+                                                )}
+                                                <span title={row.query}>{row.query}</span>
+                                            </td>
+                                            <td style={{ textAlign: "center", color: row.result_count === 0 ? "#ef4444" : "#cbd5e1" }}>{row.result_count}</td>
+                                            <td style={{ color: "#64748b", fontSize: 12 }}>
+                                                {topIds.length > 0 ? (
+                                                    <span>
+                                                        #{topIds[0]}
+                                                        {row.top_similarity != null && <span style={{ color: "#475569", marginLeft: 6 }}>{(row.top_similarity * 100).toFixed(0)}%</span>}
+                                                    </span>
+                                                ) : "—"}
+                                            </td>
+                                            <td style={{ textAlign: "right", color: "#64748b", fontSize: 12 }}>
+                                                {row.latency_ms != null ? `${row.latency_ms}ms` : "—"}
+                                            </td>
+                                            <td style={{ color: "#64748b" }}>{row.new_api_user_id}</td>
+                                        </tr>
+                                    );
+                                })}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 16, color: "#64748b", fontSize: 13 }}>
+                        <span>{from}–{to} of {total}</span>
+                        <div style={{ display: "flex", gap: 8 }}>
+                            <button onClick={() => setPage(0)} disabled={page === 0} style={{ padding: "5px 10px", borderRadius: 6, border: "1px solid #334155", background: "transparent", color: "#cbd5e1", cursor: "pointer", opacity: page === 0 ? 0.4 : 1 }}>«</button>
+                            <button onClick={() => setPage(p => Math.max(0, p - 1))} disabled={page === 0} style={{ padding: "5px 10px", borderRadius: 6, border: "1px solid #334155", background: "transparent", color: "#cbd5e1", cursor: "pointer", opacity: page === 0 ? 0.4 : 1 }}>‹</button>
+                            <span style={{ padding: "5px 10px" }}>{page + 1} / {pageCount}</span>
+                            <button onClick={() => setPage(p => Math.min(pageCount - 1, p + 1))} disabled={page >= pageCount - 1} style={{ padding: "5px 10px", borderRadius: 6, border: "1px solid #334155", background: "transparent", color: "#cbd5e1", cursor: "pointer", opacity: page >= pageCount - 1 ? 0.4 : 1 }}>›</button>
+                            <button onClick={() => setPage(pageCount - 1)} disabled={page >= pageCount - 1} style={{ padding: "5px 10px", borderRadius: 6, border: "1px solid #334155", background: "transparent", color: "#cbd5e1", cursor: "pointer", opacity: page >= pageCount - 1 ? 0.4 : 1 }}>»</button>
+                        </div>
+                    </div>
+                </>
+            )}
         </div>
     );
 }

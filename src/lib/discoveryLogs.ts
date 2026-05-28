@@ -22,7 +22,7 @@ export function getRequestIp(req: NextRequest): string | null {
 export async function logSkillDiscovery(params: {
     newApiUserId: number;
     tokenId?: number | null;
-    source: "rest" | "mcp";
+    source: "rest" | "mcp" | "telegram";
     query: string;
     page?: number;
     category?: string | null;

@@ -28,6 +28,7 @@ import {
     getThreadMessages,
     saveAssistantMessageIfThread,
 } from "@/lib/skillThread";
+import { logSkillDiscovery } from "@/lib/discoveryLogs";
 import {
     hasTelegramAttachments,
     telegramAttachmentParams,
@@ -1436,7 +1437,21 @@ export async function POST(req: NextRequest) {
         }
 
         await sendTelegramChatAction(chatId);
+        const planStart = Date.now();
         const { plan, candidates, hasMore, routingText } = await planTelegramRequest(text, attachments);
+
+        findLinkedTelegramAccount(telegramUserId).then((linked) => {
+            logSkillDiscovery({
+                newApiUserId: linked?.newApiUserId ?? TRIAL_NEWAPI_USER_ID,
+                source: "telegram",
+                query: routingText,
+                skills: candidates,
+                latencyMs: Date.now() - planStart,
+                sessionId: linked
+                    ? `telegram-linked-${linked.newApiUserId}-${new Date().toISOString().slice(0, 10)}`
+                    : `telegram-${telegramUserId}-${new Date().toISOString().slice(0, 10)}`,
+            });
+        }).catch(() => {});
 
         if (plan.action === "help") {
             await sendTelegramMessage({
