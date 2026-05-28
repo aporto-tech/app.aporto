@@ -57,10 +57,10 @@ const PENDING_SELECTION_TTL_MS = 10 * 60 * 1000;
 const RUNNING_SKILL_DEDUP_TTL_MS = 30 * 60 * 1000;
 const TELEGRAM_SKILL_CHOICES_LIMIT = 10;
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://app.aporto.tech";
-const GENERATION_TERMS = /\b(generate|create|make|render|produce|сгенерируй|создай|сделай|нарисуй|создать|генерац)\b/i;
-const VIDEO_TERMS = /\b(video|ролик|видео|анимац)\b/i;
-const IMAGE_TERMS = /\b(image|photo|picture|картин|изображ|фото)\b/i;
-const AUDIO_TERMS = /\b(audio|voice|speech|speach|tts|озвуч|голос|аудио|музык|music|song|песн)\b/i;
+const GENERATION_TERMS = /\b(?:generate|create|make|render|produce)\b|(?:сгенерируй|создай|сделай|нарисуй|создать|генерир)\w*/i;
+const VIDEO_TERMS = /\bvideo\b|ролик\w*|видео\w*|анимац\w*|клип\w*/i;
+const IMAGE_TERMS = /\b(?:image|photo|picture)\b|картин\w*|изображ\w*|фото\w*|рисун\w*|постер\w*|баннер\w*|обложк\w*|превью|иллюстрац\w*/i;
+const AUDIO_TERMS = /\b(?:audio|voice|speech|speach|tts|music|song)\b|озвуч\w*|голос\w*|аудио\w*|музык\w*|песн\w*|звук\w*/i;
 const TEXT_TO_SPEECH_TERMS = /\b(?:text\s*[- ]?to\s*[- ]?spe(?:e|a)ch|tts)\b|озвуч/i;
 const KIE_PROVIDER_TERMS = /\bkie(?:\s+provider)?\b/i;
 const LLM_MODEL_TERMS = /\b(llm|ai\s+models?|models?|model|chatgpt|gpt|claude|sonnet|opus|haiku|gemini|codex)\b|(?:ии|ai)\s+модел|(?:какие|what|which).*(?:модел|models?)/i;
@@ -214,6 +214,46 @@ function normalizeRoutingText(userText: string): string {
         .replace(/\bkie\s+provider\b/gi, "kie");
     if (LLM_MODEL_TERMS.test(normalized)) {
         normalized = `${normalized} llm chat model claude sonnet gpt gemini codex`;
+    }
+    // Russian → English augmentation for embedding search
+    // Visual / image
+    if (IMAGE_TERMS.test(normalized)) {
+        normalized = `${normalized} image photo picture illustration visual generate`;
+    }
+    // Video / animation
+    if (VIDEO_TERMS.test(normalized)) {
+        normalized = `${normalized} video animation clip generate`;
+    }
+    // Audio / voice / music
+    if (AUDIO_TERMS.test(normalized)) {
+        normalized = `${normalized} audio voice speech music sound generate`;
+    }
+    // Generation verbs (сделай, создай, нарисуй, etc.)
+    if (/(?:сделай|создай|нарисуй|сгенерируй|придумай|создать|нарисовать|генерир)\w*/i.test(normalized)) {
+        normalized = `${normalized} generate create make`;
+    }
+    // Translation
+    if (/переведи|перевод\w*|переводчик\w*/i.test(normalized)) {
+        normalized = `${normalized} translate translation`;
+    }
+    // Writing / text generation
+    if (/напиши\w*|составь\w*|напишет|написать/i.test(normalized)) {
+        normalized = `${normalized} write text generate`;
+    }
+    // Summarize
+    if (/суммаризуй|краткое\s+содержание|сократи|резюмируй/i.test(normalized)) {
+        normalized = `${normalized} summarize summary`;
+    }
+    // Search / scraping
+    if (/найди|поищи|поиск\w*|найти/i.test(normalized)) {
+        normalized = `${normalized} search find`;
+    }
+    if (/спарси\w*|скрапи\w*|парс\w*/i.test(normalized)) {
+        normalized = `${normalized} scrape extract data`;
+    }
+    // Email / messaging
+    if (/отправ[ьи]\w*.*(?:письм|email|мейл)|(?:письм|email|мейл).*отправ\w*/i.test(normalized)) {
+        normalized = `${normalized} send email`;
     }
     return normalized;
 }
