@@ -608,6 +608,29 @@ async function planTelegramRequest(userText: string, attachments: TelegramUpload
     return { plan: parseJsonObject(content), candidates, hasMore, routingText };
 }
 
+function welcomeMessage(): string {
+    return [
+        "Welcome to Aporto!",
+        "",
+        "Aporto is an AI skills marketplace. Just describe what you need and the bot picks the right skill and runs it.",
+        "",
+        "Examples:",
+        "  generate a 720p video of a neon city",
+        "  find LinkedIn profiles of AI startup founders",
+        "  text to speech: Welcome to Aporto",
+        "  claude sonnet 4.6 — explain how pgvector works",
+        "  remove the background from this image",
+        "",
+        "No account needed — trial runs are available right away.",
+        "To unlock full access, link your Aporto account:",
+        `  1. Sign up at ${APP_URL}`,
+        "  2. Open Settings → Integrations → Telegram",
+        "  3. Click Create Link Code, then send /link CODE here",
+        "",
+        "Type /help for the full command list.",
+    ].join("\n");
+}
+
 function helpMessage(): string {
     return [
         "Напишите, что нужно сделать, например:",
@@ -1492,7 +1515,18 @@ export async function POST(req: NextRequest) {
     }
     if (!text) return NextResponse.json({ ok: true });
 
-    if (text === "/start" || text === "/help") {
+    if (text === "/start") {
+        await sendTelegramMessage({
+            chatId,
+            text: welcomeMessage(),
+            replyToMessageId: message.message_id,
+        });
+        findLinkedTelegramAccount(telegramUserId).then(linked => {
+            trackTgCommand({ telegramUserId, accountType: linked ? "linked" : "trial", aportoUserId: linked?.userId ?? null, command: text });
+        }).catch(() => {});
+        return NextResponse.json({ ok: true });
+    }
+    if (text === "/help") {
         await sendTelegramMessage({
             chatId,
             text: helpMessage(),
