@@ -221,25 +221,34 @@ const _NORM_MODEL = process.env.QUERY_NORM_MODEL ?? "deepseek-v4-flash";
 
 const _NORM_SYSTEM_PROMPT = [
     "You are a search query normalizer for an AI skills marketplace.",
-    "Rewrite the user's query as a concise English skill description (5-15 words).",
-    "Focus on the capability or action needed, ignore platform/brand context.",
-    "Output ONLY the normalized query, no explanation, no punctuation at end.",
+    "Translate and rephrase the user's query into a SHORT English skill description (3-8 words).",
+    "Focus on the core capability. Do NOT add synonyms or pad with extra words.",
+    "Output ONLY the normalized query, nothing else.",
     "",
     "Examples:",
-    "\"мне нужно сделать картинку для Ozon\" → generate product image banner for e-commerce listing",
-    "\"нарисуй логотип для стартапа\" → generate logo illustration for startup",
-    "\"haiku - как дела?\" → llm chat conversation claude haiku",
-    "\"create a 720p video of a neon city\" → generate 720p video neon city animation",
-    "\"переведи текст с русского на английский\" → translate text russian to english",
-    "\"найди email компании по сайту\" → find extract company email from website",
-    "\"озвучь текст голосом\" → text to speech voice audio tts",
-    "\"спарси товары с wildberries\" → scrape extract product data e-commerce",
+    "\"мне нужно сделать картинку для Ozon\" → generate product image",
+    "\"нарисуй логотип для стартапа\" → generate logo illustration",
+    "\"haiku - как дела?\" → chat with claude haiku llm",
+    "\"сделай видео 720p неонового города\" → generate 720p video",
+    "\"переведи текст с русского на английский\" → translate russian to english",
+    "\"найди email компании по сайту\" → find company email from website",
+    "\"озвучь текст голосом\" → text to speech",
+    "\"спарси товары с wildberries\" → scrape product data",
 ].join("\n");
 
 async function normalizeQueryWithLLM(query: string): Promise<string> {
     const key = query.trim().toLowerCase();
     const hit = _normCache.get(key);
     if (hit && hit.exp > Date.now()) return hit.result;
+
+    // Skip LLM for English/ASCII queries — they embed well without translation.
+    // Only call the LLM when Cyrillic (or other non-Latin) text is present.
+    const cyrillicCount = (query.match(/[а-яёА-ЯЁ]/g) ?? []).length;
+    if (cyrillicCount < 3) {
+        const result = query.replace(/\bspeach\b/gi, "speech").replace(/\bkie\s+provider\b/gi, "kie");
+        _normCache.set(key, { result, exp: Date.now() + _NORM_TTL_MS });
+        return result;
+    }
 
     const baseUrl = process.env.NEWAPI_URL ?? "https://api.aporto.tech";
     const apiKey = process.env.NEWAPI_ADMIN_KEY;

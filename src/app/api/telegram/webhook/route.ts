@@ -417,12 +417,13 @@ async function telegramLlmModelPage(page: number): Promise<TelegramCandidate[]> 
 async function telegramDiscoveryPage(userText: string, page: number, attachments: TelegramUploadedAttachment[] = []): Promise<TelegramCandidate[]> {
     if (isLlmCatalogRequest(userText)) return telegramLlmModelPage(page);
     const routingText = routingTextWithAttachments(userText, attachments);
-    let candidates = await discoverSkills(routingText, page);
+    // Pass original userText to discoverSkills so LLM normalization sees the clean
+    // query (not the regex-expanded version which confuses the LLM).
+    // routingText (regex-expanded) is kept only for intent detection in filters.
+    let candidates = await discoverSkills(userText, page);
 
-    // If a media modality is clearly detected but the general embedding search
-    // returned no matching skills (e.g. brand names like "Ozon" bias toward
-    // business scrapers), do a category-filtered fallback search so the user
-    // sees relevant results instead of unrelated extractors.
+    // If a media modality is detected but embedding returned no matching skills,
+    // do a category-filtered fallback (e.g. "Ozon" brand biases toward scrapers).
     const mediaCategory = IMAGE_TERMS.test(routingText) ? "media/image"
         : VIDEO_TERMS.test(routingText) ? "media/video"
         : AUDIO_TERMS.test(routingText) ? "media/audio"
@@ -430,7 +431,7 @@ async function telegramDiscoveryPage(userText: string, page: number, attachments
     if (mediaCategory && page === 0) {
         const hasMediaCandidate = candidates.some((c) => c.category === mediaCategory);
         if (!hasMediaCandidate) {
-            const specific = await discoverSkills(routingText, 0, { category: mediaCategory });
+            const specific = await discoverSkills(userText, 0, { category: mediaCategory });
             if (specific.length) candidates = [...specific, ...candidates.slice(0, 5)];
         }
     }
