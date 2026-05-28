@@ -30,6 +30,15 @@ import {
 } from "@/lib/skillThread";
 import { logSkillDiscovery } from "@/lib/discoveryLogs";
 import {
+    trackTgAccountLinked,
+    trackTgAccountUnlinked,
+    trackTgCommand,
+    trackTgMessage,
+    trackTgResultDelivered,
+    trackTgSkillRun,
+    trackTgTrialBlocked,
+} from "@/lib/mixpanelTelegram";
+import {
     hasTelegramAttachments,
     telegramAttachmentParams,
     telegramMessageText,
@@ -991,6 +1000,10 @@ async function runTelegramSkill(input: {
                     text: telegramLimitMessage(),
                     replyToMessageId: input.replyToMessageId,
                 });
+                trackTgTrialBlocked({
+                    telegramUserId: input.telegramUserId,
+                    skillId: typeof input.plan.skillId === "number" ? input.plan.skillId : null,
+                });
                 return;
             }
             reservedUsageId = reservation.usageId;
@@ -1010,6 +1023,16 @@ async function runTelegramSkill(input: {
             sessionId,
             billingMode: linkedAccount ? "paid" : "trial",
             trialOnly: false,
+        });
+
+        trackTgSkillRun({
+            telegramUserId: input.telegramUserId,
+            accountType: linkedAccount ? "linked" : "trial",
+            aportoUserId: linkedAccount?.userId ?? null,
+            skillId: result.skillId || (typeof input.plan.skillId === "number" ? input.plan.skillId : null),
+            intent: input.plan.intent || input.text,
+            billingMode: linkedAccount ? "paid" : "trial",
+            sessionId,
         });
 
         await updateConversation({
@@ -1069,6 +1092,16 @@ async function runTelegramSkill(input: {
         if (assistantText && result.skillId) {
             await saveAssistantMessageIfThread(input.telegramUserId, result.skillId, assistantText).catch(() => {});
         }
+
+        trackTgResultDelivered({
+            telegramUserId: input.telegramUserId,
+            skillId: result.skillId ?? (typeof input.plan.skillId === "number" ? input.plan.skillId : null),
+            status: result.status,
+            costUsd: result.costUSD ?? null,
+            hasText: Boolean(assistantText),
+            hasFiles: Boolean(result.artifacts?.length),
+            deliveryType: "sync",
+        });
     } catch (error) {
         if (reservedUsageId) {
             await completeAnonymousTrialRun({
@@ -1337,6 +1370,9 @@ export async function POST(req: NextRequest) {
             text: helpMessage(),
             replyToMessageId: message.message_id,
         });
+        findLinkedTelegramAccount(telegramUserId).then(linked => {
+            trackTgCommand({ telegramUserId, accountType: linked ? "linked" : "trial", aportoUserId: linked?.userId ?? null, command: text });
+        }).catch(() => {});
         return NextResponse.json({ ok: true });
     }
     if (text === "/choose") {
@@ -1345,6 +1381,9 @@ export async function POST(req: NextRequest) {
             chatId,
             replyToMessageId: message.message_id,
         });
+        findLinkedTelegramAccount(telegramUserId).then(linked => {
+            trackTgCommand({ telegramUserId, accountType: linked ? "linked" : "trial", aportoUserId: linked?.userId ?? null, command: "/choose" });
+        }).catch(() => {});
         return NextResponse.json({ ok: true });
     }
     if (text === "/more") {
@@ -1353,6 +1392,9 @@ export async function POST(req: NextRequest) {
             chatId,
             replyToMessageId: message.message_id,
         });
+        findLinkedTelegramAccount(telegramUserId).then(linked => {
+            trackTgCommand({ telegramUserId, accountType: linked ? "linked" : "trial", aportoUserId: linked?.userId ?? null, command: "/more" });
+        }).catch(() => {});
         return NextResponse.json({ ok: true });
     }
     if (text === "/dashboard") {
@@ -1361,6 +1403,9 @@ export async function POST(req: NextRequest) {
             text: `${APP_URL}/dashboard`,
             replyToMessageId: message.message_id,
         });
+        findLinkedTelegramAccount(telegramUserId).then(linked => {
+            trackTgCommand({ telegramUserId, accountType: linked ? "linked" : "trial", aportoUserId: linked?.userId ?? null, command: "/dashboard" });
+        }).catch(() => {});
         return NextResponse.json({ ok: true });
     }
     if (text.toLowerCase().startsWith("/link")) {
@@ -1381,15 +1426,24 @@ export async function POST(req: NextRequest) {
                 : linked.message,
             replyToMessageId: message.message_id,
         });
+        if (linked.success) {
+            findLinkedTelegramAccount(telegramUserId).then(account => {
+                trackTgAccountLinked({ telegramUserId, aportoUserId: account?.userId ?? null, linkedEmail: linked.linkedEmail });
+            }).catch(() => {});
+        }
+        trackTgCommand({ telegramUserId, accountType: linked.success ? "linked" : "trial", command: "/link" });
         return NextResponse.json({ ok: true });
     }
     if (text === "/unlink") {
+        const accountBefore = await findLinkedTelegramAccount(telegramUserId);
         await prisma.telegramAccount.deleteMany({ where: { telegramUserId } });
         await sendTelegramMessage({
             chatId,
             text: "Telegram отвязан от Aporto. Следующие запуски пойдут через trial.",
             replyToMessageId: message.message_id,
         });
+        trackTgAccountUnlinked({ telegramUserId, aportoUserId: accountBefore?.userId ?? null });
+        trackTgCommand({ telegramUserId, accountType: "trial", command: "/unlink" });
         return NextResponse.json({ ok: true });
     }
     if (text.toLowerCase().startsWith("/quiet") || text.toLowerCase().startsWith("/silent") || text.toLowerCase() === "/verbose") {
@@ -1413,6 +1467,9 @@ export async function POST(req: NextRequest) {
                 : "Quiet mode выключен. Буду показывать служебные сообщения и costUSD.",
             replyToMessageId: message.message_id,
         });
+        findLinkedTelegramAccount(telegramUserId).then(linked => {
+            trackTgCommand({ telegramUserId, accountType: linked ? "linked" : "trial", aportoUserId: linked?.userId ?? null, command: text.toLowerCase().startsWith("/quiet") ? "/quiet" : "/verbose" });
+        }).catch(() => {});
         return NextResponse.json({ ok: true });
     }
 
@@ -1441,15 +1498,30 @@ export async function POST(req: NextRequest) {
         const { plan, candidates, hasMore, routingText } = await planTelegramRequest(text, attachments);
 
         findLinkedTelegramAccount(telegramUserId).then((linked) => {
+            const latencyMs = Date.now() - planStart;
             logSkillDiscovery({
                 newApiUserId: linked?.newApiUserId ?? TRIAL_NEWAPI_USER_ID,
                 source: "telegram",
                 query: routingText,
                 skills: candidates,
-                latencyMs: Date.now() - planStart,
+                latencyMs,
                 sessionId: linked
                     ? `telegram-linked-${linked.newApiUserId}-${new Date().toISOString().slice(0, 10)}`
                     : `telegram-${telegramUserId}-${new Date().toISOString().slice(0, 10)}`,
+            });
+            trackTgMessage({
+                telegramUserId,
+                accountType: linked ? "linked" : "trial",
+                aportoUserId: linked?.userId ?? null,
+                query: routingText,
+                hasAttachments: attachments.length > 0,
+                candidatesCount: candidates.length,
+                topSkillId: candidates[0]?.id ?? null,
+                topSimilarity: candidates[0]?.similarity != null ? Number(candidates[0].similarity) : null,
+                planAction: plan.action ?? "unknown",
+                planConfidence: plan.confidence != null ? Number(plan.confidence) : null,
+                selectedSkillId: typeof plan.skillId === "number" ? plan.skillId : null,
+                latencyMs,
             });
         }).catch(() => {});
 

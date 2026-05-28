@@ -6,6 +6,7 @@ import {
     type TelegramReplyMarkup,
 } from "@/lib/telegramBot";
 import { saveAssistantMessageIfThread } from "@/lib/skillThread";
+import { trackTgResultDelivered } from "@/lib/mixpanelTelegram";
 
 type SkillRunResult = Awaited<ReturnType<typeof getSkillRun>>;
 
@@ -224,6 +225,17 @@ export async function deliverDueTelegramSkillRuns(input: {
                     await saveAssistantMessageIfThread(delivery.telegramUserId, run.skillId, assistantText).catch(() => {});
                 }
             }
+
+            trackTgResultDelivered({
+                telegramUserId: delivery.telegramUserId,
+                skillId: run.skillId ?? null,
+                status: result.status,
+                costUsd: result.costUSD ?? null,
+                hasText: Boolean(textFromResultData(result.data)),
+                hasFiles: Boolean(result.artifacts?.length),
+                deliveryType: "async",
+                deliveryAttempts: delivery.attempts,
+            });
 
             await prisma.telegramSkillDelivery.update({
                 where: { id: delivery.id },
