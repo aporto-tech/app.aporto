@@ -208,11 +208,79 @@ export async function findExactSkillByIntentWithFilters(intent: string, filters?
     return exact[0] ? skillFromRow(exact[0].row) : null;
 }
 
-// ── Query expansion for embedding search ─────────────────────────────────────
-// Appends English synonyms so that Russian queries (and common typos) map to
-// the right skill embeddings. Called inside discoverSkills() — applies to all
-// sources (Telegram, MCP, REST/CLI).
+// ── Query normalization for embedding search ──────────────────────────────────
+// Uses a fast LLM to rewrite any user query (any language, any phrasing) into
+// a concise English skill description before embedding. Handles Russian, typos,
+// brand names, ambiguous phrasing — anything regexes can't reliably cover.
+// Falls back to regex expansion if the LLM call fails or is unconfigured.
+// Applied inside discoverSkills() — covers Telegram, MCP, and REST/CLI.
 
+const _normCache = new Map<string, { result: string; exp: number }>();
+const _NORM_TTL_MS = 30 * 60 * 1000; // 30 min in-process cache
+const _NORM_MODEL = process.env.QUERY_NORM_MODEL ?? "deepseek-v4-flash";
+
+const _NORM_SYSTEM_PROMPT = [
+    "You are a search query normalizer for an AI skills marketplace.",
+    "Rewrite the user's query as a concise English skill description (5-15 words).",
+    "Focus on the capability or action needed, ignore platform/brand context.",
+    "Output ONLY the normalized query, no explanation, no punctuation at end.",
+    "",
+    "Examples:",
+    "\"мне нужно сделать картинку для Ozon\" → generate product image banner for e-commerce listing",
+    "\"нарисуй логотип для стартапа\" → generate logo illustration for startup",
+    "\"haiku - как дела?\" → llm chat conversation claude haiku",
+    "\"create a 720p video of a neon city\" → generate 720p video neon city animation",
+    "\"переведи текст с русского на английский\" → translate text russian to english",
+    "\"найди email компании по сайту\" → find extract company email from website",
+    "\"озвучь текст голосом\" → text to speech voice audio tts",
+    "\"спарси товары с wildberries\" → scrape extract product data e-commerce",
+].join("\n");
+
+async function normalizeQueryWithLLM(query: string): Promise<string> {
+    const key = query.trim().toLowerCase();
+    const hit = _normCache.get(key);
+    if (hit && hit.exp > Date.now()) return hit.result;
+
+    const baseUrl = process.env.NEWAPI_URL ?? "https://api.aporto.tech";
+    const apiKey = process.env.NEWAPI_ADMIN_KEY;
+    if (!apiKey) return expandQueryForEmbedding(query);
+
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 5000);
+    try {
+        const res = await fetch(`${baseUrl}/v1/chat/completions`, {
+            method: "POST",
+            headers: {
+                "Authorization": `Bearer ${apiKey}`,
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+                model: _NORM_MODEL,
+                messages: [
+                    { role: "system", content: _NORM_SYSTEM_PROMPT },
+                    { role: "user", content: query },
+                ],
+                temperature: 0,
+                max_tokens: 60,
+            }),
+            signal: controller.signal,
+        });
+        clearTimeout(timer);
+        if (!res.ok) throw new Error(`llm ${res.status}`);
+        const data = await res.json() as { choices?: Array<{ message?: { content?: string } }> };
+        const normalized = data.choices?.[0]?.message?.content?.trim();
+        if (!normalized || normalized.length < 3) throw new Error("empty");
+        _normCache.set(key, { result: normalized, exp: Date.now() + _NORM_TTL_MS });
+        return normalized;
+    } catch {
+        clearTimeout(timer);
+        const fallback = expandQueryForEmbedding(query);
+        _normCache.set(key, { result: fallback, exp: Date.now() + _NORM_TTL_MS });
+        return fallback;
+    }
+}
+
+// Regex-based fallback — used when LLM normalization is unavailable or fails.
 const _IMAGE_RE = /\b(?:image|photo|picture)\b|картин\w*|изображ\w*|фото\w*|рисун\w*|постер\w*|баннер\w*|обложк\w*|превью|иллюстрац\w*/i;
 const _VIDEO_RE = /\bvideo\b|ролик\w*|видео\w*|анимац\w*|клип\w*/i;
 const _AUDIO_RE = /\b(?:audio|voice|speech|speach|tts|music|song)\b|озвуч\w*|голос\w*|аудио\w*|музык\w*|песн\w*|звук\w*/i;
@@ -226,7 +294,7 @@ function expandQueryForEmbedding(query: string): string {
     if (_VIDEO_RE.test(q)) q = `${q} video animation clip generate`;
     if (_AUDIO_RE.test(q)) q = `${q} audio voice speech music sound generate`;
     if (_LLM_RE.test(q)) q = `${q} llm chat model claude sonnet gpt gemini codex`;
-    if (/(?:сделай|создай|нарисуй|сгенерируй|придумай|создать|нарисовать|генерир)\w*/i.test(q)) q = `${q} generate create make`;
+    if (/(?:сделай|создай|нарисуй|сгенерируй|придумай|создать|сделать|нарисовать|сгенерировать|генерир)\w*/i.test(q)) q = `${q} generate create make`;
     if (/переведи|перевод\w*|переводчик\w*/i.test(q)) q = `${q} translate translation`;
     if (/напиши\w*|составь\w*|напишет|написать/i.test(q)) q = `${q} write text generate`;
     if (/суммаризуй|краткое\s+содержание|сократи|резюмируй/i.test(q)) q = `${q} summarize summary`;
@@ -243,12 +311,12 @@ export async function discoverSkills(
     page = 0,
     filters?: { category?: string; capability?: string; trialOnly?: boolean },
 ): Promise<DiscoveredSkill[]> {
-    const expanded = expandQueryForEmbedding(query);
-    const embedding = await embedQuery(expanded);
+    const normalized = await normalizeQueryWithLLM(query);
+    const embedding = await embedQuery(normalized);
     const vectorLiteral = `[${embedding.join(",")}]`;
     const offset = page * PAGE_SIZE;
     const lexicalTerms = Array.from(new Set(
-        expanded
+        normalized
             .toLowerCase()
             .replace(/[^a-z0-9.\s-]/g, " ")
             .split(/\s+/)

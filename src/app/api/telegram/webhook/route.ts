@@ -57,7 +57,7 @@ const PENDING_SELECTION_TTL_MS = 10 * 60 * 1000;
 const RUNNING_SKILL_DEDUP_TTL_MS = 30 * 60 * 1000;
 const TELEGRAM_SKILL_CHOICES_LIMIT = 10;
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://app.aporto.tech";
-const GENERATION_TERMS = /\b(?:generate|create|make|render|produce)\b|(?:сгенерируй|создай|сделай|нарисуй|создать|генерир)\w*/i;
+const GENERATION_TERMS = /\b(?:generate|create|make|render|produce)\b|(?:сгенерируй|создай|сделай|нарисуй|создать|сделать|нарисовать|генерир|сгенерировать)\w*/i;
 const VIDEO_TERMS = /\bvideo\b|ролик\w*|видео\w*|анимац\w*|клип\w*/i;
 const IMAGE_TERMS = /\b(?:image|photo|picture)\b|картин\w*|изображ\w*|фото\w*|рисун\w*|постер\w*|баннер\w*|обложк\w*|превью|иллюстрац\w*/i;
 const AUDIO_TERMS = /\b(?:audio|voice|speech|speach|tts|music|song)\b|озвуч\w*|голос\w*|аудио\w*|музык\w*|песн\w*|звук\w*/i;
@@ -272,7 +272,7 @@ function filterCandidatesForIntent(userText: string, candidates: Awaited<ReturnT
         && candidates.some((skill) => /media\/image|kie-image|image-generation|text-to-image/.test(candidateText(skill)))
         && candidates.some((skill) => /media\/video|kie-video|text-to-video|image-to-video/.test(candidateText(skill)));
 
-    if (!hasExplicitGenerationIntent && !shouldPreferImage) return candidates;
+    if (!hasExplicitGenerationIntent && !shouldPreferImage && !wantsImage && !wantsVideo && !wantsAudio) return candidates;
 
     const filtered = candidates.filter((skill) => {
         const text = candidateText(skill);
@@ -417,7 +417,25 @@ async function telegramLlmModelPage(page: number): Promise<TelegramCandidate[]> 
 async function telegramDiscoveryPage(userText: string, page: number, attachments: TelegramUploadedAttachment[] = []): Promise<TelegramCandidate[]> {
     if (isLlmCatalogRequest(userText)) return telegramLlmModelPage(page);
     const routingText = routingTextWithAttachments(userText, attachments);
-    return withTelegramPriceLabels(filterTelegramVisibleCandidates(filterCandidatesForIntent(routingText, await discoverSkills(routingText, page))));
+    let candidates = await discoverSkills(routingText, page);
+
+    // If a media modality is clearly detected but the general embedding search
+    // returned no matching skills (e.g. brand names like "Ozon" bias toward
+    // business scrapers), do a category-filtered fallback search so the user
+    // sees relevant results instead of unrelated extractors.
+    const mediaCategory = IMAGE_TERMS.test(routingText) ? "media/image"
+        : VIDEO_TERMS.test(routingText) ? "media/video"
+        : AUDIO_TERMS.test(routingText) ? "media/audio"
+        : null;
+    if (mediaCategory && page === 0) {
+        const hasMediaCandidate = candidates.some((c) => c.category === mediaCategory);
+        if (!hasMediaCandidate) {
+            const specific = await discoverSkills(routingText, 0, { category: mediaCategory });
+            if (specific.length) candidates = [...specific, ...candidates.slice(0, 5)];
+        }
+    }
+
+    return withTelegramPriceLabels(filterTelegramVisibleCandidates(filterCandidatesForIntent(routingText, candidates)));
 }
 
 async function telegramDiscoveryHasMore(userText: string, page: number, attachments: TelegramUploadedAttachment[] = []): Promise<boolean> {
