@@ -208,6 +208,34 @@ export async function findExactSkillByIntentWithFilters(intent: string, filters?
     return exact[0] ? skillFromRow(exact[0].row) : null;
 }
 
+// ── Query expansion for embedding search ─────────────────────────────────────
+// Appends English synonyms so that Russian queries (and common typos) map to
+// the right skill embeddings. Called inside discoverSkills() — applies to all
+// sources (Telegram, MCP, REST/CLI).
+
+const _IMAGE_RE = /\b(?:image|photo|picture)\b|картин\w*|изображ\w*|фото\w*|рисун\w*|постер\w*|баннер\w*|обложк\w*|превью|иллюстрац\w*/i;
+const _VIDEO_RE = /\bvideo\b|ролик\w*|видео\w*|анимац\w*|клип\w*/i;
+const _AUDIO_RE = /\b(?:audio|voice|speech|speach|tts|music|song)\b|озвуч\w*|голос\w*|аудио\w*|музык\w*|песн\w*|звук\w*/i;
+const _LLM_RE = /\b(?:llm|ai\s+models?|model|chatgpt|gpt|claude|sonnet|opus|haiku|gemini|codex)\b|(?:ии|ai)\s+модел/i;
+
+function expandQueryForEmbedding(query: string): string {
+    let q = query
+        .replace(/\bspeach\b/gi, "speech")
+        .replace(/\bkie\s+provider\b/gi, "kie");
+    if (_IMAGE_RE.test(q)) q = `${q} image photo picture illustration visual generate`;
+    if (_VIDEO_RE.test(q)) q = `${q} video animation clip generate`;
+    if (_AUDIO_RE.test(q)) q = `${q} audio voice speech music sound generate`;
+    if (_LLM_RE.test(q)) q = `${q} llm chat model claude sonnet gpt gemini codex`;
+    if (/(?:сделай|создай|нарисуй|сгенерируй|придумай|создать|нарисовать|генерир)\w*/i.test(q)) q = `${q} generate create make`;
+    if (/переведи|перевод\w*|переводчик\w*/i.test(q)) q = `${q} translate translation`;
+    if (/напиши\w*|составь\w*|напишет|написать/i.test(q)) q = `${q} write text generate`;
+    if (/суммаризуй|краткое\s+содержание|сократи|резюмируй/i.test(q)) q = `${q} summarize summary`;
+    if (/найди|поищи|поиск\w*|найти/i.test(q)) q = `${q} search find`;
+    if (/спарси\w*|скрапи\w*|парс\w*/i.test(q)) q = `${q} scrape extract data`;
+    if (/отправ[ьи]\w*.*(?:письм|email|мейл)|(?:письм|email|мейл).*отправ\w*/i.test(q)) q = `${q} send email`;
+    return q;
+}
+
 // ── discoverSkills ────────────────────────────────────────────────────────────
 
 export async function discoverSkills(
@@ -215,11 +243,12 @@ export async function discoverSkills(
     page = 0,
     filters?: { category?: string; capability?: string; trialOnly?: boolean },
 ): Promise<DiscoveredSkill[]> {
-    const embedding = await embedQuery(query);
+    const expanded = expandQueryForEmbedding(query);
+    const embedding = await embedQuery(expanded);
     const vectorLiteral = `[${embedding.join(",")}]`;
     const offset = page * PAGE_SIZE;
     const lexicalTerms = Array.from(new Set(
-        query
+        expanded
             .toLowerCase()
             .replace(/[^a-z0-9.\s-]/g, " ")
             .split(/\s+/)
