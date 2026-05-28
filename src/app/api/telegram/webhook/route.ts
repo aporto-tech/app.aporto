@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { runSkill } from "@/lib/skillRuns";
-import { discoverSkills, normalizeQueryWithLLM } from "@/lib/routing";
+import { discoverSkills, findExactSkillByIntent, normalizeQueryWithLLM, type SkillLookup } from "@/lib/routing";
 import {
     TRIAL_LIMIT_MESSAGE,
     TRIAL_NEWAPI_USER_ID,
@@ -290,8 +290,9 @@ function filterCandidatesForIntent(userText: string, candidates: Awaited<ReturnT
 function filterTelegramVisibleCandidates(candidates: Awaited<ReturnType<typeof discoverSkills>>) {
     return candidates.filter((skill) => {
         if (skill.category === "media/task") return false;
-        const text = candidateText(skill);
-        return !/task-status|poll-async-generation|check-task-status|kie media task status/.test(text);
+        // Filter by name only — description may legitimately mention polling skills
+        const name = skill.name.toLowerCase();
+        return !/task-status|poll-async-generation|check-task-status/.test(name);
     });
 }
 
@@ -443,8 +444,76 @@ async function telegramDiscoveryHasMore(userText: string, page: number, attachme
     return (await telegramDiscoveryPage(userText, page + 1, attachments)).length > 0;
 }
 
+function skillLookupToCandidate(skill: SkillLookup): TelegramCandidate {
+    return {
+        id: skill.id,
+        name: skill.name,
+        description: skill.description,
+        category: skill.category,
+        capabilities: skill.capabilities,
+        inputTypes: [],
+        outputTypes: [],
+        paramsSchema: skill.paramsSchema,
+        tags: skill.tags,
+        similarity: 1.0,
+        priceUSD: null,
+        trialAvailable: false,
+    };
+}
+
+/**
+ * Tier 0: pre-discovery explicit match.
+ * When the user names a specific model version ("sonnet 4.6 - ...") or KIE provider,
+ * look it up directly in the DB and skip the expensive LLM normalize + embedQuery step.
+ */
+async function detectTier0Intent(
+    userText: string,
+    attachments: TelegramUploadedAttachment[],
+): Promise<TelegramCandidate | null> {
+    // Skip Tier 0 if attachments present — file type can change the needed skill
+    if (attachments.length > 0) return null;
+
+    // Exact versioned model name: "sonnet 4.6 - привет", "haiku 4.5 объясни..."
+    if (/(haiku|opus|sonnet|claude|gemini|gpt|codex)/i.test(userText)) {
+        for (const { user: pattern } of EXACT_LLM_MODEL_PATTERNS) {
+            if (!pattern.test(userText)) continue;
+            const match = userText.match(pattern);
+            if (!match) continue;
+            const skill = await findExactSkillByIntent(match[0]);
+            if (skill) return skillLookupToCandidate(skill);
+        }
+    }
+
+    // Explicit KIE provider reference: "kie provider - ..."
+    if (KIE_PROVIDER_TERMS.test(userText)) {
+        const skill = await findExactSkillByIntent("kie");
+        if (skill) return skillLookupToCandidate(skill);
+    }
+
+    return null;
+}
+
 async function planTelegramRequest(userText: string, attachments: TelegramUploadedAttachment[] = []): Promise<{ plan: TelegramPlan; candidates: TelegramCandidate[]; hasMore: boolean; routingText: string }> {
     const routingText = routingTextWithAttachments(userText, attachments);
+
+    // Tier 0: explicit model/skill match — skip expensive LLM normalize + embedQuery
+    const tier0Skill = await detectTier0Intent(userText, attachments);
+    if (tier0Skill) {
+        return {
+            candidates: [tier0Skill],
+            hasMore: false,
+            routingText,
+            plan: {
+                action: "run_skill",
+                intent: tier0Skill.name,
+                skillId: tier0Skill.id,
+                confidence: 0.98,
+                providerHint: tier0Skill.name,
+                params: { prompt: extractPromptAfterModelName(userText) },
+            },
+        };
+    }
+
     const candidates = await telegramDiscoveryPage(userText, 0, attachments);
     const hasMore = await telegramDiscoveryHasMore(userText, 0, attachments);
     if (isLlmCatalogRequest(userText)) {

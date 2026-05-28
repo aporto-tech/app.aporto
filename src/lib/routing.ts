@@ -235,15 +235,17 @@ Rules:
 - Remove provider/tool names: nano banana, midjourney, runway, kie, apify, dalle, sora, etc.
 - Remove platform/brand names: ozon, wildberries, amazon, instagram, etc.
 - Remove style/quality details: dark style, 720p, in Russian, realistic, etc.
+- Remove domain/use-case context: "for marketplace", "for startup", "product", "e-commerce", etc.
 - Output in English only, 2-5 words, no punctuation at end
 - No explanation, ONLY the capability phrase
+- Focus on WHAT the skill does, not WHAT it generates content for
 
 Examples:
 "сделай картинку" → image generation
-"генерация карточек для маркетплейса через nano banana" → product image generation
+"генерация карточек для маркетплейса через nano banana" → image generation
 "нарисуй реалистичный портрет" → image generation
-"сделай фото товара для ozon" → product image generation
-"логотип для стартапа" → logo generation
+"сделай фото товара для ozon" → image generation
+"логотип для стартапа" → image generation
 "сделай видео через runway" → video generation
 "анимация для рекламы" → video generation
 "озвучь текст голосом" → text to speech
@@ -372,12 +374,17 @@ export async function discoverSkills(
         conditions.push(`"trialAvailable" = true`);
     }
 
-    const lexicalParts: string[] = [];
+    const tagParts: string[] = [];
+    const nameParts: string[] = [];
     for (const term of lexicalTerms) {
-        lexicalParts.push(`CASE WHEN search_text ILIKE $${argIdx++} THEN 1 ELSE 0 END`);
+        tagParts.push(`CASE WHEN tags ILIKE $${argIdx++} THEN 3 ELSE 0 END`);
+        args.push(`%${term}%`);
+        nameParts.push(`CASE WHEN search_text ILIKE $${argIdx++} THEN 1 ELSE 0 END`);
         args.push(`%${term}%`);
     }
-    const lexicalScore = lexicalParts.length ? lexicalParts.join(" + ") : "0::int";
+    const lexicalScore = tagParts.length
+        ? `(${tagParts.join(" + ")}) + (${nameParts.join(" + ")})`
+        : "0::int";
 
     const where = conditions.join(" AND ");
 
@@ -392,7 +399,6 @@ export async function discoverSkills(
             SELECT "Skill".*,
                    CONCAT_WS(' ',
                      "Skill".name,
-                     "Skill".description,
                      COALESCE("Skill".tags, ''),
                      COALESCE("Skill".capabilities, ''),
                      COALESCE("Skill"."inputTypes", ''),
