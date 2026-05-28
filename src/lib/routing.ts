@@ -327,7 +327,13 @@ export async function discoverSkills(
     filters?: { category?: string; capability?: string; trialOnly?: boolean },
 ): Promise<DiscoveredSkill[]> {
     const normalized = await normalizeQueryWithLLM(query);
-    const embedding = await embedQuery(normalized);
+    let embedding: number[];
+    try {
+        embedding = await embedQuery(normalized);
+    } catch (err) {
+        console.error(`[discoverSkills] embedQuery failed for "${normalized}": ${err}`);
+        return [];
+    }
     const vectorLiteral = `[${embedding.join(",")}]`;
     const offset = page * PAGE_SIZE;
     const lexicalTerms = Array.from(new Set(
