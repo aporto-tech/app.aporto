@@ -24,6 +24,7 @@ export async function logSkillDiscovery(params: {
     tokenId?: number | null;
     source: "rest" | "mcp" | "telegram";
     query: string;
+    normalizedQuery?: string | null;
     page?: number;
     category?: string | null;
     capability?: string | null;
@@ -42,7 +43,9 @@ export async function logSkillDiscovery(params: {
                 tokenId: params.tokenId ?? null,
                 source: params.source,
                 query: params.query.slice(0, 2048),
-                normalized: normalizeQuery(params.query),
+                normalized: params.normalizedQuery
+                    ? params.normalizedQuery.slice(0, 2048)
+                    : normalizeQuery(params.query),
                 page: params.page ?? 0,
                 category: params.category ?? null,
                 capability: params.capability ?? null,

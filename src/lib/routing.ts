@@ -263,7 +263,7 @@ Examples:
 "отправь рассылку клиентам" → email sending
 "анализ данных в таблице" → data analysis`;
 
-async function normalizeQueryWithLLM(query: string): Promise<string> {
+export async function normalizeQueryWithLLM(query: string): Promise<string> {
     const key = query.trim().toLowerCase();
     const hit = _normCache.get(key);
     if (hit && hit.exp > Date.now()) return hit.result;

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { runSkill } from "@/lib/skillRuns";
-import { discoverSkills } from "@/lib/routing";
+import { discoverSkills, normalizeQueryWithLLM } from "@/lib/routing";
 import {
     TRIAL_LIMIT_MESSAGE,
     TRIAL_NEWAPI_USER_ID,
@@ -1556,12 +1556,14 @@ export async function POST(req: NextRequest) {
         const planStart = Date.now();
         const { plan, candidates, hasMore, routingText } = await planTelegramRequest(text, attachments);
 
-        findLinkedTelegramAccount(telegramUserId).then((linked) => {
+        findLinkedTelegramAccount(telegramUserId).then(async (linked) => {
             const latencyMs = Date.now() - planStart;
+            const normalizedQuery = await normalizeQueryWithLLM(text).catch(() => null);
             logSkillDiscovery({
                 newApiUserId: linked?.newApiUserId ?? TRIAL_NEWAPI_USER_ID,
                 source: "telegram",
-                query: routingText,
+                query: text,
+                normalizedQuery,
                 skills: candidates,
                 latencyMs,
                 sessionId: linked
@@ -1572,7 +1574,7 @@ export async function POST(req: NextRequest) {
                 telegramUserId,
                 accountType: linked ? "linked" : "trial",
                 aportoUserId: linked?.userId ?? null,
-                query: routingText,
+                query: text,
                 hasAttachments: attachments.length > 0,
                 candidatesCount: candidates.length,
                 topSkillId: candidates[0]?.id ?? null,
