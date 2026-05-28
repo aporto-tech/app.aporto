@@ -218,48 +218,50 @@ const _normCache = new Map<string, { result: string; exp: number }>();
 const _NORM_TTL_MS = 30 * 60 * 1000; // 30 min in-process cache
 const _NORM_MODEL = process.env.QUERY_NORM_MODEL ?? "deepseek-v4-flash";
 
-// Closed-vocabulary prompt: LLM can only output one of the listed terms.
-// Fixed vocabulary = deterministic output = correct embeddings every time.
-const _NORM_SYSTEM_PROMPT = `You are a query classifier for an AI skills marketplace.
+// Closed-vocabulary approach doesn't scale to tens of thousands of skills.
+// Instead: extract the CORE CAPABILITY from any query as a short English phrase.
+// Rules for the LLM:
+//   - Strip provider names (nano banana, midjourney, runway, kie, apify, ...)
+//   - Strip platform/brand names (ozon, wildberries, amazon, instagram, ...)
+//   - Strip style/quality details ("dark style", "720p", "in Russian")
+//   - Keep ONLY the core skill type in English, 2-5 words
+// This scales to any number of skills because we're classifying user INTENT,
+// not matching skill names — the output embeds near the right skill cluster.
+const _NORM_SYSTEM_PROMPT = `You are an intent extractor for a skills marketplace.
 
-Map the user's request to the SINGLE closest term from this exact list:
+Extract the CORE CAPABILITY from the user's request as a short English phrase (2-5 words).
 
-image generation
-video generation
-text to speech
-translation
-llm chat
-web scraping
-web search
-email
-data extraction
+Rules:
+- Remove provider/tool names: nano banana, midjourney, runway, kie, apify, dalle, sora, etc.
+- Remove platform/brand names: ozon, wildberries, amazon, instagram, etc.
+- Remove style/quality details: dark style, 720p, in Russian, realistic, etc.
+- Output in English only, 2-5 words, no punctuation at end
+- No explanation, ONLY the capability phrase
 
-Output ONLY that exact term. No other words. No explanation. No punctuation.
-
-Russian → English mapping examples:
+Examples:
 "сделай картинку" → image generation
-"нарисуй логотип" → image generation
-"нужна картинка для Ozon" → image generation
-"баннер для магазина" → image generation
-"постер для стартапа" → image generation
-"сделай фото" → image generation
-"сделай видео" → video generation
-"ролик для рекламы" → video generation
-"анимация" → video generation
-"озвучь текст" → text to speech
-"прочитай вслух" → text to speech
-"переведи на английский" → translation
-"переведи текст" → translation
-"поговори со мной" → llm chat
-"напиши текст" → llm chat
-"объясни" → llm chat
-"спарси сайт" → web scraping
-"собери данные с wildberries" → web scraping
-"парс" → web scraping
-"найди информацию" → web search
-"поищи компанию" → web search
-"отправь письмо" → email
-"извлеки данные из файла" → data extraction`;
+"генерация карточек для маркетплейса через nano banana" → product image generation
+"нарисуй реалистичный портрет" → image generation
+"сделай фото товара для ozon" → product image generation
+"логотип для стартапа" → logo generation
+"сделай видео через runway" → video generation
+"анимация для рекламы" → video generation
+"озвучь текст голосом" → text to speech
+"переведи с русского на английский" → text translation
+"спарси wildberries через apify" → web scraping
+"собери данные с сайта" → web scraping
+"найди email компании по сайту" → email finder
+"поговори со мной как gpt" → llm chat
+"напиши пост для instagram" → text generation
+"сделай summary статьи" → text summarization
+"транскрипция аудио" → speech to text
+"удали фон с фотографии" → background removal
+"улучши качество фото" → image enhancement
+"конвертируй видео в mp4" → video conversion
+"генерация музыки" → music generation
+"извлеки данные из PDF" → document data extraction
+"отправь рассылку клиентам" → email sending
+"анализ данных в таблице" → data analysis`;
 
 async function normalizeQueryWithLLM(query: string): Promise<string> {
     const key = query.trim().toLowerCase();
