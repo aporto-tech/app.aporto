@@ -209,40 +209,64 @@ export async function findExactSkillByIntentWithFilters(intent: string, filters?
 }
 
 // ── Query normalization for embedding search ──────────────────────────────────
-// Uses a fast LLM to rewrite any user query (any language, any phrasing) into
-// a concise English skill description before embedding. Handles Russian, typos,
-// brand names, ambiguous phrasing — anything regexes can't reliably cover.
-// Falls back to regex expansion if the LLM call fails or is unconfigured.
-// Applied inside discoverSkills() — covers Telegram, MCP, and REST/CLI.
+// Uses an LLM to classify any user query into a canonical English skill term
+// before embedding. Closed-vocabulary approach: the LLM picks from a fixed list,
+// so output is always predictable and embeds correctly.
+// Applies to all callers: Telegram, MCP, REST/CLI.
 
 const _normCache = new Map<string, { result: string; exp: number }>();
 const _NORM_TTL_MS = 30 * 60 * 1000; // 30 min in-process cache
 const _NORM_MODEL = process.env.QUERY_NORM_MODEL ?? "deepseek-v4-flash";
 
-const _NORM_SYSTEM_PROMPT = [
-    "You are a search query normalizer for an AI skills marketplace.",
-    "Translate and rephrase the user's query into a SHORT English skill description (3-8 words).",
-    "Focus on the core capability. Do NOT add synonyms or pad with extra words.",
-    "Output ONLY the normalized query, nothing else.",
-    "",
-    "Examples:",
-    "\"мне нужно сделать картинку для Ozon\" → generate product image",
-    "\"нарисуй логотип для стартапа\" → generate logo illustration",
-    "\"haiku - как дела?\" → chat with claude haiku llm",
-    "\"сделай видео 720p неонового города\" → generate 720p video",
-    "\"переведи текст с русского на английский\" → translate russian to english",
-    "\"найди email компании по сайту\" → find company email from website",
-    "\"озвучь текст голосом\" → text to speech",
-    "\"спарси товары с wildberries\" → scrape product data",
-].join("\n");
+// Closed-vocabulary prompt: LLM can only output one of the listed terms.
+// Fixed vocabulary = deterministic output = correct embeddings every time.
+const _NORM_SYSTEM_PROMPT = `You are a query classifier for an AI skills marketplace.
+
+Map the user's request to the SINGLE closest term from this exact list:
+
+image generation
+video generation
+text to speech
+translation
+llm chat
+web scraping
+web search
+email
+data extraction
+
+Output ONLY that exact term. No other words. No explanation. No punctuation.
+
+Russian → English mapping examples:
+"сделай картинку" → image generation
+"нарисуй логотип" → image generation
+"нужна картинка для Ozon" → image generation
+"баннер для магазина" → image generation
+"постер для стартапа" → image generation
+"сделай фото" → image generation
+"сделай видео" → video generation
+"ролик для рекламы" → video generation
+"анимация" → video generation
+"озвучь текст" → text to speech
+"прочитай вслух" → text to speech
+"переведи на английский" → translation
+"переведи текст" → translation
+"поговори со мной" → llm chat
+"напиши текст" → llm chat
+"объясни" → llm chat
+"спарси сайт" → web scraping
+"собери данные с wildberries" → web scraping
+"парс" → web scraping
+"найди информацию" → web search
+"поищи компанию" → web search
+"отправь письмо" → email
+"извлеки данные из файла" → data extraction`;
 
 async function normalizeQueryWithLLM(query: string): Promise<string> {
     const key = query.trim().toLowerCase();
     const hit = _normCache.get(key);
     if (hit && hit.exp > Date.now()) return hit.result;
 
-    // Skip LLM for English/ASCII queries — they embed well without translation.
-    // Only call the LLM when Cyrillic (or other non-Latin) text is present.
+    // Skip LLM for English/ASCII queries — they embed well as-is.
     const cyrillicCount = (query.match(/[а-яёА-ЯЁ]/g) ?? []).length;
     if (cyrillicCount < 3) {
         const result = query.replace(/\bspeach\b/gi, "speech").replace(/\bkie\s+provider\b/gi, "kie");
@@ -252,7 +276,10 @@ async function normalizeQueryWithLLM(query: string): Promise<string> {
 
     const baseUrl = process.env.NEWAPI_URL ?? "https://api.aporto.tech";
     const apiKey = process.env.NEWAPI_ADMIN_KEY;
-    if (!apiKey) return expandQueryForEmbedding(query);
+    if (!apiKey) {
+        _normCache.set(key, { result: query, exp: Date.now() + _NORM_TTL_MS });
+        return query;
+    }
 
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 5000);
@@ -270,47 +297,24 @@ async function normalizeQueryWithLLM(query: string): Promise<string> {
                     { role: "user", content: query },
                 ],
                 temperature: 0,
-                max_tokens: 60,
+                max_tokens: 10,
             }),
             signal: controller.signal,
         });
         clearTimeout(timer);
         if (!res.ok) throw new Error(`llm ${res.status}`);
         const data = await res.json() as { choices?: Array<{ message?: { content?: string } }> };
-        const normalized = data.choices?.[0]?.message?.content?.trim();
+        const normalized = data.choices?.[0]?.message?.content?.trim().toLowerCase();
         if (!normalized || normalized.length < 3) throw new Error("empty");
+        console.log(`[query-norm] "${query}" → "${normalized}"`);
         _normCache.set(key, { result: normalized, exp: Date.now() + _NORM_TTL_MS });
         return normalized;
-    } catch {
+    } catch (err) {
         clearTimeout(timer);
-        const fallback = expandQueryForEmbedding(query);
-        _normCache.set(key, { result: fallback, exp: Date.now() + _NORM_TTL_MS });
-        return fallback;
+        console.warn(`[query-norm] failed for "${query}": ${err}`);
+        _normCache.set(key, { result: query, exp: Date.now() + _NORM_TTL_MS });
+        return query;
     }
-}
-
-// Regex-based fallback — used when LLM normalization is unavailable or fails.
-const _IMAGE_RE = /\b(?:image|photo|picture)\b|картин\w*|изображ\w*|фото\w*|рисун\w*|постер\w*|баннер\w*|обложк\w*|превью|иллюстрац\w*/i;
-const _VIDEO_RE = /\bvideo\b|ролик\w*|видео\w*|анимац\w*|клип\w*/i;
-const _AUDIO_RE = /\b(?:audio|voice|speech|speach|tts|music|song)\b|озвуч\w*|голос\w*|аудио\w*|музык\w*|песн\w*|звук\w*/i;
-const _LLM_RE = /\b(?:llm|ai\s+models?|model|chatgpt|gpt|claude|sonnet|opus|haiku|gemini|codex)\b|(?:ии|ai)\s+модел/i;
-
-function expandQueryForEmbedding(query: string): string {
-    let q = query
-        .replace(/\bspeach\b/gi, "speech")
-        .replace(/\bkie\s+provider\b/gi, "kie");
-    if (_IMAGE_RE.test(q)) q = `${q} image photo picture illustration visual generate`;
-    if (_VIDEO_RE.test(q)) q = `${q} video animation clip generate`;
-    if (_AUDIO_RE.test(q)) q = `${q} audio voice speech music sound generate`;
-    if (_LLM_RE.test(q)) q = `${q} llm chat model claude sonnet gpt gemini codex`;
-    if (/(?:сделай|создай|нарисуй|сгенерируй|придумай|создать|сделать|нарисовать|сгенерировать|генерир)\w*/i.test(q)) q = `${q} generate create make`;
-    if (/переведи|перевод\w*|переводчик\w*/i.test(q)) q = `${q} translate translation`;
-    if (/напиши\w*|составь\w*|напишет|написать/i.test(q)) q = `${q} write text generate`;
-    if (/суммаризуй|краткое\s+содержание|сократи|резюмируй/i.test(q)) q = `${q} summarize summary`;
-    if (/найди|поищи|поиск\w*|найти/i.test(q)) q = `${q} search find`;
-    if (/спарси\w*|скрапи\w*|парс\w*/i.test(q)) q = `${q} scrape extract data`;
-    if (/отправ[ьи]\w*.*(?:письм|email|мейл)|(?:письм|email|мейл).*отправ\w*/i.test(q)) q = `${q} send email`;
-    return q;
 }
 
 // ── discoverSkills ────────────────────────────────────────────────────────────
