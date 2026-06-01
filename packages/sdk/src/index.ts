@@ -48,9 +48,11 @@ export interface AportoClientOptions {
     apiKey: string;
     /** Optional agent name forwarded as X-Agent-Name header for observability */
     agentName?: string;
+    /** Public repository integration id forwarded as X-Aporto-Integration-Id for Aporto-side attribution */
+    integrationId?: string;
     /** API base URL for app-backed service routes. Defaults to https://app.aporto.tech */
     appBaseUrl?: string;
-    /** OpenAI-compatible LLM base URL. Defaults to https://api.aporto.tech/v1 */
+    /** OpenAI-compatible LLM base URL. Defaults to https://app.aporto.tech/api/llm/v1 */
     llmBaseUrl?: string;
 }
 
@@ -70,16 +72,17 @@ export class AportoClient {
         const {
             apiKey,
             agentName,
+            integrationId = typeof process !== "undefined" ? process.env.APORTO_INTEGRATION_ID : undefined,
             appBaseUrl = DEFAULT_APP_BASE_URL,
             llmBaseUrl = DEFAULT_LLM_BASE_URL,
         } = options;
 
-        this.llm = createLlmModule(apiKey, agentName, llmBaseUrl);
-        this.search = createSearchModule(apiKey, agentName, appBaseUrl);
-        this.audio = createAudioModule(apiKey, agentName, appBaseUrl);
-        this.images = createImagesModule(apiKey, agentName, appBaseUrl);
-        this.sms = createSmsModule(apiKey, agentName, appBaseUrl);
-        this.routing = createRoutingModule(apiKey, agentName, appBaseUrl);
+        this.llm = createLlmModule(apiKey, agentName, integrationId, llmBaseUrl);
+        this.search = createSearchModule(apiKey, agentName, appBaseUrl, integrationId);
+        this.audio = createAudioModule(apiKey, agentName, appBaseUrl, integrationId);
+        this.images = createImagesModule(apiKey, agentName, appBaseUrl, integrationId);
+        this.sms = createSmsModule(apiKey, agentName, appBaseUrl, integrationId);
+        this.routing = createRoutingModule(apiKey, agentName, appBaseUrl, integrationId);
     }
 }
 

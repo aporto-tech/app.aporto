@@ -29,6 +29,7 @@ import { validateApiKeyOrSession, deductUserQuota, logServiceUsage } from "@/lib
 import { prisma } from "@/lib/prisma";
 import { logSkillDiscovery } from "@/lib/discoveryLogs";
 import { storeSkillResultArtifacts } from "@/lib/artifacts";
+import { extractRepoIntegrationId } from "@/lib/repoIntegrations";
 import { DEFAULT_WAIT_SECONDS, MAX_WAIT_SECONDS, getSkillRun, runSkill } from "@/lib/skillRuns";
 import {
     MAX_PROVIDER_ATTEMPTS,
@@ -66,7 +67,7 @@ async function refundQuota(userId: number, costUSD: number) {
 
 // ── build the MCP server (one per request in stateless mode) ──────────────────
 
-function buildMcpServer(userId: number, authHeader: string, internalBaseUrl?: string) {
+function buildMcpServer(userId: number, authHeader: string, internalBaseUrl?: string, integrationPublicId?: string | null) {
     const server = new McpServer({
         name: "aporto",
         version: "1.0.0",
@@ -561,6 +562,7 @@ function buildMcpServer(userId: number, authHeader: string, internalBaseUrl?: st
                     waitForResult,
                     maxWaitSeconds,
                     sessionId,
+                    integrationPublicId,
                 });
                 return {
                     content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
@@ -631,7 +633,7 @@ async function handleMcpRequest(request: NextRequest): Promise<Response> {
         enableJsonResponse: true,      // return JSON instead of SSE for simple tool calls
     });
 
-    const server = buildMcpServer(auth.newApiUserId, authHeader, request.nextUrl.origin);
+    const server = buildMcpServer(auth.newApiUserId, authHeader, request.nextUrl.origin, extractRepoIntegrationId(request));
     await server.connect(transport);
 
     return transport.handleRequest(request);

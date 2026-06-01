@@ -1,18 +1,19 @@
 import { AportoError } from "../errors";
 
 export const DEFAULT_APP_BASE_URL = "https://app.aporto.tech";
-export const DEFAULT_LLM_BASE_URL = "https://api.aporto.tech/v1";
+export const DEFAULT_LLM_BASE_URL = "https://app.aporto.tech/api/llm/v1";
 
 export function cleanBaseUrl(baseUrl: string): string {
     return baseUrl.replace(/\/$/, "");
 }
 
-export function createJsonHeaders(apiKey: string, agentName?: string): Record<string, string> {
+export function createJsonHeaders(apiKey: string, agentName?: string, integrationId?: string): Record<string, string> {
     const headers: Record<string, string> = {
         Authorization: `Bearer ${apiKey}`,
         "Content-Type": "application/json",
     };
     if (agentName) headers["X-Agent-Name"] = agentName;
+    if (integrationId) headers["X-Aporto-Integration-Id"] = integrationId;
     return headers;
 }
 

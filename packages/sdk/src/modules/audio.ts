@@ -17,8 +17,8 @@ export interface TextToSpeechResult {
     [key: string]: unknown;
 }
 
-export function createAudioModule(apiKey: string, agentName?: string, appBaseUrl = DEFAULT_APP_BASE_URL) {
-    const headers = createJsonHeaders(apiKey, agentName);
+export function createAudioModule(apiKey: string, agentName?: string, appBaseUrl = DEFAULT_APP_BASE_URL, integrationId?: string) {
+    const headers = createJsonHeaders(apiKey, agentName, integrationId);
 
     return {
         /** Returns a stored audio artifact URL. */

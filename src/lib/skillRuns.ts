@@ -3,6 +3,7 @@ import { logServiceUsage } from "@/lib/serviceProxy";
 import { deductSkillUsage, refundSkillUsage, type SkillCharge } from "@/lib/promoGrants";
 import { prisma } from "@/lib/prisma";
 import { storeSkillResultArtifacts, type StoredArtifact } from "@/lib/artifacts";
+import { createRepoIntegrationRevenue } from "@/lib/repoIntegrations";
 import {
     createSkillRevenue,
     deactivateSkillIfNoActiveProviders,
@@ -51,6 +52,7 @@ type RunSkillInput = {
     sessionId?: string;
     billingMode?: "paid" | "trial";
     trialOnly?: boolean;
+    integrationPublicId?: string | null;
 };
 
 type RunSkillResult = {
@@ -148,6 +150,7 @@ type SkillRunRow = {
     promoRedemptionId: string | null;
     promoCoveredUSD: number | null;
     balanceChargedUSD: number | null;
+    integrationPublicId: string | null;
 };
 
 type ProviderLookupRow = {
@@ -649,6 +652,7 @@ async function createRun(input: {
     promoRedemptionId?: string | null;
     promoCoveredUSD?: number;
     balanceChargedUSD?: number | null;
+    integrationPublicId?: string | null;
     nextPollAt?: Date | null;
     expiresAt?: Date | null;
 }): Promise<string> {
@@ -656,9 +660,9 @@ async function createRun(input: {
         `INSERT INTO "SkillRun" (
             "newApiUserId", "sessionId", "skillId", "providerId", status,
             "lifecycleMode", "paramsHash", "providerTaskId", "providerRaw",
-            result, error, "costUSD", "promoRedemptionId", "promoCoveredUSD", "balanceChargedUSD", "nextPollAt", "expiresAt", "createdAt", "updatedAt"
+            result, error, "costUSD", "promoRedemptionId", "promoCoveredUSD", "balanceChargedUSD", "integrationPublicId", "nextPollAt", "expiresAt", "createdAt", "updatedAt"
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10::jsonb, $11::jsonb, $12, $13, $14, $15, $16, $17, NOW(), NOW())
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10::jsonb, $11::jsonb, $12, $13, $14, $15, $16, $17, $18, NOW(), NOW())
         RETURNING id`,
         input.newApiUserId,
         input.sessionId,
@@ -675,6 +679,7 @@ async function createRun(input: {
         input.promoRedemptionId ?? null,
         input.promoCoveredUSD ?? 0,
         input.balanceChargedUSD ?? null,
+        input.integrationPublicId ?? null,
         input.nextPollAt ?? null,
         input.expiresAt ?? null,
     );
@@ -802,9 +807,12 @@ async function storeFinalResult(input: {
 
 async function pollKieProvider(provider: ScoredProvider, providerTaskId: string, internalBaseUrl?: string): Promise<AsyncProviderPollResult> {
     const submitPath = typeof provider.syncConfig?.apiPath === "string" ? provider.syncConfig.apiPath : "";
-    const recordInfoPath = submitPath === "/api/v1/veo/generate"
+    const configuredStatusPath = typeof provider.syncConfig?.statusApiPath === "string"
+        ? provider.syncConfig.statusApiPath
+        : null;
+    const recordInfoPath = configuredStatusPath ?? (submitPath === "/api/v1/veo/generate"
         ? "/api/v1/veo/record-info"
-        : "/api/v1/jobs/recordInfo";
+        : "/api/v1/jobs/recordInfo");
     return executeSkillViaProvider(
         provider,
         {
@@ -888,6 +896,7 @@ async function waitForProviderResult(input: {
     internalBaseUrl?: string;
     charge: Pick<SkillCharge, "promoRedemptionId" | "promoCoveredUSD" | "balanceChargedUSD">;
     billingMode?: "paid" | "trial";
+    integrationPublicId?: string | null;
 }): Promise<RunSkillResult> {
     const adapter = getAsyncProviderAdapter(input.provider, { taskId: input.providerTaskId });
     if (!adapter) {
@@ -981,6 +990,15 @@ async function waitForProviderResult(input: {
                     grossUSD: actualCostUSD,
                     revenueShare: Number(input.revenueShare),
                 }).catch(() => {});
+            }
+            if (input.billingMode !== "trial" && input.skillCallId != null && actualCostUSD > 0) {
+                void createRepoIntegrationRevenue({
+                    integrationPublicId: input.integrationPublicId,
+                    newApiUserId: input.newApiUserId,
+                    grossUSD: actualCostUSD,
+                    skillCallId: input.skillCallId,
+                    skillRunId: input.runId,
+                }).catch((error) => console.error("[waitForProviderResult] createRepoIntegrationRevenue:", error));
             }
             void logServiceUsage(input.newApiUserId, "skill", input.provider.name, actualCostUSD, {
                 skillId: input.skillId,
@@ -1306,6 +1324,7 @@ export async function runSkill(input: RunSkillInput): Promise<RunSkillResult> {
         providerTaskId,
         providerRaw: executed.data,
         costUSD: estimatedCostUSD,
+        integrationPublicId: input.integrationPublicId ?? null,
         promoRedemptionId: charge.promoRedemptionId,
         promoCoveredUSD: charge.promoCoveredUSD,
         balanceChargedUSD: charge.balanceChargedUSD,
@@ -1353,6 +1372,7 @@ export async function runSkill(input: RunSkillInput): Promise<RunSkillResult> {
                 skillCallId,
                 charge,
                 billingMode: input.billingMode,
+                integrationPublicId: input.integrationPublicId,
             })),
         };
     }
@@ -1386,6 +1406,15 @@ export async function runSkill(input: RunSkillInput): Promise<RunSkillResult> {
             revenueShare: Number(skillMeta.revenueShare),
         }).catch(() => {});
     }
+    if (input.billingMode !== "trial" && actualCostUSD > 0) {
+        void createRepoIntegrationRevenue({
+            integrationPublicId: input.integrationPublicId,
+            newApiUserId: input.newApiUserId,
+            grossUSD: actualCostUSD,
+            skillCallId,
+            skillRunId: runId,
+        }).catch((error) => console.error("[runSkill] createRepoIntegrationRevenue:", error));
+    }
     void logServiceUsage(input.newApiUserId, "skill", provider.name, actualCostUSD, {
         skillId,
         runId,
@@ -1417,7 +1446,7 @@ export async function getSkillRun(input: {
     const rows = await prisma.$queryRawUnsafe<SkillRunRow[]>(
         `SELECT id, "newApiUserId", "sessionId", "skillId", "providerId", "skillCallId",
                 status, "lifecycleMode", "providerTaskId", result, error,
-                "artifactJson", "costUSD", "promoRedemptionId", "promoCoveredUSD", "balanceChargedUSD"
+                "artifactJson", "costUSD", "promoRedemptionId", "promoCoveredUSD", "balanceChargedUSD", "integrationPublicId"
          FROM "SkillRun"
          WHERE id = $1 AND "newApiUserId" = $2
          LIMIT 1`,
@@ -1506,6 +1535,7 @@ export async function getSkillRun(input: {
             promoCoveredUSD: Number(run.promoCoveredUSD ?? 0),
             balanceChargedUSD: Number(run.balanceChargedUSD ?? 0),
         },
+        integrationPublicId: run.integrationPublicId,
     });
 }
 
@@ -1518,7 +1548,7 @@ export async function pollSkillRunById(input: {
     const rows = await prisma.$queryRawUnsafe<SkillRunRow[]>(
         `SELECT id, "newApiUserId", "sessionId", "skillId", "providerId", "skillCallId",
                 status, "lifecycleMode", "providerTaskId", result, error,
-                "artifactJson", "costUSD", "promoRedemptionId", "promoCoveredUSD", "balanceChargedUSD"
+                "artifactJson", "costUSD", "promoRedemptionId", "promoCoveredUSD", "balanceChargedUSD", "integrationPublicId"
          FROM "SkillRun"
          WHERE id = $1
          LIMIT 1`,
@@ -1579,6 +1609,7 @@ export async function pollSkillRunById(input: {
             promoCoveredUSD: Number(run.promoCoveredUSD ?? 0),
             balanceChargedUSD: Number(run.balanceChargedUSD ?? 0),
         },
+        integrationPublicId: run.integrationPublicId,
     });
 }
 

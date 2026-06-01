@@ -34,6 +34,7 @@ function usage(): string {
         "  --no-wait          Do not wait (default for async skills)",
         "  --max-wait <sec>   Maximum seconds to wait for completion (default: 600)",
         "  --provider <hint>  Provider preference (name or 'auto')",
+        "  --integration <id> Public repo integration id for Aporto-side attribution",
         "  --param key=value  Set a parameter (repeatable)",
         "  --file key=path    Attach a local file as a parameter (repeatable, base64-encoded)",
         "  --params <file>    Load parameters from a JSON file",
@@ -47,6 +48,7 @@ function usage(): string {
         "Environment:",
         "  APORTO_API_KEY      required for paid commands; optional for discover and trial skill runs",
         "  APORTO_BASE_URL     optional, defaults to https://app.aporto.tech",
+        "  APORTO_INTEGRATION_ID optional public repo integration id",
     ].join("\n");
 }
 
@@ -231,6 +233,7 @@ function printRun(result: { status?: string; runId?: string; skillId?: number; s
 async function discoverSkills(params: {
     appBaseUrl: string;
     apiKey?: string;
+    integrationId?: string;
     query: string;
     category?: string;
     capability?: string;
@@ -241,6 +244,7 @@ async function discoverSkills(params: {
         "X-Agent-Name": "aporto-cli",
     };
     if (params.apiKey) headers.Authorization = `Bearer ${params.apiKey}`;
+    if (params.integrationId) headers["X-Aporto-Integration-Id"] = params.integrationId;
 
     const url = `${params.appBaseUrl.replace(/\/$/, "")}/api/routing/skills`;
     const body = JSON.stringify({
@@ -322,6 +326,7 @@ async function main() {
     }
 
     const apiKey = process.env.APORTO_API_KEY;
+    const integrationId = flagString(flags, "integration") ?? process.env.APORTO_INTEGRATION_ID;
     const appBaseUrl = process.env.APORTO_BASE_URL ?? "https://app.aporto.tech";
     const asJson = flags.json === true;
 
@@ -332,6 +337,7 @@ async function main() {
         const result = await discoverSkills({
             appBaseUrl,
             apiKey,
+            integrationId,
             query,
             category: flagString(flags, "category"),
             capability: flagString(flags, "capability"),
@@ -365,7 +371,7 @@ async function main() {
                 sessionId: flagString(flags, "session"),
             }) as RunSkillResult;
         } else {
-            const client = createClient(apiKey, appBaseUrl);
+            const client = createClient(apiKey, appBaseUrl, integrationId);
             result = await client.routing.runSkill({
                 intent: target,
                 skillId: numericSkillId,
@@ -394,7 +400,7 @@ async function main() {
         throw new AportoConfigError("APORTO_API_KEY is required for this command. To keep using Aporto after trial runs, get a key at https://aporto.tech");
     }
 
-    const client = createClient(apiKey, appBaseUrl);
+    const client = createClient(apiKey, appBaseUrl, integrationId);
 
     if (command === "runs" && (args[1] === "get" || args[1] === "wait")) {
         const runId = args[2];
@@ -420,10 +426,11 @@ async function main() {
     throw new AportoConfigError(`Unknown command: ${args.join(" ")}`);
 }
 
-function createClient(apiKey: string, appBaseUrl: string): AportoClient {
+function createClient(apiKey: string, appBaseUrl: string, integrationId?: string): AportoClient {
     return new AportoClient({
         apiKey,
         agentName: "aporto-cli",
+        integrationId,
         appBaseUrl,
     });
 }

@@ -88,13 +88,6 @@ const audienceCards = [
   "Operators connecting AI tools into repeatable systems",
 ];
 
-const howItWorks = [
-  ["Connect your system", "Integrate Aporto via MCP in minutes."],
-  ["Send requests normally", "Your app sends tasks like usual."],
-  ["Aporto routes everything", "Each request is automatically sent to the best model, tool, or skill."],
-  ["Get optimized results", "Higher quality, lower cost, better reliability."],
-];
-
 const engineSignals = [
   "Best capability for the task",
   "Fastest execution option",
@@ -110,25 +103,6 @@ const controlItems = [
   "View execution logs",
   "Debug every request",
   "Override routing decisions",
-];
-
-const workflowEvents = [
-  ["Request", "generate launch video from product screenshots"],
-  ["Intent", "video generation, voiceover, captions"],
-  ["Route", "Veo 3.1 primary, Sora 2 fallback"],
-  ["Optimize", "quality high, cost cap $0.42"],
-  ["Result", "artifact, logs, provider trace"],
-];
-
-const radarSkills = [
-  { label: "Flux", x: 18, y: 22 },
-  { label: "Sora 2", x: 72, y: 12 },
-  { label: "ElevenLabs", x: 85, y: 55 },
-  { label: "Claude", x: 65, y: 82 },
-  { label: "Apify", x: 12, y: 68 },
-  { label: "Veo 3.1", x: 42, y: 88 },
-  { label: "Recraft", x: 88, y: 30 },
-  { label: "DeepSeek", x: 28, y: 45 },
 ];
 
 const chatMessages = [
@@ -224,31 +198,6 @@ export default function NewLandingPage() {
         </div>
 
         <div className={styles.heroShowcase}>
-          <div className={styles.radar} aria-label="Skill discovery radar">
-            <div className={styles.radarRings}>
-              <div className={styles.radarRing} />
-              <div className={styles.radarRing} />
-              <div className={styles.radarRing} />
-            </div>
-            <div className={styles.radarSweep} />
-            <div className={styles.radarCenter}>
-              <Image src="/logo.svg" alt="" width={24} height={24} />
-            </div>
-            {radarSkills.map((skill, i) => (
-              <span
-                key={skill.label}
-                className={styles.radarDot}
-                style={{
-                  "--dot-x": `${skill.x}%`,
-                  "--dot-y": `${skill.y}%`,
-                  "--dot-delay": `${i * 0.5}s`,
-                } as CSSProperties}
-              >
-                {skill.label}
-              </span>
-            ))}
-          </div>
-
           <div className={styles.chatDemo} aria-label="Agent-Aporto conversation demo">
             <div className={styles.chatHeader}>
               <span className={styles.chatDot} />
@@ -370,38 +319,6 @@ console.log(result.artifact?.url);`}</pre>
             <article key={item}>
               <span />
               <h3>{item}</h3>
-            </article>
-          ))}
-        </div>
-      </section>
-
-      <section className={styles.processSection}>
-        <div className={styles.sectionIntro}>
-          <span>How it works</span>
-          <h2>Four steps from normal task requests to optimized execution.</h2>
-        </div>
-        <div className={styles.processGrid}>
-          {howItWorks.map(([title, body], index) => (
-            <article key={title}>
-              <span>{String(index + 1).padStart(2, "0")}</span>
-              <h3>{title}</h3>
-              <p>{body}</p>
-            </article>
-          ))}
-        </div>
-      </section>
-
-      <section className={styles.workflowSection}>
-        <div className={styles.workflowCopy}>
-          <span>Workflow layer</span>
-          <h2>One request can become a routed multi-skill execution.</h2>
-          <p>Instead of wiring tools one by one, Aporto turns intent into a traceable workflow with routing, fallback, and cost controls.</p>
-        </div>
-        <div className={styles.workflowBoard} aria-label="Workflow execution timeline">
-          {workflowEvents.map(([label, body], index) => (
-            <article key={label} style={{ "--step-index": index } as CSSProperties}>
-              <span>{label}</span>
-              <p>{body}</p>
             </article>
           ))}
         </div>

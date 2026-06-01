@@ -27,8 +27,15 @@ export async function GET(req: NextRequest) {
             publisherId,
         ),
         prisma.$queryRawUnsafe<{ total: number }[]>(
-            `SELECT COALESCE(SUM("publisherEarningUSD"), 0)::float AS total
-             FROM "SkillRevenue" WHERE "publisherId" = $1 AND "paidOut" = false`,
+            `SELECT (
+                 COALESCE((SELECT SUM("publisherEarningUSD") FROM "SkillRevenue" WHERE "publisherId" = $1 AND "paidOut" = false), 0)
+                 + COALESCE((
+                     SELECT SUM(rr."earningUSD")
+                     FROM "RepoIntegrationRevenue" rr
+                     JOIN "RepoIntegration" ri ON ri.id = rr."integrationId"
+                     WHERE ri."publisherId" = $1 AND rr."paidOut" = false
+                 ), 0)
+             )::float AS total`,
             publisherId,
         ),
         prisma.$queryRawUnsafe<{ cnt: number }[]>(

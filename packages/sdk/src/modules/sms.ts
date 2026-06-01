@@ -16,8 +16,8 @@ export interface SmsResult {
     [key: string]: unknown;
 }
 
-export function createSmsModule(apiKey: string, agentName?: string, appBaseUrl = DEFAULT_APP_BASE_URL) {
-    const headers = createJsonHeaders(apiKey, agentName);
+export function createSmsModule(apiKey: string, agentName?: string, appBaseUrl = DEFAULT_APP_BASE_URL, integrationId?: string) {
+    const headers = createJsonHeaders(apiKey, agentName, integrationId);
 
     return {
         async send(opts: SendSmsOptions): Promise<SmsResult> {

@@ -92,6 +92,7 @@ const Sidebar = () => {
     const publisherNavItems = [
         { name: "Overview", icon: "📊", path: "/publisher" },
         { name: "Skills", icon: "⚡", path: "/publisher/skills" },
+        { name: "Integrations", icon: "🔗", path: "/publisher/integrations" },
         { name: "Earnings", icon: "💰", path: "/publisher/earnings" },
     ];
 

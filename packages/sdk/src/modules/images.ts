@@ -20,8 +20,8 @@ export interface GenerateImageResult {
     [key: string]: unknown;
 }
 
-export function createImagesModule(apiKey: string, agentName?: string, appBaseUrl = DEFAULT_APP_BASE_URL) {
-    const headers = createJsonHeaders(apiKey, agentName);
+export function createImagesModule(apiKey: string, agentName?: string, appBaseUrl = DEFAULT_APP_BASE_URL, integrationId?: string) {
+    const headers = createJsonHeaders(apiKey, agentName, integrationId);
 
     return {
         async generate(opts: GenerateImageOptions): Promise<GenerateImageResult> {

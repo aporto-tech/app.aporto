@@ -28,10 +28,21 @@ type RequestType = "jobs.createTask" | "jobs.recordInfo" | "suno.direct" | "dire
 interface KieConfig {
     requestType?: RequestType;
     apiPath?: string;
+    statusApiPath?: string;
     method?: "POST" | "GET";
     model?: string;
     inputDefaults?: Record<string, unknown>;
     bodyDefaults?: Record<string, unknown>;
+    inputMappings?: unknown;
+    pricing?: unknown;
+    timeoutMs?: unknown;
+    responseCapBytes?: unknown;
+    taskIdPath?: string;
+    statusPath?: string;
+    successValues?: unknown;
+    failureValues?: unknown;
+    resultPath?: string;
+    nextPollSeconds?: unknown;
 }
 
 type StoredArtifact = {
@@ -176,10 +187,21 @@ export async function POST(req: NextRequest) {
         const {
             requestType = "jobs.createTask",
             apiPath,
+            statusApiPath: _statusApiPath,
             method = "POST",
             model,
             inputDefaults,
             bodyDefaults,
+            inputMappings: _inputMappings,
+            pricing: _pricing,
+            timeoutMs: _timeoutMs,
+            responseCapBytes: _responseCapBytes,
+            taskIdPath: _taskIdPath,
+            statusPath: _statusPath,
+            successValues: _successValues,
+            failureValues: _failureValues,
+            resultPath: _resultPath,
+            nextPollSeconds: _nextPollSeconds,
             ...params
         } = body;
 

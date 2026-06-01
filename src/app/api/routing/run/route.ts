@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { validateApiKeyOrSession } from "@/lib/serviceProxy";
 import { DEFAULT_WAIT_SECONDS, runSkill } from "@/lib/skillRuns";
+import { extractRepoIntegrationId } from "@/lib/repoIntegrations";
 
 export const dynamic = "force-dynamic";
 
@@ -44,6 +45,7 @@ export async function POST(req: NextRequest) {
             waitForResult: Boolean(waitForResult),
             maxWaitSeconds: Number(maxWaitSeconds) || DEFAULT_WAIT_SECONDS,
             sessionId,
+            integrationPublicId: extractRepoIntegrationId(req),
         });
 
         return NextResponse.json({ success: result.status !== "failed", ...result });

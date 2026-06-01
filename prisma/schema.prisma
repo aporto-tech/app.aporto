@@ -287,6 +287,7 @@ model Publisher {
   createdAt       DateTime          @default(now())
   user            User              @relation(fields: [userId], references: [id])
   apiKeys         PublisherApiKey[]
+  repoIntegrations RepoIntegration[]
   skills          Skill[]
   revenue         SkillRevenue[]
   submissions     SkillSubmission[]
@@ -499,6 +500,46 @@ model SkillRevenue {
   @@index([publisherId, createdAt(sort: Desc)])
 }
 
+model RepoIntegration {
+  id           String   @id @default(cuid())
+  publisherId  String
+  publicId     String   @unique
+  name         String
+  repoUrl      String?
+  status       String   @default("pending")
+  revenueShare Float    @default(0.2)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  publisher    Publisher @relation(fields: [publisherId], references: [id])
+  revenue      RepoIntegrationRevenue[]
+
+  @@index([publisherId])
+  @@index([status])
+}
+
+model RepoIntegrationRevenue {
+  id              String    @id @default(cuid())
+  integrationId   String
+  newApiUserId    Int
+  requestId       String?
+  skillCallId     Int?
+  skillRunId      String?
+  model           String?
+  grossUSD        Float
+  providerCostUSD Float?
+  netUSD          Float?
+  revenueShare    Float
+  earningUSD      Float
+  paidOut         Boolean   @default(false)
+  paidOutAt       DateTime?
+  createdAt       DateTime  @default(now())
+  integration     RepoIntegration @relation(fields: [integrationId], references: [id])
+
+  @@index([integrationId, createdAt(sort: Desc)])
+  @@index([integrationId, paidOut])
+  @@index([newApiUserId, createdAt(sort: Desc)])
+}
+
 model SkillRun {
   id                String   @id @default(cuid())
   newApiUserId      Int
@@ -516,6 +557,7 @@ model SkillRun {
   error             Json?
   artifactJson      Json?
   costUSD           Float?
+  integrationPublicId String?
   promoRedemptionId String?
   promoCoveredUSD   Float    @default(0)
   balanceChargedUSD Float?

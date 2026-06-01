@@ -12,10 +12,13 @@ import { DEFAULT_LLM_BASE_URL } from "./http";
  *     messages: [{ role: 'user', content: 'Hello' }],
  *   })
  */
-export function createLlmModule(apiKey: string, agentName?: string, baseURL = DEFAULT_LLM_BASE_URL): OpenAI {
+export function createLlmModule(apiKey: string, agentName?: string, integrationId?: string, baseURL = DEFAULT_LLM_BASE_URL): OpenAI {
     const defaultHeaders: Record<string, string> = {};
     if (agentName) {
         defaultHeaders["X-Agent-Name"] = agentName;
+    }
+    if (integrationId) {
+        defaultHeaders["X-Aporto-Integration-Id"] = integrationId;
     }
 
     return new OpenAI({

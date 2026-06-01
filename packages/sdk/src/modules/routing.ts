@@ -133,8 +133,8 @@ export interface RunSkillResult {
 
 // ── Module ────────────────────────────────────────────────────────────────────
 
-export function createRoutingModule(apiKey: string, agentName?: string, appBaseUrl = DEFAULT_APP_BASE_URL) {
-    const headers = createJsonHeaders(apiKey, agentName);
+export function createRoutingModule(apiKey: string, agentName?: string, appBaseUrl = DEFAULT_APP_BASE_URL, integrationId?: string) {
+    const headers = createJsonHeaders(apiKey, agentName, integrationId);
 
     async function apiFetch<T>(path: string, body: object): Promise<T> {
         return apiFetchJson<T>(appBaseUrl, path, headers, body, "Routing request");
